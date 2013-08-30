@@ -27,6 +27,7 @@ import edu.uci.ics.asterix.optimizer.rules.ExtractDistinctByExpressionsRule;
 import edu.uci.ics.asterix.optimizer.rules.ExtractOrderExpressionsRule;
 import edu.uci.ics.asterix.optimizer.rules.FeedScanCollectionToUnnest;
 import edu.uci.ics.asterix.optimizer.rules.FuzzyEqRule;
+import edu.uci.ics.asterix.optimizer.rules.FuzzyJoinRule;
 import edu.uci.ics.asterix.optimizer.rules.IfElseToSwitchCaseFunctionRule;
 import edu.uci.ics.asterix.optimizer.rules.InlineUnnestFunctionRule;
 import edu.uci.ics.asterix.optimizer.rules.IntroduceDynamicTypeCastRule;
@@ -86,7 +87,7 @@ import edu.uci.ics.hyracks.algebricks.rewriter.rules.IsolateHyracksOperatorsRule
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.LeftOuterJoinToInnerJoinRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PullSelectOutOfEqJoin;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushAssignBelowUnionAllRule;
-import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushAssignDownThroughProductRule;
+import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushAssignDownThroughJoinRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushLimitDownRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushNestedOrderByUnderPreSortedGroupByRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushProjectDownRule;
@@ -148,7 +149,7 @@ public final class RuleCollections {
         condPushDownAndJoinInference.add(new ComplexJoinInferenceRule());
         condPushDownAndJoinInference.add(new PushSelectIntoJoinRule());
         condPushDownAndJoinInference.add(new IntroJoinInsideSubplanRule());
-        condPushDownAndJoinInference.add(new PushAssignDownThroughProductRule());
+        condPushDownAndJoinInference.add(new PushAssignDownThroughJoinRule());
         condPushDownAndJoinInference.add(new PushSubplanWithAggregateDownThroughProductRule());
         condPushDownAndJoinInference.add(new IntroduceGroupByForSubplanRule());
         condPushDownAndJoinInference.add(new SubplanOutOfGroupRule());
@@ -187,7 +188,7 @@ public final class RuleCollections {
 
     public final static List<IAlgebraicRewriteRule> buildFuzzyJoinRuleCollection() {
         List<IAlgebraicRewriteRule> fuzzy = new LinkedList<IAlgebraicRewriteRule>();
-        // fuzzy.add(new FuzzyJoinRule()); -- The non-indexed fuzzy join will be temporarily disabled. It should be enabled some time in the near future.
+        fuzzy.add(new FuzzyJoinRule());
         fuzzy.add(new InferTypesRule());
         return fuzzy;
     }

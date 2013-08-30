@@ -1847,6 +1847,99 @@
         <output-dir compare="Text">opentype</output-dir>
       </compilation-unit>
     </test-case>
+    
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-int-aqlplus_1">
+        <output-dir compare="Text">user-int-aqlplus_1</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-int-aqlplus_2">
+        <output-dir compare="Text">user-int-aqlplus_2</output-dir>
+      </compilation-unit>
+    </test-case>    
+    <!-- issue #618
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-int-aqlplus_3">
+        <output-dir compare="Text">user-int-aqlplus_3</output-dir>
+      </compilation-unit>
+    </test-case>  
+    -->
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-lot-aqlplus_1">
+        <output-dir compare="Text">user-lot-aqlplus_1</output-dir>
+      </compilation-unit>
+    </test-case>  
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-lot-aqlplus_1.1">
+        <output-dir compare="Text">user-lot-aqlplus_1.1</output-dir>
+      </compilation-unit>
+    </test-case>     
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-lot-aqlplus_2">
+        <output-dir compare="Text">user-lot-aqlplus_2</output-dir>
+      </compilation-unit>
+    </test-case> 
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-lot-aqlplus_3">
+        <output-dir compare="Text">user-lot-aqlplus_3</output-dir>
+      </compilation-unit>
+    </test-case>  
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-int-aqlplus_1">
+        <output-dir compare="Text">user-vis-int-aqlplus_1</output-dir>
+      </compilation-unit>
+    </test-case>    
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-int-aqlplus_2">
+        <output-dir compare="Text">user-vis-int-aqlplus_2</output-dir>
+      </compilation-unit>
+    </test-case> 
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-int-aqlplus_3">
+        <output-dir compare="Text">user-vis-int-aqlplus_3</output-dir>
+      </compilation-unit>
+    </test-case> 
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-int-vis-user-lot-aqlplus_1">
+        <output-dir compare="Text">user-vis-int-vis-user-lot-aqlplus_1</output-dir>
+      </compilation-unit>
+    </test-case> 
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-lot-aqlplus_1">
+        <output-dir compare="Text">user-vis-lot-aqlplus_1</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-lot-aqlplus_2">
+        <output-dir compare="Text">user-vis-lot-aqlplus_2</output-dir>
+      </compilation-unit>
+    </test-case> 
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-lot-aqlplus_3">
+        <output-dir compare="Text">user-vis-lot-aqlplus_3</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-lot-aqlplus_4">
+        <output-dir compare="Text">user-vis-lot-aqlplus_4</output-dir>
+      </compilation-unit>
+    </test-case> 
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-lot-aqlplus_5">
+        <output-dir compare="Text">user-vis-lot-aqlplus_5</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-lot-int-aqlplus_1">
+        <output-dir compare="Text">user-vis-lot-int-aqlplus_1</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="user-vis-lot-int-aqlplus_2">
+        <output-dir compare="Text">user-vis-lot-int-aqlplus_2</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="index-join">
     <test-case FilePath="index-join">

@@ -75,7 +75,7 @@ public class LoadRecordFieldsRule implements IAlgebraicRewriteRule {
             AssignOperator a1 = (AssignOperator) op1;
             ILogicalExpression expr = getFirstExpr(a1);
             if (AnalysisUtil.isAccessToFieldRecord(expr)) {
-                boolean res = findAndEliminateRedundantFieldAccess(a1);
+                boolean res = findAndEliminateRedundantFieldAccess(a1, context);
                 context.addToDontApplySet(this, op1);
                 return res;
             }
@@ -181,7 +181,7 @@ public class LoadRecordFieldsRule implements IAlgebraicRewriteRule {
             a2InptList.add(topChild);
             // and link it as child in the op. tree
             topOp.getInputs().set(0, new MutableObject<ILogicalOperator>(a2));
-            findAndEliminateRedundantFieldAccess(a2);
+            findAndEliminateRedundantFieldAccess(a2, context);
         } else { // e.g., a join
             LinkedList<LogicalVariable> usedInAccess = new LinkedList<LogicalVariable>();
             VariableUtilities.getUsedVariables(a2, usedInAccess);
@@ -230,7 +230,7 @@ public class LoadRecordFieldsRule implements IAlgebraicRewriteRule {
         tpInpList.clear();
         tpInpList.add(new MutableObject<ILogicalOperator>(toPushThroughChildRef.getValue()));
         toPushThroughChildRef.setValue(toPush);
-        findAndEliminateRedundantFieldAccess(toPush);
+        findAndEliminateRedundantFieldAccess(toPush, context);
     }
 
     /**
@@ -249,7 +249,7 @@ public class LoadRecordFieldsRule implements IAlgebraicRewriteRule {
      * 
      * @param toPush
      */
-    private static boolean findAndEliminateRedundantFieldAccess(AssignOperator assign) throws AlgebricksException {
+    private static boolean findAndEliminateRedundantFieldAccess(AssignOperator assign, IOptimizationContext context) throws AlgebricksException {
         ILogicalExpression expr = getFirstExpr(assign);
         AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) expr;
         ILogicalExpression arg0 = f.getArguments().get(0).getValue();
@@ -264,6 +264,15 @@ public class LoadRecordFieldsRule implements IAlgebraicRewriteRule {
         }
         ConstantExpression ce = (ConstantExpression) arg1;
         if (f.getFunctionIdentifier().equals(AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME)) {
+            // add functional dependency for the assign
+            List<LogicalVariable> keys = context.findPrimaryKey(recordVar);
+            if (keys != null) {
+                List<LogicalVariable> tail = new ArrayList<LogicalVariable>();
+                tail.add(assign.getVariables().get(0));
+                FunctionalDependency pk = new FunctionalDependency(keys, tail);
+                context.addPrimaryKey(pk);
+            }
+            
             String fldName = ((AString) ((AsterixConstantValue) ce.getValue()).getObject()).getStringValue();
             ILogicalExpression fldExpr = findFieldExpression(assign, recordVar, fldName);
 
