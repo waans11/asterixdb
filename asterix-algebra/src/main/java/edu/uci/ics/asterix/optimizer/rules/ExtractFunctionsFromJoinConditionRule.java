@@ -36,6 +36,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractBin
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
+import edu.uci.ics.hyracks.algebricks.core.algebra.properties.FunctionalDependency;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 
 /**
@@ -126,6 +127,14 @@ public class ExtractFunctionsFromJoinConditionRule implements IAlgebraicRewriteR
                     }
 
                     if (modified) {
+                        // add functional dependency for the assign
+                        List<LogicalVariable> keys = computePrimaryKey(exprRef.getValue(), context);
+                        if (keys != null) {
+                            List<LogicalVariable> tail = new ArrayList<LogicalVariable>();
+                            tail.add(newVar);
+                            FunctionalDependency pk = new FunctionalDependency(keys, tail);
+                            context.addPrimaryKey(pk);
+                        }
                         // Replace original expr with variable reference.
                         exprRef.setValue(new VariableReferenceExpression(newVar));
                         context.computeAndSetTypeEnvironmentForOperator(newAssign);
@@ -137,6 +146,40 @@ public class ExtractFunctionsFromJoinConditionRule implements IAlgebraicRewriteR
         } else {
             return false;
         }
+    }
+
+    private List<LogicalVariable> computePrimaryKey(ILogicalExpression expr, IOptimizationContext context) {
+        
+        if (expr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            return null;
+        }
+        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) expr;
+        
+        List<LogicalVariable> keys = null;
+        for (Mutable<ILogicalExpression> argRef : fexp.getArguments()) {
+            ILogicalExpression arg = argRef.getValue();
+            if (arg.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+                continue;
+            }
+            List<LogicalVariable> currentKeys = null;
+            if (arg.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+                currentKeys = computePrimaryKey(arg, context);
+            } else if (arg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+                LogicalVariable var = ((VariableReferenceExpression) arg).getVariableReference();
+                currentKeys = context.findPrimaryKey(var);
+            }
+            if (currentKeys != null) {
+                if (keys == null) {
+                    keys = currentKeys;
+                }
+                for (LogicalVariable key : currentKeys) {
+                    if (!keys.contains(key)) {
+                        keys.add(key);
+                    }
+                }
+            }
+        }
+        return keys;
     }
 
 }
