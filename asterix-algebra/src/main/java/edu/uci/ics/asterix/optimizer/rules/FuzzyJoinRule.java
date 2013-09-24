@@ -22,6 +22,7 @@ import java.util.Locale;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
+import org.eclipse.jdt.internal.core.util.ConstantValueAttribute;
 
 import edu.uci.ics.asterix.algebra.base.LogicalOperatorDeepCopyVisitor;
 import edu.uci.ics.asterix.aql.base.Clause;
@@ -30,6 +31,8 @@ import edu.uci.ics.asterix.aqlplus.parser.AQLPlusParser;
 import edu.uci.ics.asterix.aqlplus.parser.ParseException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
+import edu.uci.ics.asterix.om.base.AFloat;
+import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.TypeHelper;
@@ -177,13 +180,18 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
         ILogicalOperator rightInputOp = inputOps.get(1).getValue();
 
         List<Mutable<ILogicalExpression>> inputExps = simFuncExpr.getArguments();
+        if (inputExps.size() != 3) {
+            return false;
+        }
 
         ILogicalExpression inputExp0 = inputExps.get(0).getValue();
         ILogicalExpression inputExp1 = inputExps.get(1).getValue();
+        ILogicalExpression inputExp2 = inputExps.get(2).getValue();
 
         // left and right expressions are variables
         if (inputExp0.getExpressionTag() != LogicalExpressionTag.VARIABLE
-                || inputExp1.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+                || inputExp1.getExpressionTag() != LogicalExpressionTag.VARIABLE
+                || inputExp2.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
             return false;
         }
 
@@ -233,8 +241,15 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
             tokenizer = funcId.getName();
         }
 
-        float simThreshold = FuzzyUtils.getSimThreshold(metadataProvider);
-        String simFunction = FuzzyUtils.getSimFunction(metadataProvider);
+        String simFunction = FuzzyUtils.getSimFunction(simFuncExpr.getFunctionIdentifier());
+        float simThreshold;
+        ConstantExpression constExpr = (ConstantExpression) inputExp2;
+        AsterixConstantValue constVal = (AsterixConstantValue) constExpr.getValue();
+        if (constVal.getObject() instanceof AFloat) {
+            simThreshold = ((AFloat)constVal.getObject()).getFloatValue();                    
+        } else {
+            simThreshold = FuzzyUtils.getSimThreshold(metadataProvider);
+        }
 
         // finalize AQL+ query
         String prepareJoin;

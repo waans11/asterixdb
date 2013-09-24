@@ -116,4 +116,15 @@ public class FuzzyUtils {
         simFunction = simFunction.toLowerCase();
         return simFunction;
     }
+
+    public static String getSimFunction(FunctionIdentifier simFuncId) {
+        if (simFuncId.equals(AsterixBuiltinFunctions.SIMILARITY_JACCARD)
+                || simFuncId.equals(AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK)) {
+            return JACCARD_FUNCTION_NAME;
+        } else if (simFuncId.equals(AsterixBuiltinFunctions.EDIT_DISTANCE)
+                || simFuncId.equals(AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK)) {
+            return EDIT_DISTANCE_FUNCTION_NAME;
+        }
+        return null;
+    }
 }
