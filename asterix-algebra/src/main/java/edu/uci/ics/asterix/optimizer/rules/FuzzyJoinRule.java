@@ -31,14 +31,18 @@ import edu.uci.ics.asterix.aqlplus.parser.AQLPlusParser;
 import edu.uci.ics.asterix.aqlplus.parser.ParseException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
+import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.TypeHelper;
 import edu.uci.ics.asterix.optimizer.base.FuzzyUtils;
+import edu.uci.ics.asterix.optimizer.rules.am.IAccessMethod;
+import edu.uci.ics.asterix.optimizer.rules.am.IntroduceJoinAccessMethodRule;
 import edu.uci.ics.asterix.translator.AqlPlusExpressionToPlanTranslator;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -172,6 +176,12 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
         }
         // Skip this rule based on annotations.
         if (simFuncExpr.getAnnotations().containsKey(IndexedNLJoinExpressionAnnotation.INSTANCE)) {
+            return false;
+        }
+        
+        // Skip this rule if indexed NL join can be applied
+        IntroduceJoinAccessMethodRule accessMethodAnalyzer = new IntroduceJoinAccessMethodRule();
+        if (accessMethodAnalyzer.chooseAccessMethod(opRef, context) != null) {
             return false;
         }
 

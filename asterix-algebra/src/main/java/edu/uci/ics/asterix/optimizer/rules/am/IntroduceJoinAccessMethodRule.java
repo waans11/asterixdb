@@ -65,6 +65,7 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
     protected Mutable<ILogicalOperator> joinRef = null;
     protected InnerJoinOperator join = null;
     protected AbstractFunctionCallExpression joinCond = null;
+    protected  Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
     protected final OptimizableOperatorSubTree leftSubTree = new OptimizableOperatorSubTree();
     protected final OptimizableOperatorSubTree rightSubTree = new OptimizableOperatorSubTree();
 
@@ -79,15 +80,31 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
             throws AlgebricksException {
+        Pair<IAccessMethod, Index> chosenIndex = chooseAccessMethod(opRef, context);
+        if (chosenIndex == null) {
+            return false;
+        }
+        // Apply plan transformation using chosen index.
+        AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
+        boolean res = chosenIndex.first.applyJoinPlanTransformation(joinRef, leftSubTree, rightSubTree,
+                chosenIndex.second, analysisCtx, context);
+        if (res) {
+            OperatorPropertiesUtil.typeOpRec(opRef, context);            
+        }
+        context.addToDontApplySet(this, join);
+        return res;
+    }
+    
+    public Pair<IAccessMethod, Index> chooseAccessMethod(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
+            throws AlgebricksException {
         clear();
         setMetadataDeclarations(context);
 
         // Match operator pattern and initialize optimizable sub trees.
         if (!matchesOperatorPattern(opRef, context)) {
-            return false;
+            return null;
         }
         // Analyze condition on those optimizable subtrees that have a datasource scan.
-        Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
         boolean matchInLeftSubTree = false;
         boolean matchInRightSubTree = false;
         if (leftSubTree.hasDataSourceScan()) {
@@ -97,7 +114,7 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
             matchInRightSubTree = analyzeCondition(joinCond, rightSubTree.assigns, analyzedAMs);
         }
         if (!matchInLeftSubTree && !matchInRightSubTree) {
-            return false;
+            return null;
         }
 
         // Set dataset and type metadata.
@@ -111,7 +128,7 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
             checkRightSubTreeMetadata = rightSubTree.setDatasetAndTypeMetadata(metadataProvider);
         }
         if (!checkLeftSubTreeMetadata && !checkRightSubTreeMetadata) {
-            return false;
+            return null;
         }
         if (checkLeftSubTreeMetadata) {
             fillSubTreeIndexExprs(leftSubTree, analyzedAMs);
@@ -120,23 +137,14 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
             fillSubTreeIndexExprs(rightSubTree, analyzedAMs);
         }
         pruneIndexCandidates(analyzedAMs);
-
+        
         // Choose index to be applied.
         Pair<IAccessMethod, Index> chosenIndex = chooseIndex(analyzedAMs);
         if (chosenIndex == null) {
             context.addToDontApplySet(this, join);
-            return false;
-        }
-
-        // Apply plan transformation using chosen index.
-        AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
-        boolean res = chosenIndex.first.applyJoinPlanTransformation(joinRef, leftSubTree, rightSubTree,
-                chosenIndex.second, analysisCtx, context);
-        if (res) {
-            OperatorPropertiesUtil.typeOpRec(opRef, context);            
-        }
-        context.addToDontApplySet(this, join);
-        return res;
+            return null;
+        }       
+        return chosenIndex;
     }
 
     protected boolean matchesOperatorPattern(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
@@ -175,5 +183,6 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         joinRef = null;
         join = null;
         joinCond = null;
+        analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
     }
 }
