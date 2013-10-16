@@ -1,5 +1,3 @@
-drop dataverse fuzzyjoin if exists;
-create dataverse fuzzyjoin;
 use dataverse fuzzyjoin;
 
 load dataset Users 

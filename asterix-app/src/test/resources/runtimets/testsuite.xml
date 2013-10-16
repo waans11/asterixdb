@@ -1907,13 +1907,11 @@
         <output-dir compare="Text">user-int-aqlplus_2</output-dir>
       </compilation-unit>
     </test-case>    
-    <!-- issue #618
     <test-case FilePath="fuzzyjoin">
       <compilation-unit name="user-int-aqlplus_3">
         <output-dir compare="Text">user-int-aqlplus_3</output-dir>
       </compilation-unit>
     </test-case>  
-    -->
     <test-case FilePath="fuzzyjoin">
       <compilation-unit name="user-lot-aqlplus_1">
         <output-dir compare="Text">user-lot-aqlplus_1</output-dir>
