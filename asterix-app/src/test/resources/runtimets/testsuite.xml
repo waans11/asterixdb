@@ -1892,6 +1892,16 @@
     </test-case>
     -->
     <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="events-users-aqlplus_1">
+        <output-dir compare="Text">events-users-aqlplus_1</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="events-users-aqlplus_2">
+        <output-dir compare="Text">events-users-aqlplus_2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
       <compilation-unit name="opentype">
         <output-dir compare="Text">opentype</output-dir>
       </compilation-unit>
@@ -1931,7 +1941,7 @@
       <compilation-unit name="user-lot-aqlplus_3">
         <output-dir compare="Text">user-lot-aqlplus_3</output-dir>
       </compilation-unit>
-    </test-case>  
+    </test-case>
     <test-case FilePath="fuzzyjoin">
       <compilation-unit name="user-vis-int-aqlplus_1">
         <output-dir compare="Text">user-vis-int-aqlplus_1</output-dir>
@@ -1951,7 +1961,7 @@
       <compilation-unit name="user-vis-int-vis-user-lot-aqlplus_1">
         <output-dir compare="Text">user-vis-int-vis-user-lot-aqlplus_1</output-dir>
       </compilation-unit>
-    </test-case> 
+    </test-case>
     <test-case FilePath="fuzzyjoin">
       <compilation-unit name="user-vis-lot-aqlplus_1">
         <output-dir compare="Text">user-vis-lot-aqlplus_1</output-dir>

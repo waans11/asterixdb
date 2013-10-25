@@ -1,0 +1,14 @@
+use dataverse fuzzyjoin;
+
+set simthreshold '.5f';
+
+for $user in dataset('User')
+order by $user.name 
+return {
+	"user_name": $user.name,
+	"similar_users": for $similar_user in dataset('User')
+						where $user.interests ~= $similar_user.interests
+						and $user.name != $similar_user.name
+						order by $similar_user.name 
+ 						return { "user_name": $similar_user.name }
+};

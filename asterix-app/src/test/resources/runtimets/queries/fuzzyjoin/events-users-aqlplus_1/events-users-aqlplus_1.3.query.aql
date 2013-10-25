@@ -5,7 +5,7 @@ set simthreshold '.5f';
 for $user in dataset('User')
 let $similar_users :=
  for $similar_user in dataset('User')
- where $user.interests ~= $similar_user.interests
+ where $user.interests ~= $similar_user.interests and $user.name != $similar_user.name
  order by $similar_user.name 
  return { "user_name": $similar_user.name }
 order by $user.name 

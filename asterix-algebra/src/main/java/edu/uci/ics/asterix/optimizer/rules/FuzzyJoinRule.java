@@ -15,6 +15,7 @@
 package edu.uci.ics.asterix.optimizer.rules;
 
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -27,6 +28,7 @@ import org.eclipse.jdt.internal.core.util.ConstantValueAttribute;
 import edu.uci.ics.asterix.algebra.base.LogicalOperatorDeepCopyVisitor;
 import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.expression.Identifier;
+import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.aqlplus.parser.AQLPlusParser;
 import edu.uci.ics.asterix.aqlplus.parser.ParseException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
@@ -54,6 +56,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IndexedNLJoinExpressionAnnotation;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -76,8 +79,8 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
             //
             // -- - Stage 3 - --
             //
-            + "((#RIGHT), "
-            + "  (join((#LEFT), "
+            + "((#LEFT), "
+            + "  (join((#RIGHT), "
             //
             // -- -- - Stage 2 - --
             //
@@ -146,7 +149,7 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
             //
             // -- -- -
             //
-            + "    ), $$LEFTPK = $idLeft)),  $$RIGHTPK = $idRight)";
+            + "    ), $$RIGHTPK = $idRight)),  $$LEFTPK = $idLeft)";
 
     private Collection<LogicalVariable> liveVars = new HashSet<LogicalVariable>();
 
@@ -178,7 +181,7 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
         if (simFuncExpr.getAnnotations().containsKey(IndexedNLJoinExpressionAnnotation.INSTANCE)) {
             return false;
         }
-        
+
         // Skip this rule if indexed NL join can be applied
         IntroduceJoinAccessMethodRule accessMethodAnalyzer = new IntroduceJoinAccessMethodRule();
         if (accessMethodAnalyzer.chooseAccessMethod(opRef, context) != null) {
@@ -256,7 +259,7 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
         ConstantExpression constExpr = (ConstantExpression) inputExp2;
         AsterixConstantValue constVal = (AsterixConstantValue) constExpr.getValue();
         if (constVal.getObject() instanceof AFloat) {
-            simThreshold = ((AFloat)constVal.getObject()).getFloatValue();                    
+            simThreshold = ((AFloat) constVal.getObject()).getFloatValue();
         } else {
             simThreshold = FuzzyUtils.getSimThreshold(metadataProvider);
         }
@@ -269,18 +272,8 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
                 break;
             }
             case LEFT_OUTER: {
-                // TODO To make it work for Left Outer Joins, we should permute
-                // the #LEFT and #RIGHT at the top of the AQL+ query. But, when
-                // doing this, the
-                // fuzzyjoin/user-vis-int-vis-user-lot-aqlplus_1.aql (the one
-                // doing 3-way fuzzy joins) gives a different result. But even
-                // if we don't change the FuzzyJoinRule, permuting the for
-                // clauses in fuzzyjoin/user-vis-int-vis-user-lot-aqlplus_1.aql
-                // leads to different results, which suggests there is some
-                // other sort of bug.
-                return false;
-                // prepareJoin = "loj" + AQLPLUS;
-                // break;
+                prepareJoin = "loj" + AQLPLUS;
+                break;
             }
             default: {
                 throw new IllegalStateException();
@@ -387,7 +380,25 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
                         throw new IllegalStateException();
                     }
                     LeftOuterJoinOperator topJoin = (LeftOuterJoinOperator) outputOp;
-                    topJoin.getCondition().setValue(expRef.getValue());
+
+                    // Combine the conditions of top join of aqlplus plan and the original join
+                    AbstractFunctionCallExpression andFunc = new ScalarFunctionCallExpression(
+                            FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.AND));
+
+                    List<Mutable<ILogicalExpression>> conjs = new ArrayList<Mutable<ILogicalExpression>>();
+                    if (topJoin.getCondition().getValue().splitIntoConjuncts(conjs)) {
+                        andFunc.getArguments().addAll(conjs);     
+                    } else {
+                        andFunc.getArguments().add(new MutableObject<ILogicalExpression>(topJoin.getCondition().getValue()));
+                    }
+                    
+                    List<Mutable<ILogicalExpression>> conjs2 = new ArrayList<Mutable<ILogicalExpression>>();
+                    if (expRef.getValue().splitIntoConjuncts(conjs2)) {
+                        andFunc.getArguments().addAll(conjs2);     
+                    } else {
+                        andFunc.getArguments().add(expRef);
+                    }
+                    topJoin.getCondition().setValue(andFunc);
                     break;
                 }
                 default: {
@@ -411,8 +422,8 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
                 return expRef;
             }
             if (funcExpr.getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.AND)) {
-                for (int i = 0; i < 2; i++) {
-                    Mutable<ILogicalExpression> expRefRet = getSimilarityExpression(funcExpr.getArguments().get(i));
+                for (Mutable<ILogicalExpression> arg : funcExpr.getArguments()) {
+                    Mutable<ILogicalExpression> expRefRet = getSimilarityExpression(arg);
                     if (expRefRet != null) {
                         return expRefRet;
                     }
