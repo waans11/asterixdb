@@ -1658,6 +1658,11 @@
   -->
   <test-group name="fuzzyjoin">
     <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="bestpaper-dblp-csx-aqlplus_1">
+        <output-dir compare="Text">bestpaper-dblp-csx-aqlplus_1</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
       <compilation-unit name="dblp-1_1">
         <output-dir compare="Text">dblp-1_1</output-dir>
       </compilation-unit>
