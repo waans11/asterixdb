@@ -253,7 +253,8 @@ public class TestsUtils {
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, "Method failed: " + method.getStatusLine());
             String[] errors = handleError(method);
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, errors[2]);
-            throw new Exception("DML operation failed: " + errors[0]);
+            throw new Exception("DDL operation failed: " + errors[0] + "\nSUMMARY: " + errors[1] + "\nSTACKTRACE: "
+                    + errors[2]);
         }
     }
 
@@ -285,7 +286,8 @@ public class TestsUtils {
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, "Method failed: " + method.getStatusLine());
             String[] errors = handleError(method);
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, errors[2]);
-            throw new Exception("DDL operation failed: " + errors[0]);
+            throw new Exception("DDL operation failed: " + errors[0] + "\nSUMMARY: " + errors[1] + "\nSTACKTRACE: "
+                    + errors[2]);
         }
     }
 
@@ -422,34 +424,18 @@ public class TestsUtils {
                             break;
                         case "txnqar": //qar represents query after recovery
                             try {
-                                ////////////// <begin of temporary fix> ////////////////////////////
-                                //TODO
-                                //Temporary fix in order not to block the build test(mvn verify)
-                                //A proper fix should not have the while loop here.
-                                int maxRetryCount = 12;
-                                int tryCount = 0;
-                                InputStream resultStream = null;
-                                long sleepTime = 5;
-                                
-                                do {
-                                    //wait until NC starts
-                                    sleepTime *= 2;
-                                    Thread.sleep(sleepTime);
-                                    if (++tryCount > maxRetryCount) {
-                                        LOGGER.info("Metadata node is not running - this test will fail.");
-                                        break;
-                                    }
-                                    resultStream = executeQuery(statement);
-                                } while (resultStream.toString().contains("Connection refused to host"));
-                                ////////////// <end of temporary fix> //////////////////////////////
+
+                                InputStream resultStream = executeQuery(statement);
 
                                 qarFile = new File(actualPath + File.separator
                                         + testCaseCtx.getTestCase().getFilePath().replace(File.separator, "_") + "_"
                                         + cUnit.getName() + "_qar.adm");
                                 qarFile.getParentFile().mkdirs();
                                 TestsUtils.writeResultsToFile(qarFile, resultStream);
+
                                 TestsUtils.runScriptAndCompareWithResult(testFile, new PrintWriter(System.err),
                                         qbcFile, qarFile);
+
                                 LOGGER.info("[TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/"
                                         + cUnit.getName() + " PASSED ");
                             } catch (JsonMappingException e) {
@@ -476,11 +462,23 @@ public class TestsUtils {
                                 throw new Exception("Test \"" + testFile + "\" FAILED!\n", e);
                             }
                             break;
+                        case "sleep":
+                            Thread.sleep(Long.parseLong(statement.trim()));
+                            break;
+                        case "errddl": // a ddlquery that expects error
+                            try {
+                                TestsUtils.executeDDL(statement);
+
+                            } catch (Exception e) {
+                                // expected error happens
+                            }
+                            break;
                         default:
                             throw new IllegalArgumentException("No statements of type " + ctx.getType());
                     }
 
                 } catch (Exception e) {
+                    e.printStackTrace();
                     if (cUnit.getExpectedError().isEmpty()) {
                         throw new Exception("Test \"" + testFile + "\" FAILED!", e);
                     }
@@ -488,4 +486,5 @@ public class TestsUtils {
             }
         }
     }
+
 }
