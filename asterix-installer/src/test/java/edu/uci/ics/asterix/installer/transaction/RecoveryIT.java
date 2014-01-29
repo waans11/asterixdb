@@ -114,7 +114,7 @@ public class RecoveryIT {
 
     @Test
     public void test() throws Exception {
-        TestsUtils.executeTest(PATH_ACTUAL, tcCtx, pb);
+        TestsUtils.executeTest(PATH_ACTUAL, tcCtx, pb, false);
     }
 
 }
