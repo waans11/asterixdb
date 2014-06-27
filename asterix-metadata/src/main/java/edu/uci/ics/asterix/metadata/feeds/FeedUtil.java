@@ -26,8 +26,10 @@ import java.util.logging.Logger;
 
 import org.apache.commons.lang3.tuple.Pair;
 
+import edu.uci.ics.asterix.common.dataflow.AsterixLSMInvertedIndexInsertDeleteOperatorDescriptor;
 import edu.uci.ics.asterix.common.dataflow.AsterixLSMTreeInsertDeleteOperatorDescriptor;
 import edu.uci.ics.asterix.common.feeds.FeedConnectionId;
+import edu.uci.ics.asterix.common.feeds.FeedRuntime;
 import edu.uci.ics.asterix.common.feeds.FeedRuntime.FeedRuntimeType;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
@@ -35,6 +37,7 @@ import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter.AdapterType;
+import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Feed;
 import edu.uci.ics.asterix.metadata.entities.FeedActivity;
 import edu.uci.ics.asterix.metadata.entities.FeedActivity.FeedActivityType;
@@ -87,12 +90,14 @@ public class FeedUtil {
             return spec;
         }
 
-        JobSpecification altered = new JobSpecification();
+        JobSpecification altered = new JobSpecification(spec.getFrameSize());
         Map<OperatorDescriptorId, IOperatorDescriptor> operatorMap = spec.getOperatorMap();
 
         // copy operators
+        String operationId = null;
         Map<OperatorDescriptorId, OperatorDescriptorId> oldNewOID = new HashMap<OperatorDescriptorId, OperatorDescriptorId>();
         for (Entry<OperatorDescriptorId, IOperatorDescriptor> entry : operatorMap.entrySet()) {
+            operationId = FeedRuntime.FeedRuntimeId.DEFAULT_OPERATION_ID;
             IOperatorDescriptor opDesc = entry.getValue();
             if (opDesc instanceof FeedIntakeOperatorDescriptor) {
                 FeedIntakeOperatorDescriptor orig = (FeedIntakeOperatorDescriptor) opDesc;
@@ -107,8 +112,14 @@ public class FeedUtil {
                 }
                 oldNewOID.put(opDesc.getOperatorId(), fiop.getOperatorId());
             } else if (opDesc instanceof AsterixLSMTreeInsertDeleteOperatorDescriptor) {
+                operationId = ((AsterixLSMTreeInsertDeleteOperatorDescriptor) opDesc).getIndexName();
                 FeedMetaOperatorDescriptor metaOp = new FeedMetaOperatorDescriptor(altered, feedConnectionId, opDesc,
-                        feedPolicy, FeedRuntimeType.STORAGE);
+                        feedPolicy, FeedRuntimeType.STORAGE, operationId);
+                oldNewOID.put(opDesc.getOperatorId(), metaOp.getOperatorId());
+            } else if (opDesc instanceof AsterixLSMInvertedIndexInsertDeleteOperatorDescriptor) {
+                operationId = ((AsterixLSMInvertedIndexInsertDeleteOperatorDescriptor) opDesc).getIndexName();
+                FeedMetaOperatorDescriptor metaOp = new FeedMetaOperatorDescriptor(altered, feedConnectionId, opDesc,
+                        feedPolicy, FeedRuntimeType.STORAGE, operationId);
                 oldNewOID.put(opDesc.getOperatorId(), metaOp.getOperatorId());
             } else {
                 FeedRuntimeType runtimeType = null;
@@ -122,7 +133,7 @@ public class FeedUtil {
                     }
                 }
                 FeedMetaOperatorDescriptor metaOp = new FeedMetaOperatorDescriptor(altered, feedConnectionId, opDesc,
-                        feedPolicy, runtimeType);
+                        feedPolicy, runtimeType, operationId);
 
                 oldNewOID.put(opDesc.getOperatorId(), metaOp.getOperatorId());
             }
@@ -282,8 +293,12 @@ public class FeedUtil {
                                 "You must specify the datatype associated with the incoming data. Datatype is specified by the "
                                         + IGenericAdapterFactory.KEY_TYPE_NAME + " configuration parameter");
                     }
-                    adapterOutputType = (ARecordType) MetadataManager.INSTANCE.getDatatype(mdTxnCtx,
-                            feed.getDataverseName(), outputTypeName).getDatatype();
+                    Datatype datatype = MetadataManager.INSTANCE.getDatatype(mdTxnCtx,
+                            feed.getDataverseName(), outputTypeName);
+                    if (datatype == null) {
+                        throw new Exception("no datatype \"" + outputTypeName + "\" in dataverse \"" + feed.getDataverseName() + "\"");
+                    }
+                    adapterOutputType = (ARecordType) datatype.getDatatype();
                     ((IGenericAdapterFactory) adapterFactory).configure(configuration, (ARecordType) adapterOutputType);
                     break;
                 default:

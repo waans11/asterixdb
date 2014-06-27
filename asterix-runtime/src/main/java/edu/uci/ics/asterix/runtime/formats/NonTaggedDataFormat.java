@@ -65,22 +65,47 @@ import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarAvgAggregateDescripto
 import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarCountAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarMaxAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarMinAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarSqlAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarSqlCountAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarSqlMaxAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarSqlMinAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarSqlSumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.scalar.ScalarSumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableAvgAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableCountAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableGlobalAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableGlobalSqlAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableIntermediateAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableIntermediateSqlAvgAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableLocalAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableLocalSqlAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableLocalSqlSumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableLocalSumAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableSqlAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableSqlCountAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableSqlSumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.serializable.std.SerializableSumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.AvgAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.CountAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.GlobalAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.GlobalSqlAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.IntermediateAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.IntermediateSqlAvgAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.LocalAvgAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.LocalMaxAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.LocalMinAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.LocalSqlAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.LocalSqlMaxAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.LocalSqlMinAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.LocalSqlSumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.LocalSumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.MaxAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.MinAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.SqlAvgAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.SqlCountAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.SqlMaxAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.SqlMinAggregateDescriptor;
+import edu.uci.ics.asterix.runtime.aggregates.std.SqlSumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.std.SumAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.stream.EmptyStreamAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.aggregates.stream.NonEmptyStreamAggregateDescriptor;
@@ -145,6 +170,7 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.CreatePolygonDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.CreateRectangleDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.CreateUUIDDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.EditDistanceCheckDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.EditDistanceContainsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.EditDistanceDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.EditDistanceListIsFilterable;
 import edu.uci.ics.asterix.runtime.evaluators.functions.EditDistanceStringIsFilterable;
@@ -160,6 +186,7 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.HashedGramTokensDescript
 import edu.uci.ics.asterix.runtime.evaluators.functions.HashedWordTokensDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.InjectFailureDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.IsNullDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.IsSystemNullDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.LenDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.LikeDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NotDescriptor;
@@ -368,6 +395,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(NumericModuloDescriptor.FACTORY);
         temp.add(NumericCaretDescriptor.FACTORY);
         temp.add(IsNullDescriptor.FACTORY);
+        temp.add(IsSystemNullDescriptor.FACTORY);
         temp.add(NotDescriptor.FACTORY);
         temp.add(LenDescriptor.FACTORY);
         temp.add(EmptyStreamAggregateDescriptor.FACTORY);
@@ -403,6 +431,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(CountAggregateDescriptor.FACTORY);
         temp.add(AvgAggregateDescriptor.FACTORY);
         temp.add(LocalAvgAggregateDescriptor.FACTORY);
+        temp.add(IntermediateAvgAggregateDescriptor.FACTORY);
         temp.add(GlobalAvgAggregateDescriptor.FACTORY);
         temp.add(SumAggregateDescriptor.FACTORY);
         temp.add(LocalSumAggregateDescriptor.FACTORY);
@@ -415,6 +444,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(SerializableCountAggregateDescriptor.FACTORY);
         temp.add(SerializableAvgAggregateDescriptor.FACTORY);
         temp.add(SerializableLocalAvgAggregateDescriptor.FACTORY);
+        temp.add(SerializableIntermediateAvgAggregateDescriptor.FACTORY);
         temp.add(SerializableGlobalAvgAggregateDescriptor.FACTORY);
         temp.add(SerializableSumAggregateDescriptor.FACTORY);
         temp.add(SerializableLocalSumAggregateDescriptor.FACTORY);
@@ -425,6 +455,35 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(ScalarSumAggregateDescriptor.FACTORY);
         temp.add(ScalarMaxAggregateDescriptor.FACTORY);
         temp.add(ScalarMinAggregateDescriptor.FACTORY);
+
+        // SQL aggregates
+        temp.add(SqlCountAggregateDescriptor.FACTORY);
+        temp.add(SqlAvgAggregateDescriptor.FACTORY);
+        temp.add(LocalSqlAvgAggregateDescriptor.FACTORY);
+        temp.add(IntermediateSqlAvgAggregateDescriptor.FACTORY);
+        temp.add(GlobalSqlAvgAggregateDescriptor.FACTORY);
+        temp.add(SqlSumAggregateDescriptor.FACTORY);
+        temp.add(LocalSqlSumAggregateDescriptor.FACTORY);
+        temp.add(SqlMaxAggregateDescriptor.FACTORY);
+        temp.add(LocalSqlMaxAggregateDescriptor.FACTORY);
+        temp.add(SqlMinAggregateDescriptor.FACTORY);
+        temp.add(LocalSqlMinAggregateDescriptor.FACTORY);
+
+        // SQL serializable aggregates
+        temp.add(SerializableSqlCountAggregateDescriptor.FACTORY);
+        temp.add(SerializableSqlAvgAggregateDescriptor.FACTORY);
+        temp.add(SerializableLocalSqlAvgAggregateDescriptor.FACTORY);
+        temp.add(SerializableIntermediateSqlAvgAggregateDescriptor.FACTORY);
+        temp.add(SerializableGlobalSqlAvgAggregateDescriptor.FACTORY);
+        temp.add(SerializableSqlSumAggregateDescriptor.FACTORY);
+        temp.add(SerializableLocalSqlSumAggregateDescriptor.FACTORY);
+
+        // SQL scalar aggregates
+        temp.add(ScalarSqlCountAggregateDescriptor.FACTORY);
+        temp.add(ScalarSqlAvgAggregateDescriptor.FACTORY);
+        temp.add(ScalarSqlSumAggregateDescriptor.FACTORY);
+        temp.add(ScalarSqlMaxAggregateDescriptor.FACTORY);
+        temp.add(ScalarSqlMinAggregateDescriptor.FACTORY);
 
         // new functions - constructors
         temp.add(ABooleanConstructorDescriptor.FACTORY);
@@ -485,6 +544,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(EditDistanceCheckDescriptor.FACTORY);
         temp.add(EditDistanceStringIsFilterable.FACTORY);
         temp.add(EditDistanceListIsFilterable.FACTORY);
+        temp.add(EditDistanceContainsDescriptor.FACTORY);
 
         temp.add(SimilarityJaccardDescriptor.FACTORY);
         temp.add(SimilarityJaccardCheckDescriptor.FACTORY);
@@ -864,21 +924,7 @@ public class NonTaggedDataFormat implements IDataFormat {
 
     @Override
     public ITupleParserFactory createTupleParser(ARecordType recType, IParseFileSplitsDecl decl) {
-        if (decl.isDelimitedFileFormat()) {
-            int n = recType.getFieldTypes().length;
-            IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
-            for (int i = 0; i < n; i++) {
-                ATypeTag tag = recType.getFieldTypes()[i].getTypeTag();
-                IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
-                if (vpf == null) {
-                    throw new NotImplementedException("No value parser factory for delimited fields of type " + tag);
-                }
-                fieldParserFactories[i] = vpf;
-            }
-            return new NtDelimitedDataTupleParserFactory(recType, fieldParserFactories, decl.getDelimChar());
-        } else {
-            return new AdmSchemafullRecordParserFactory(recType);
-        }
+        return createTupleParser(recType, decl.isDelimitedFileFormat(), decl.getDelimChar());
     }
 
     @Override

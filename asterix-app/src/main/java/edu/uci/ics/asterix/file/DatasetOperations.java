@@ -26,6 +26,7 @@ import edu.uci.ics.asterix.api.common.Job;
 import edu.uci.ics.asterix.common.api.ILocalResourceMetadata;
 import edu.uci.ics.asterix.common.config.AsterixStorageProperties;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.common.config.DatasetConfig.ExternalDatasetTransactionState;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.config.OptimizationConfUtil;
 import edu.uci.ics.asterix.common.context.AsterixVirtualBufferCacheProvider;
@@ -123,7 +124,7 @@ public class DatasetOperations {
         JobSpecification specPrimary = JobSpecificationUtils.createJobSpecification();
 
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = metadataProvider
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(dataset.getDataverseName(), datasetName,
+                .splitProviderAndPartitionConstraintsForDataset(dataset.getDataverseName(), datasetName,
                         datasetName);
         AsterixStorageProperties storageProperties = AsterixAppContextInfo.getInstance().getStorageProperties();
         Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(dataset,
@@ -134,7 +135,7 @@ public class DatasetOperations {
                         dataset.getDatasetId()), compactionInfo.first, compactionInfo.second,
                         new PrimaryIndexOperationTrackerProvider(dataset.getDatasetId()),
                         AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, LSMBTreeIOOperationCallbackFactory.INSTANCE,
-                        storageProperties.getBloomFilterFalsePositiveRate()));
+                        storageProperties.getBloomFilterFalsePositiveRate(), true));
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(specPrimary, primaryBtreeDrop,
                 splitsAndConstraint.second);
 
@@ -164,7 +165,7 @@ public class DatasetOperations {
         int[] blooFilterKeyFields = DatasetUtils.createBloomFilterKeyFields(dataset);
 
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(dataverseName, datasetName, datasetName);
+                .splitProviderAndPartitionConstraintsForDataset(dataverseName, datasetName, datasetName);
         FileSplit[] fs = splitsAndConstraint.first.getFileSplits();
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < fs.length; i++) {
@@ -189,7 +190,7 @@ public class DatasetOperations {
                         compactionInfo.first, compactionInfo.second, new PrimaryIndexOperationTrackerProvider(dataset
                                 .getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
                         LSMBTreeIOOperationCallbackFactory.INSTANCE, storageProperties
-                                .getBloomFilterFalsePositiveRate()), localResourceFactoryProvider,
+                                .getBloomFilterFalsePositiveRate(), true), localResourceFactoryProvider,
                 NoOpOperationCallbackFactory.INSTANCE);
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, indexCreateOp,
                 splitsAndConstraint.second);
@@ -225,10 +226,10 @@ public class DatasetOperations {
         int[] blooFilterKeyFields = DatasetUtils.createBloomFilterKeyFields(dataset);
 
         ExternalDatasetDetails externalDatasetDetails = new ExternalDatasetDetails(loadStmt.getAdapter(),
-                loadStmt.getProperties());
+                loadStmt.getProperties(), null, null, ExternalDatasetTransactionState.COMMIT, null, null);
 
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = metadataProvider.buildExternalDataScannerRuntime(
-                spec, itemType, externalDatasetDetails, format);
+                spec, itemType, externalDatasetDetails, format, dataset);
         IOperatorDescriptor scanner = p.first;
         AlgebricksPartitionConstraint scannerPc = p.second;
         RecordDescriptor recDesc = computePayloadKeyRecordDescriptor(dataset, itemType, payloadSerde, format);
@@ -253,7 +254,7 @@ public class DatasetOperations {
         fieldPermutation[numKeys] = 0;
 
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = metadataProvider
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(dataverseName, datasetName, datasetName);
+                .splitProviderAndPartitionConstraintsForDataset(dataverseName, datasetName, datasetName);
 
         FileSplit[] fs = splitsAndConstraint.first.getFileSplits();
         StringBuilder sb = new StringBuilder();
@@ -277,7 +278,7 @@ public class DatasetOperations {
                             compactionInfo.second, new PrimaryIndexOperationTrackerProvider(dataset.getDatasetId()),
                             AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
                             LSMBTreeIOOperationCallbackFactory.INSTANCE,
-                            storageProperties.getBloomFilterFalsePositiveRate()), NoOpOperationCallbackFactory.INSTANCE);
+                            storageProperties.getBloomFilterFalsePositiveRate(), true), NoOpOperationCallbackFactory.INSTANCE);
             AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, btreeBulkLoad,
                     splitsAndConstraint.second);
 
@@ -302,7 +303,7 @@ public class DatasetOperations {
                             compactionInfo.second, new PrimaryIndexOperationTrackerProvider(dataset.getDatasetId()),
                             AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
                             LSMBTreeIOOperationCallbackFactory.INSTANCE,
-                            storageProperties.getBloomFilterFalsePositiveRate()), NoOpOperationCallbackFactory.INSTANCE);
+                            storageProperties.getBloomFilterFalsePositiveRate(), true), NoOpOperationCallbackFactory.INSTANCE);
             AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, btreeBulkLoad,
                     splitsAndConstraint.second);
 
@@ -389,7 +390,7 @@ public class DatasetOperations {
         int[] blooFilterKeyFields = DatasetUtils.createBloomFilterKeyFields(dataset);
 
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(dataverseName, datasetName, datasetName);
+                .splitProviderAndPartitionConstraintsForDataset(dataverseName, datasetName, datasetName);
 
         AsterixStorageProperties storageProperties = AsterixAppContextInfo.getInstance().getStorageProperties();
 
@@ -402,7 +403,7 @@ public class DatasetOperations {
                         compactionInfo.first, compactionInfo.second, new PrimaryIndexOperationTrackerProvider(
                                 dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
                         LSMBTreeIOOperationCallbackFactory.INSTANCE,
-                        storageProperties.getBloomFilterFalsePositiveRate()), NoOpOperationCallbackFactory.INSTANCE);
+                        storageProperties.getBloomFilterFalsePositiveRate(), true), NoOpOperationCallbackFactory.INSTANCE);
         AlgebricksPartitionConstraintHelper
                 .setPartitionConstraintInJobSpec(spec, compactOp, splitsAndConstraint.second);
 

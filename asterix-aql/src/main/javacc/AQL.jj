@@ -202,6 +202,7 @@ Statement SingleStatement() throws ParseException:
     | stmt = FeedStatement()
     | stmt = CompactStatement()
     | stmt = Query()
+    | stmt = RefreshExternalDatasetStatement()
   )
   {
     return stmt;
@@ -320,11 +321,16 @@ DatasetDecl DatasetSpecification() throws ParseException:
     <LEFTPAREN> typeName = Identifier() <RIGHTPAREN>
     ifNotExists = IfNotExists()
     "using" adapterName = AdapterName() properties = Configuration()
+    ("on" nodeGroupName = Identifier() )?
     ( "hints" hints = Properties() )?
+    ( "using" "compaction" "policy" compactionPolicy = CompactionPolicy() compactionPolicyProperties = Configuration() )?
       {
         ExternalDetailsDecl edd = new ExternalDetailsDecl();
         edd.setAdapter(adapterName);
         edd.setProperties(properties);
+        edd.setNodegroupName(nodeGroupName != null? new Identifier(nodeGroupName): null);
+        edd.setCompactionPolicy(compactionPolicy);
+        edd.setCompactionPolicyProperties(compactionPolicyProperties);
         dsetDecl = new DatasetDecl(nameComponents.first,
                                    nameComponents.second,
                                    new Identifier(typeName),
@@ -362,6 +368,21 @@ DatasetDecl DatasetSpecification() throws ParseException:
     {
       return dsetDecl;
     }
+}
+
+RefreshExternalDatasetStatement RefreshExternalDatasetStatement() throws ParseException:
+{
+  RefreshExternalDatasetStatement redss = new RefreshExternalDatasetStatement();
+  Pair<Identifier,Identifier> nameComponents = null;
+  String datasetName = null;
+}
+{
+	"refresh external" <DATASET> nameComponents = QualifiedName()
+	{
+	redss.setDataverseName(nameComponents.first);
+	redss.setDatasetName(nameComponents.second);
+	return redss;
+	}
 }
 
 CreateIndexStatement IndexSpecification() throws ParseException:
@@ -1471,7 +1492,7 @@ Expression ValueExpr()throws ParseException:
   Expression expr = null;
   Identifier ident = null;
   AbstractAccessor fa = null;
-  int index;
+  Expression indexExpr = null;
 }
 {
   expr = PrimaryExpr() ( ident = Field()
@@ -1479,10 +1500,10 @@ Expression ValueExpr()throws ParseException:
 	  fa = (fa == null ? new FieldAccessor(expr, ident) 
                        : new FieldAccessor(fa, ident));
     }
-  | index = Index()
+  | indexExpr = Index()
     {
-      fa = (fa == null ? new IndexAccessor(expr, index)
-                       : new IndexAccessor(fa, index));
+      fa = (fa == null ? new IndexAccessor(expr, indexExpr)
+                       : new IndexAccessor(fa, indexExpr));
      }
   )*
     {
@@ -1501,10 +1522,9 @@ Identifier Field() throws ParseException:
     }
 }
 
-int Index() throws ParseException:
+Expression Index() throws ParseException:
 {
 	Expression expr = null;
-	int idx = -2;
 }
 {
   <LEFTBRACKET> ( expr = Expression()
@@ -1512,28 +1532,20 @@ int Index() throws ParseException:
 		if(expr.getKind() == Expression.Kind.LITERAL_EXPRESSION)
 		{
 			Literal lit = ((LiteralExpr)expr).getValue();
-			if(lit.getLiteralType() == Literal.Type.INTEGER || 
-			   lit.getLiteralType() == Literal.Type.LONG) {
-				idx = Integer.valueOf(lit.getStringValue());
-			}
-			else {
+			if(lit.getLiteralType() != Literal.Type.INTEGER &&
+			   lit.getLiteralType() != Literal.Type.LONG) {
 				throw new ParseException("Index should be an INTEGER");				
             }
 		}
-
 	}
 
-  	| <QUES>
-	{
-		idx = IndexAccessor.ANY;
-	  // ANY
-	}
+  	| <QUES> // ANY
  	 
   	)
 
    <RIGHTBRACKET>
 	{
-	  return idx;
+	  return expr;
 	}
 }
 
@@ -2297,9 +2309,11 @@ TOKEN :
 <DEFAULT,IN_DBL_BRACE>
 TOKEN :
 {
-    <STRING_LITERAL : ("\"" (<EscapeQuot> | ~["\""])* "\"") | ("\'"(<EscapeApos> | ~["\'"])* "\'")>
+    <STRING_LITERAL : ("\"" (<EscapeQuot> | <EscapeBslash> | ~["\"","\\"])* "\"") 
+        | ("\'"(<EscapeApos> | <EscapeBslash> | ~["\'","\\"])* "\'")>
   | < #EscapeQuot: "\\\"" >
   | < #EscapeApos: "\\\'" >
+  | < #EscapeBslash: "\\\\" >
 }
 
 <DEFAULT,IN_DBL_BRACE>

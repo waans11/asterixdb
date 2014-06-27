@@ -189,12 +189,6 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
             return false;
         }
 
-        // Skip this rule if indexed NL join can be applied
-        IntroduceJoinAccessMethodRule accessMethodAnalyzer = new IntroduceJoinAccessMethodRule();
-        if (accessMethodAnalyzer.chooseAccessMethod(opRef, context) != null) {
-            return false;
-        }
-
         List<Mutable<ILogicalOperator>> inputOps = joinOp.getInputs();
         ILogicalOperator leftInputOp = inputOps.get(0).getValue();
         ILogicalOperator rightInputOp = inputOps.get(1).getValue();
@@ -374,7 +368,7 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
             getItemExprRef.setValue(ConstantExpression.TRUE);
             switch (joinOp.getJoinKind()) {
                 case INNER: {
-                    extraSelect = new SelectOperator(expRef);
+                    extraSelect = new SelectOperator(expRef, false, null);
                     extraSelect.getInputs().add(new MutableObject<ILogicalOperator>(outputOp));
                     outputOp = extraSelect;
                     break;

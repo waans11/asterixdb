@@ -330,7 +330,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         } else {
             LogicalVariable pVar = context.newVar(fc.getPosVarExpr());
             returnedOp = new UnnestOperator(v, new MutableObject<ILogicalExpression>(makeUnnestExpression(eo.first)),
-                    pVar, BuiltinType.AINT32);
+                    pVar, BuiltinType.AINT32, new AqlPositionWriter());
         }
         returnedOp.getInputs().add(eo.second);
 
@@ -427,17 +427,16 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         Pair<ILogicalExpression, Mutable<ILogicalOperator>> p = aqlExprToAlgExpression(ia.getExpr(), tupSource);
         LogicalVariable v = context.newVar();
         AbstractFunctionCallExpression f;
-        int i = ia.getIndex();
-        if (i == IndexAccessor.ANY) {
+        if (ia.isAny()) {
             f = new ScalarFunctionCallExpression(
                     FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.ANY_COLLECTION_MEMBER));
             f.getArguments().add(new MutableObject<ILogicalExpression>(p.first));
         } else {
+            Pair<ILogicalExpression, Mutable<ILogicalOperator>> indexPair = aqlExprToAlgExpression(ia.getIndexExpr(),
+                    tupSource);
             f = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.GET_ITEM));
             f.getArguments().add(new MutableObject<ILogicalExpression>(p.first));
-            f.getArguments().add(
-                    new MutableObject<ILogicalExpression>(new ConstantExpression(
-                            new AsterixConstantValue(new AInt32(i)))));
+            f.getArguments().add(new MutableObject<ILogicalExpression>(indexPair.first));
         }
         AssignOperator a = new AssignOperator(v, new MutableObject<ILogicalExpression>(f));
         a.getInputs().add(p.second);
@@ -639,14 +638,14 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
 
         Pair<ILogicalOperator, LogicalVariable> pThen = ifexpr.getThenExpr().accept(this, nestedSource);
         SelectOperator sel1 = new SelectOperator(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
-                varCond)));
+                varCond)), false, null);
         sel1.getInputs().add(new MutableObject<ILogicalOperator>(pThen.first));
 
         Pair<ILogicalOperator, LogicalVariable> pElse = ifexpr.getElseExpr().accept(this, nestedSource);
         AbstractFunctionCallExpression notVarCond = new ScalarFunctionCallExpression(
                 FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.NOT), new MutableObject<ILogicalExpression>(
                         new VariableReferenceExpression(varCond)));
-        SelectOperator sel2 = new SelectOperator(new MutableObject<ILogicalExpression>(notVarCond));
+        SelectOperator sel2 = new SelectOperator(new MutableObject<ILogicalExpression>(notVarCond), false, null);
         sel2.getInputs().add(new MutableObject<ILogicalOperator>(pElse.first));
 
         ILogicalPlan p1 = new ALogicalPlanImpl(new MutableObject<ILogicalOperator>(sel1));
@@ -825,7 +824,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         AggregateFunctionCallExpression fAgg;
         SelectOperator s;
         if (qe.getQuantifier() == Quantifier.SOME) {
-            s = new SelectOperator(new MutableObject<ILogicalExpression>(eo2.first));
+            s = new SelectOperator(new MutableObject<ILogicalExpression>(eo2.first), false, null);
             s.getInputs().add(eo2.second);
             fAgg = AsterixBuiltinFunctions.makeAggregateFunctionExpression(AsterixBuiltinFunctions.NON_EMPTY_STREAM,
                     new ArrayList<Mutable<ILogicalExpression>>());
@@ -833,7 +832,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
             List<Mutable<ILogicalExpression>> satExprList = new ArrayList<Mutable<ILogicalExpression>>(1);
             satExprList.add(new MutableObject<ILogicalExpression>(eo2.first));
             s = new SelectOperator(new MutableObject<ILogicalExpression>(new ScalarFunctionCallExpression(
-                    FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.NOT), satExprList)));
+                    FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.NOT), satExprList)), false, null);
             s.getInputs().add(eo2.second);
             fAgg = AsterixBuiltinFunctions.makeAggregateFunctionExpression(AsterixBuiltinFunctions.EMPTY_STREAM,
                     new ArrayList<Mutable<ILogicalExpression>>());
@@ -923,7 +922,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
     public Pair<ILogicalOperator, LogicalVariable> visitWhereClause(WhereClause w, Mutable<ILogicalOperator> tupSource)
             throws AsterixException {
         Pair<ILogicalExpression, Mutable<ILogicalOperator>> p = aqlExprToAlgExpression(w.getWhereExpr(), tupSource);
-        SelectOperator s = new SelectOperator(new MutableObject<ILogicalExpression>(p.first));
+        SelectOperator s = new SelectOperator(new MutableObject<ILogicalExpression>(p.first), false, null);
         s.getInputs().add(p.second);
 
         return new Pair<ILogicalOperator, LogicalVariable>(s, null);

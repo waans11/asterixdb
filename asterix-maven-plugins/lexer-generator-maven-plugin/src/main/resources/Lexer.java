@@ -35,6 +35,7 @@ public class [LEXER_NAME] {
     protected int line;
     protected boolean prevCharIsCR;
     protected boolean prevCharIsLF;
+    protected boolean containsEscapes; 
     protected char[] buffer;
     protected int bufsize;
     protected int bufpos;
@@ -53,11 +54,12 @@ public class [LEXER_NAME] {
 //  Main method. Return a TOKEN_CONSTANT
 // ================================================================================            
             
-    public int next() throws [LEXER_NAME]Exception, IOException{
+    public int next() throws [LEXER_NAME]Exception, IOException {
         char currentChar = buffer[bufpos];
         while (currentChar == ' ' || currentChar=='\t' || currentChar == '\n' || currentChar=='\r')
             currentChar = readNextChar(); 
         tokenBegin = bufpos;
+        containsEscapes = false;
         if (currentChar==EOF_CHAR) return TOKEN_EOF;
 
         [LEXER_LOGIC]
@@ -96,6 +98,18 @@ public class [LEXER_NAME] {
                                   new String(buffer, 0, bufpos);
     }
     
+    public int getColumn() {
+        return column;
+    }
+    
+    public int getLine() {
+        return line;
+    }
+    
+    public boolean containsEscapes() {
+        return containsEscapes;
+    }
+
     public static String tokenKindToString(int token) {
         return tokenImage[token]; 
     }
@@ -108,22 +122,14 @@ public class [LEXER_NAME] {
 //  Parse error management
 // ================================================================================    
     
-    protected int parseError(String reason) throws [LEXER_NAME]Exception {
-        StringBuilder message = new StringBuilder();
-        message.append(reason).append("\n");
-        message.append("Line: ").append(line).append("\n");
-        message.append("Row: ").append(column).append("\n");
-        throw new [LEXER_NAME]Exception(message.toString());
-    }
-
     protected int parseError(int ... tokens) throws [LEXER_NAME]Exception {
         StringBuilder message = new StringBuilder();
-        message.append("Error while parsing. ");
-        message.append(" Line: ").append(line);
-        message.append(" Row: ").append(column);
-        message.append(" Expecting:");
-        for (int tokenId : tokens){
-            message.append(" ").append([LEXER_NAME].tokenKindToString(tokenId));
+        message.append("Parse error at (").append(line).append(", ").append(column).append(")");
+        if (tokens.length > 0) {
+            message.append(" expecting:");
+            for (int tokenId : tokens){
+                message.append(" ").append([LEXER_NAME].tokenKindToString(tokenId));
+            }
         }
         throw new [LEXER_NAME]Exception(message.toString());
     }

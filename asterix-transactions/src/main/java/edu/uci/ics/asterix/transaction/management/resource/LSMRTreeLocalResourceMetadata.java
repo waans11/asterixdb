@@ -39,19 +39,20 @@ public class LSMRTreeLocalResourceMetadata extends AbstractLSMLocalResourceMetad
 
     private static final long serialVersionUID = 1L;
 
-    private final ITypeTraits[] typeTraits;
-    private final IBinaryComparatorFactory[] rtreeCmpFactories;
-    private final IBinaryComparatorFactory[] btreeCmpFactories;
-    private final IPrimitiveValueProviderFactory[] valueProviderFactories;
-    private final RTreePolicyType rtreePolicyType;
-    private final ILinearizeComparatorFactory linearizeCmpFactory;
-    private final ILSMMergePolicyFactory mergePolicyFactory;
-    private final Map<String, String> mergePolicyProperties;
+    protected final ITypeTraits[] typeTraits;
+    protected final IBinaryComparatorFactory[] rtreeCmpFactories;
+    protected final IBinaryComparatorFactory[] btreeCmpFactories;
+    protected final IPrimitiveValueProviderFactory[] valueProviderFactories;
+    protected final RTreePolicyType rtreePolicyType;
+    protected final ILinearizeComparatorFactory linearizeCmpFactory;
+    protected final ILSMMergePolicyFactory mergePolicyFactory;
+    protected final Map<String, String> mergePolicyProperties;
+    protected final int[] btreeFields;
 
     public LSMRTreeLocalResourceMetadata(ITypeTraits[] typeTraits, IBinaryComparatorFactory[] rtreeCmpFactories,
             IBinaryComparatorFactory[] btreeCmpFactories, IPrimitiveValueProviderFactory[] valueProviderFactories,
             RTreePolicyType rtreePolicyType, ILinearizeComparatorFactory linearizeCmpFactory, int datasetID,
-            ILSMMergePolicyFactory mergePolicyFactory, Map<String, String> mergePolicyProperties) {
+            ILSMMergePolicyFactory mergePolicyFactory, Map<String, String> mergePolicyProperties, int[] btreeFields) {
         super(datasetID);
         this.typeTraits = typeTraits;
         this.rtreeCmpFactories = rtreeCmpFactories;
@@ -61,6 +62,7 @@ public class LSMRTreeLocalResourceMetadata extends AbstractLSMLocalResourceMetad
         this.linearizeCmpFactory = linearizeCmpFactory;
         this.mergePolicyFactory = mergePolicyFactory;
         this.mergePolicyProperties = mergePolicyProperties;
+        this.btreeFields = btreeFields;
     }
 
     @Override
@@ -75,7 +77,7 @@ public class LSMRTreeLocalResourceMetadata extends AbstractLSMLocalResourceMetad
                     mergePolicyFactory.createMergePolicy(mergePolicyProperties), new BaseOperationTracker(
                             (DatasetLifecycleManager) runtimeContextProvider.getIndexLifecycleManager(), datasetID),
                     runtimeContextProvider.getLSMIOScheduler(), LSMRTreeIOOperationCallbackFactory.INSTANCE
-                            .createIOOperationCallback(), linearizeCmpFactory);
+                            .createIOOperationCallback(), linearizeCmpFactory, btreeFields);
         } catch (TreeIndexException e) {
             throw new HyracksDataException(e);
         }

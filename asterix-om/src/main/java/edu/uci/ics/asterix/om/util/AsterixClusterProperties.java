@@ -52,6 +52,8 @@ public class AsterixClusterProperties {
 
     private AlgebricksAbsolutePartitionConstraint clusterPartitionConstraint;
 
+    private boolean globalRecoveryCompleted = false;
+
     private AsterixClusterProperties() {
         InputStream is = this.getClass().getClassLoader().getResourceAsStream(CLUSTER_CONFIGURATION_FILE);
         if (is != null) {
@@ -88,7 +90,7 @@ public class AsterixClusterProperties {
             state = State.ACTIVE;
         }
         if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info(" Registering configuration parameters for node id" + nodeId);
+            LOGGER.info(" Registering configuration parameters for node id " + nodeId);
         }
         resetClusterPartitionConstraint();
     }
@@ -106,7 +108,7 @@ public class AsterixClusterProperties {
         Map<String, String> ncConfig = ncConfiguration.get(nodeId);
         if (ncConfig == null) {
             if (LOGGER.isLoggable(Level.WARNING)) {
-                LOGGER.warning("Configuration parameters for nodeId" + nodeId
+                LOGGER.warning("Configuration parameters for nodeId " + nodeId
                         + " not found. The node has not joined yet or has left.");
             }
             return -1;
@@ -126,7 +128,7 @@ public class AsterixClusterProperties {
         Map<String, String> ncConfig = ncConfiguration.get(nodeId);
         if (ncConfig == null) {
             if (LOGGER.isLoggable(Level.WARNING)) {
-                LOGGER.warning("Configuration parameters for nodeId" + nodeId
+                LOGGER.warning("Configuration parameters for nodeId " + nodeId
                         + " not found. The node has not joined yet or has left.");
             }
             return null;
@@ -238,5 +240,13 @@ public class AsterixClusterProperties {
             }
 
         }
+    }
+
+    public boolean isGlobalRecoveryCompleted() {
+        return globalRecoveryCompleted;
+    }
+
+    public void setGlobalRecoveryCompleted(boolean globalRecoveryCompleted) {
+        this.globalRecoveryCompleted = globalRecoveryCompleted;
     }
 }
