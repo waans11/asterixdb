@@ -299,7 +299,7 @@ public class TestsUtils {
             stringBuilder.append(line);
             stringBuilder.append(ls);
         }
-
+        reader.close();
         return stringBuilder.toString();
     }
 
