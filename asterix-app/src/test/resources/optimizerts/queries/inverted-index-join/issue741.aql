@@ -40,7 +40,7 @@ $t.send_time < datetime('2011-06-18T15:10:17')
 return {                     
     "tweet": $t.tweetid,               
     "similar-tweets": for $t2 in dataset('TweetMessages')
-                      let $sim := similarity-jaccard-check($t.referred_topics, $t2.referred_topics, 0.6f)
+                      let $sim := /*+ indexnl */ similarity-jaccard-check($t.referred_topics, $t2.referred_topics, 0.6f)
 		      where $sim[0] and 
                       $t2.tweetid != $t.tweetid
                       return $t2.tweetid

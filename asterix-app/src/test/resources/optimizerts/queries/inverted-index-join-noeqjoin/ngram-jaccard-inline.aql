@@ -27,6 +27,6 @@ write output to nc1:"rttest/inverted-index-join-noeqjoin_ngram-jaccard-inline.ad
 
 for $a in dataset('DBLP')
 for $b in dataset('DBLP')
-let $jacc := similarity-jaccard(gram-tokens($a.title, 3, false), gram-tokens($b.title, 3, false))
+let $jacc := /*+ indexnl */ similarity-jaccard(gram-tokens($a.title, 3, false), gram-tokens($b.title, 3, false))
 where $jacc >= 0.5f and $a.id < $b.id
 return {"atitle": $a.title, "btitle": $b.title, "jacc": $jacc}

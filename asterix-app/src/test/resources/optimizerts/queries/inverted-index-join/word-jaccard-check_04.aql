@@ -25,6 +25,6 @@ write output to nc1:"rttest/inverted-index-join_word-jaccard-check_04.adm";
 
 for $a in dataset('DBLP')
 for $b in dataset('DBLP')
-let $jacc := similarity-jaccard-check(word-tokens($a.title), word-tokens($b.title), 0.5f)
+let $jacc := /*+ indexnl */ similarity-jaccard-check(word-tokens($a.title), word-tokens($b.title), 0.5f)
 where $jacc[0] and $a.id < $b.id
 return {"arec": $a, "brec": $b, "jacc": $jacc[1] }

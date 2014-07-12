@@ -47,7 +47,7 @@ order by $t1.tweetid
 return {
     "tweet": {"id": $t1.tweetid, "topics" : $t1.referred-topics} ,             
     "similar-tweets": for $t2 in dataset('TweetMessages')
-                      let $sim := similarity-jaccard-check($t1.referred-topics, $t2.referred-topics, 0.5f)
+                      let $sim := /*+ indexnl */ similarity-jaccard-check($t1.referred-topics, $t2.referred-topics, 0.5f)
 		      where $sim[0] and 
                       $t2.tweetid != $t1.tweetid
                       order by $t2.tweetid

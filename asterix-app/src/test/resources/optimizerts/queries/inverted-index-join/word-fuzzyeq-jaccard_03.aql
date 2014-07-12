@@ -27,5 +27,5 @@ set simthreshold '0.5f';
 
 for $a in dataset('DBLP')
 for $b in dataset('DBLP')
-where word-tokens($a.title) ~= word-tokens($b.title) and $a.id < $b.id
+where word-tokens($a.title) /*+ indexnl */ ~= word-tokens($b.title) and $a.id < $b.id
 return {"arec": $a, "brec": $b }

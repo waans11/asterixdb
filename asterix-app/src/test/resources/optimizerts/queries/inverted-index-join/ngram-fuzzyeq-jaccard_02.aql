@@ -38,5 +38,5 @@ set simthreshold '0.5f';
 
 for $a in dataset('DBLP')
 for $b in dataset('CSX')
-where gram-tokens($a.title, 3, false) ~= gram-tokens($b.title, 3, false) and $a.id < $b.id
+where gram-tokens($a.title, 3, false) /*+ indexnl */ ~= gram-tokens($b.title, 3, false) and $a.id < $b.id
 return {"arec": $a, "brec": $b }

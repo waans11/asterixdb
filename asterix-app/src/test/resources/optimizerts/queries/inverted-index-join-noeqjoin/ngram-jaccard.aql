@@ -36,6 +36,6 @@ write output to nc1:"rttest/inverted-index-join-noeqjoin_ngram-jaccard.adm";
 
 for $a in dataset('DBLP')
 for $b in dataset('CSX')
-where similarity-jaccard(gram-tokens($a.title, 3, false), gram-tokens($b.title, 3, false)) >= 0.5f
+where /*+ indexnl */ similarity-jaccard(gram-tokens($a.title, 3, false), gram-tokens($b.title, 3, false)) >= 0.5f
       and $a.id < $b.id
 return {"atitle": $a.title, "btitle": $b.title}
