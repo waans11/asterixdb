@@ -17,12 +17,12 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>edu.uci.ics.asterix</groupId>
   <artifactId>asterix</artifactId>
-  <version>0.8.6-SNAPSHOT</version>
+  <version>0.8.7-SNAPSHOT</version>
   <packaging>pom</packaging>
   
   <properties>
-    <algebricks.version>0.2.12-SNAPSHOT</algebricks.version>
-    <hyracks.version>0.2.12-SNAPSHOT</hyracks.version>
+    <algebricks.version>0.2.13-SNAPSHOT</algebricks.version>
+    <hyracks.version>0.2.13-SNAPSHOT</hyracks.version>
     <jvm.extraargs />
     <runSlowAQLTests>false</runSlowAQLTests>
 
@@ -75,7 +75,7 @@
 
 	<scm>
 		<connection>scm:git:https://code.google.com/p/asterixdb/</connection>
-		<developerConnection>scm:git:https://code.google.com/p/asterixdb/</developerConnection>
+		<developerConnection>scm:git:ssh://fulliautomatix.ics.uci.edu:29418/asterixdb</developerConnection>
 	</scm>
 
 	<distributionManagement>
