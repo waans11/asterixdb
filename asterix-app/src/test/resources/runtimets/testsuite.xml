@@ -1322,6 +1322,16 @@
       </compilation-unit>
      </test-case>
      <test-case FilePath="dml">
+      <compilation-unit name="using-correlated-prefix-merge-policy">
+        <output-dir compare="Text">using-correlated-prefix-merge-policy</output-dir>
+      </compilation-unit>
+     </test-case>
+     <test-case FilePath="dml">
+      <compilation-unit name="using-no-merge-policy">
+        <output-dir compare="Text">using-no-merge-policy</output-dir>
+      </compilation-unit>
+     </test-case>
+     <test-case FilePath="dml">
       <compilation-unit name="query-issue382">
         <output-dir compare="Text">query-issue382</output-dir>
       </compilation-unit>
@@ -4193,6 +4203,11 @@
     <test-case FilePath="string">
       <compilation-unit name="toLowerCase04">
         <output-dir compare="Text">toLowerCase04</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="string">
+      <compilation-unit name="uppercase">
+        <output-dir compare="Text">uppercase</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
