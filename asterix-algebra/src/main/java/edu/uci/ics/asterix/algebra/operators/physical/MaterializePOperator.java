@@ -92,4 +92,9 @@ public class MaterializePOperator extends AbstractPhysicalOperator {
         }
         return new Pair<int[], int[]>(inputDependencyLabels, outputDependencyLabels);
     }
+
+    @Override
+    public boolean expensiveThanMaterialization() {
+        return false;
+    }
 }
