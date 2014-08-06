@@ -2430,6 +2430,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="index-selection">
+      <compilation-unit name="rtree-secondary-index-circular-query">
+        <output-dir compare="Text">rtree-secondary-index-circular-query</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="index-selection">
       <compilation-unit name="disjunctive-predicate-1">
         <output-dir compare="Text">disjunctive-predicate-1</output-dir>
       </compilation-unit>
@@ -2715,6 +2720,11 @@
     <test-case FilePath="misc">
       <compilation-unit name="year_01">
         <output-dir compare="Text">year_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="string_eq_01">
+        <output-dir compare="Text">string_eq_01</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -3874,6 +3884,16 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="string">
+      <compilation-unit name="escapes01">
+        <output-dir compare="Text">escapes01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="string">
+      <compilation-unit name="escapes02">
+        <output-dir compare="Text">escapes02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="string">
       <compilation-unit name="length_01">
         <output-dir compare="Text">length_01</output-dir>
       </compilation-unit>
@@ -4796,8 +4816,13 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="load">
-      <compilation-unit name="escapes">
-        <output-dir compare="Text">escapes</output-dir>
+      <compilation-unit name="escapes01">
+        <output-dir compare="Text">escapes01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="load">
+      <compilation-unit name="escapes02">
+        <output-dir compare="Text">escapes02</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="load">
