@@ -90,8 +90,8 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
         }
 
         @Override
-        public Object getVarType(LogicalVariable var, List<LogicalVariable> nonNullVariables)
-                throws AlgebricksException {
+        public Object getVarType(LogicalVariable var, List<LogicalVariable> nonNullVariables,
+                List<List<LogicalVariable>> correlatedNullableVariableLists) throws AlgebricksException {
             throw new IllegalStateException();
         }
 
