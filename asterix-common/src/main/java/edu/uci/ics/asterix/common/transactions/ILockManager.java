@@ -36,8 +36,8 @@ public interface ILockManager {
      * "stronger" lock mode, then no action would be taken - If the transaction
      * has a "weaker" lock, then the request would be interpreted as a convert
      * request
-     * Waiting transaction would eventually garb the lock, or get timed-out
-     * 
+     * Waiting transaction would eventually grab the lock, or get timed-out
+     *
      * @param datasetId
      * @param entityHashValue
      * @param lockMode
@@ -52,7 +52,7 @@ public interface ILockManager {
      * transaction on "All" resources Upon releasing each lock on each resource,
      * potential waiters, which can be waken up based on their requested lock
      * mode and the waiting policy would be waken up
-     * 
+     *
      * @param txnContext
      * @throws ACIDException
      */
@@ -72,7 +72,7 @@ public interface ILockManager {
 
     /**
      * Call to lock and unlock a specific resource in a specific lock mode
-     * 
+     *
      * @param datasetId
      * @param entityHashValue
      * @param lockMode
@@ -108,7 +108,7 @@ public interface ILockManager {
 
     /**
      * Prints out the contents of the transactions' table in a readable fashion
-     * 
+     *
      * @return
      * @throws ACIDException
      */

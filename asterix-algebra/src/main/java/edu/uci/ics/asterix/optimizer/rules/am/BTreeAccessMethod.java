@@ -127,6 +127,11 @@ public class BTreeAccessMethod implements IAccessMethod {
         if (opRef != null) {
             op = opRef.getValue();
         }
+
+        // Temporary: we are not doing post-processing check
+//        ((AbstractLogicalOperator) primaryIndexUnnestOp).setExecutionMode(ExecutionMode.PARTITIONED);
+//        selectRef.setValue(primaryIndexUnnestOp);
+
         // Generate new select using the new condition.
         if (conditionRef.getValue() != null) {
             select.getInputs().clear();
@@ -145,6 +150,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 selectRef.setValue(primaryIndexUnnestOp);
             }
         }
+
         return true;
     }
 
@@ -499,6 +505,8 @@ public class BTreeAccessMethod implements IAccessMethod {
                     primaryIndexOutputTypes, retainInput);
             primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
 
+            //Temporary:
+//            primaryIndexPostProccessingIsNeeded = false;
             if (!primaryIndexPostProccessingIsNeeded) {
                 List<Mutable<ILogicalExpression>> remainingFuncExprs = new ArrayList<Mutable<ILogicalExpression>>();
                 getNewConditionExprs(conditionRef, replacedFuncExprs, remainingFuncExprs);

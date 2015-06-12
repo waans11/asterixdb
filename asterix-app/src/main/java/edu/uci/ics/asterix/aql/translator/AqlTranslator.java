@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.rmi.RemoteException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -187,6 +188,9 @@ import edu.uci.ics.hyracks.api.dataset.ResultSetId;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.api.job.JobId;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
+import edu.uci.ics.hyracks.api.util.ExperimentProfiler;
+import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
+import edu.uci.ics.hyracks.api.util.StopWatch;
 import edu.uci.ics.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
@@ -217,10 +221,17 @@ public class AqlTranslator extends AbstractAqlTranslator {
     private Dataverse activeDefaultDataverse;
     private final List<FunctionDecl> declaredFunctions;
 
+    // For Experiment Profiler
+    private StopWatch profilerSW;
+
     public AqlTranslator(List<Statement> aqlStatements, SessionConfig conf) throws MetadataException, AsterixException {
         this.aqlStatements = aqlStatements;
         this.sessionConfig = conf;
         declaredFunctions = getDeclaredFunctions(aqlStatements);
+        // For Experiment Profiler
+        if (ExperimentProfiler.PROFILE_MODE) {
+            profilerSW = new StopWatch();
+        }
     }
 
     private List<FunctionDecl> getDeclaredFunctions(List<Statement> statements) {
@@ -235,7 +246,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
 
     /**
      * Compiles and submits for execution a list of AQL statements.
-     * 
+     *
      * @param hcc
      *            A Hyracks client connection that is used to submit a jobspec to Hyracks.
      * @param hdc
@@ -252,6 +263,13 @@ public class AqlTranslator extends AbstractAqlTranslator {
         IAWriterFactory writerFactory = PrinterBasedWriterFactory.INSTANCE;
         IResultSerializerFactoryProvider resultSerializerFactoryProvider = ResultSerializerFactoryProvider.INSTANCE;
         Map<String, String> config = new HashMap<String, String>();
+
+    	// For Experiment Profiler
+//        if(ExperimentProfiler.PROFILE_MODE) {
+//            profilerSW.start();
+//            OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("compileAndExecute", String.valueOf(profilerSW.getStartTimeStamp()), "init", false);
+//            System.out.println("complieAndExecute start " + profilerSW.getStartTimeStamp());
+//        }
 
         for (Statement stmt : aqlStatements) {
             validateOperation(activeDefaultDataverse, stmt);
@@ -403,6 +421,16 @@ public class AqlTranslator extends AbstractAqlTranslator {
                 }
             }
         }
+
+    	// For Experiment Profiler
+//        if(ExperimentProfiler.PROFILE_MODE) {
+//            profilerSW.suspend();
+//            profilerSW.finish();
+//            OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("compileAndExecute", String.valueOf(profilerSW.getStartTimeStamp()), profilerSW.getMessage("compileAndExecute", profilerSW.getStartTimeStamp()), true);
+//            System.out.println("complieAndExecute end " + profilerSW.getStartTimeStamp());
+//        }
+
+
     }
 
     private void handleSetStatement(AqlMetadataProvider metadataProvider, Statement stmt, Map<String, String> config)

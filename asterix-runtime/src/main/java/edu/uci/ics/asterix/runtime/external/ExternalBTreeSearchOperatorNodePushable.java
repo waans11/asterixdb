@@ -21,6 +21,7 @@ import edu.uci.ics.hyracks.api.comm.VSizeFrame;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.dataflow.value.IRecordDescriptorProvider;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.api.util.ExperimentProfiler;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAppender;
@@ -42,6 +43,10 @@ public class ExternalBTreeSearchOperatorNodePushable extends BTreeSearchOperator
     // We override the open function to search a specific version of the index
     @Override
     public void open() throws HyracksDataException {
+        // For Experiment Profiler
+        if (ExperimentProfiler.PROFILE_MODE) {
+            profilerSW.start();
+        }
         ExternalBTreeWithBuddyDataflowHelper dataFlowHelper = (ExternalBTreeWithBuddyDataflowHelper) indexHelper;
         accessor = new FrameTupleAccessor(inputRecDesc);
         writer.open();

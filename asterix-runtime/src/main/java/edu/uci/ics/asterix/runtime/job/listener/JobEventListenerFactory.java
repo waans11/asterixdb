@@ -24,6 +24,9 @@ import edu.uci.ics.hyracks.api.context.IHyracksJobletContext;
 import edu.uci.ics.hyracks.api.job.IJobletEventListener;
 import edu.uci.ics.hyracks.api.job.IJobletEventListenerFactory;
 import edu.uci.ics.hyracks.api.job.JobStatus;
+import edu.uci.ics.hyracks.api.util.ExperimentProfiler;
+import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
+import edu.uci.ics.hyracks.api.util.StopWatch;
 
 public class JobEventListenerFactory implements IJobletEventListenerFactory {
 
@@ -44,6 +47,12 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
     public IJobletEventListener createListener(final IHyracksJobletContext jobletContext) {
 
         return new IJobletEventListener() {
+
+			// For Experiment Profiler
+			private StopWatch profilerSW;
+			private String nodeJobSignature;
+			private String taskId;
+
             @Override
             public void jobletFinish(JobStatus jobStatus) {
                 try {
@@ -53,6 +62,15 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
                     txnContext.setWriteTxn(transactionalWrite);
                     txnManager.completedTransaction(txnContext, new DatasetId(-1), -1,
                             !(jobStatus == JobStatus.FAILURE));
+
+                    // For Experiment Profiler
+                    if (ExperimentProfiler.PROFILE_MODE) {
+                    	profilerSW.suspend();
+                        profilerSW.finish();
+                        OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add(nodeJobSignature, taskId, profilerSW.getMessage("TOTAL_HYRACKS_JOB", profilerSW.getStartTimeStamp()), true);
+                        System.out.println("TOTAL_HYRACKS_JOB end " + nodeJobSignature);
+                    }
+
                 } catch (ACIDException e) {
                     throw new Error(e);
                 }
@@ -61,8 +79,26 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
             @Override
             public void jobletStart() {
                 try {
-                    ((IAsterixAppRuntimeContext) jobletContext.getApplicationContext().getApplicationObject())
+                	((IAsterixAppRuntimeContext) jobletContext.getApplicationContext().getApplicationObject())
                             .getTransactionSubsystem().getTransactionManager().getTransactionContext(jobId, true);
+                    // For Experiment Profiler
+                    if (ExperimentProfiler.PROFILE_MODE) {
+                    	profilerSW = new StopWatch();
+                        profilerSW.start();
+
+                        // The key of this job: nodeId + JobId + Joblet hash code
+    					nodeJobSignature = jobletContext
+    							.getApplicationContext().getNodeId()
+    							+ jobletContext.getJobId()
+    							+ jobletContext.hashCode();
+
+    					taskId = "TOTAL_HYRACKS_JOB" + profilerSW.getStartTimeStamp();
+
+    					// taskId: partition + taskId
+//                        OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add(nodeJobSignature, taskId, "init", false);
+                        System.out.println("TOTAL_HYRACKS_JOB start " + nodeJobSignature);
+
+                    }
                 } catch (ACIDException e) {
                     throw new Error(e);
                 }
