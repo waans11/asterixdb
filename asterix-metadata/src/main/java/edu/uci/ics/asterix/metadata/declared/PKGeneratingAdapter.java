@@ -90,7 +90,7 @@ public class PKGeneratingAdapter implements IDatasourceAdapter {
         }
 
         /*
-         * We write this method in low level instead of using pre-existing libraries since this will be called for each record and to avoid 
+         * We write this method in low level instead of using pre-existing libraries since this will be called for each record and to avoid
          * size validation
          */
         private void serializeUUID(AUUID aUUID, byte[] serializedUUID) {
@@ -164,7 +164,7 @@ public class PKGeneratingAdapter implements IDatasourceAdapter {
                     //write the record
                     recBuilder.write(tb.getDataOutput(), true);
                     tb.addFieldEndOffset();
-                    appendToFrameFromTupleBuilder(tb);
+                    appendToFrameFromTupleBuilder(tb, null);
                 }
             } catch (Exception e) {
                 throw new HyracksDataException("Error in the auto id generation and merge of the record", e);

@@ -34,6 +34,8 @@ public class AsterixHyracksIntegrationUtil {
 
     public static final int NODES = 2;
     public static final int PARTITONS = 2;
+    public static final String[] NC_IDS = { "nc1", "nc2" };
+    public static final String[] ASTERIX_DATA_DIRS = new String[] { "nc1data", "nc2data" };
 
     public static final int DEFAULT_HYRACKS_CC_CLIENT_PORT = 1098;
 
@@ -41,6 +43,8 @@ public class AsterixHyracksIntegrationUtil {
 
     private static ClusterControllerService cc;
     private static NodeControllerService[] ncs = new NodeControllerService[NODES];
+    private static NodeControllerService nc1;
+    private static NodeControllerService nc2;
     private static IHyracksClientConnection hcc;
 
     public static void init() throws Exception {

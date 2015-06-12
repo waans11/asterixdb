@@ -984,6 +984,9 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
             case LE: {
                 return AlgebricksBuiltinFunctions.LE;
             }
+            case CONTAINS: {
+                return AlgebricksBuiltinFunctions.CONTAINS;
+            }
             default: {
                 throw new IllegalStateException();
             }

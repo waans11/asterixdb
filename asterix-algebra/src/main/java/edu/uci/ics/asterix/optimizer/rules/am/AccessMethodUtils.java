@@ -117,6 +117,8 @@ public class AccessMethodUtils {
         return ((ABoolean) obj).getBoolean();
     }
 
+    // Analyzes the given function expression
+    // One arg: constant, the other arg: variable
     public static boolean analyzeFuncExprArgsForOneConstAndVar(AbstractFunctionCallExpression funcExpr,
             AccessMethodAnalysisContext analysisCtx) {
         IAlgebricksConstantValue constFilterVal = null;
@@ -126,8 +128,10 @@ public class AccessMethodUtils {
         // One of the args must be a constant, and the other arg must be a variable.
         if (arg1.getExpressionTag() == LogicalExpressionTag.CONSTANT
                 && arg2.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-            // The arguments of contains() function are asymmetrical, we can only use index if it is on the first argument
-            if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+            // The arguments of contains-substring() function or contains text() are asymmetrical.
+        	// We can only use index if the variable is on the first argument
+            if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_FUNCTION
+            		|| funcExpr.getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
                 return false;
             }
             ConstantExpression constExpr = (ConstantExpression) arg1;

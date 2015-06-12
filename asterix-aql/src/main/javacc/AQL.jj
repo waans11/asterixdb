@@ -589,6 +589,10 @@ IndexParams IndexType() throws ParseException:
     {
       type = IndexType.LENGTH_PARTITIONED_WORD_INVIX;
     }
+  | "fulltext"
+    {
+      type = IndexType.SINGLE_PARTITION_WORD_INVIX;
+    }
   | "ngram" <LEFTPAREN> <INTEGER_LITERAL>
     {
       type = IndexType.LENGTH_PARTITIONED_NGRAM_INVIX;
@@ -1593,7 +1597,7 @@ Expression RelExpr()throws ParseException:
     }
 
     (
-      LOOKAHEAD(2)( <LT> | <GT> | <LE> | <GE> | <EQ> | <NE> |<SIMILAR>)
+      LOOKAHEAD(2)( <LT> | <GT> | <LE> | <GE> | <EQ> | <NE> | <SIMILAR> | "contains text" <LEFTPAREN> )
         {
           String mhint = getHint(token);
           if (mhint != null) {
@@ -1609,7 +1613,10 @@ Expression RelExpr()throws ParseException:
           op.setCurrentop(true);
           broadcast = false;
           }
-        op.addOperator(token.image);
+        if (token.image.equals("("))
+        	op.addOperator("contains");
+        else
+        	op.addOperator(token.image);
       }
 
        operand = AddExpr()
@@ -1622,6 +1629,10 @@ Expression RelExpr()throws ParseException:
            }
          }
          op.addOperand(operand, broadcast);
+      }
+
+      (<RIGHTPAREN>)?
+      {
       }
     )?
 
@@ -2504,7 +2515,8 @@ TOKEN :
   | <NE : "!=">
   | <SIMILAR : "~=">
   | <ASSIGN : ":=">
-
+  | <CONTAINS : "contains">
+  | <TEXT : "text">
   | <AND : "and">
   | <OR : "or">
 }

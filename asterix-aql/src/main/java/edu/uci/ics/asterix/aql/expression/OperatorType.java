@@ -31,5 +31,6 @@ public enum OperatorType {
     MOD,
     CARET,
     IDIV, // integer divide
-    FUZZY_EQ
+    FUZZY_EQ,
+    CONTAINS // fulltext search
 }

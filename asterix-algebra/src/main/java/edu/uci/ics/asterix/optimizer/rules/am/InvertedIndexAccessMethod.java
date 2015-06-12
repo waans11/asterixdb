@@ -97,10 +97,13 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
 
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
-        funcIdents.add(AsterixBuiltinFunctions.CONTAINS);
+        // contains(substring) function
+        funcIdents.add(AsterixBuiltinFunctions.CONTAINS_FUNCTION);
         // For matching similarity-check functions. For example, similarity-jaccard-check returns a list of two items,
         // and the select condition will get the first list-item and check whether it evaluates to true.
         funcIdents.add(AsterixBuiltinFunctions.GET_ITEM);
+        // full-text search function
+        funcIdents.add(AlgebricksBuiltinFunctions.CONTAINS);
     }
 
     // These function identifiers are matched in this AM's analyzeFuncExprArgs(),
@@ -123,12 +126,19 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr,
             List<AbstractLogicalOperator> assignsAndUnnests, AccessMethodAnalysisContext analysisCtx) {
 
-        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
-            boolean matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
+    	boolean matches;
+        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_FUNCTION) {
+            matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
             if (!matches) {
                 matches = AccessMethodUtils.analyzeFuncExprArgsForTwoVars(funcExpr, analysisCtx);
             }
             return matches;
+        } else if (funcExpr.getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
+        	matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
+            if (!matches) {
+                matches = AccessMethodUtils.analyzeFuncExprArgsForTwoVars(funcExpr, analysisCtx);
+            }
+        	return matches;
         }
         return analyzeGetItemFuncExpr(funcExpr, assignsAndUnnests, analysisCtx);
     }
@@ -426,7 +436,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         ILogicalOperator indexPlanRootOp = createSecondaryToPrimaryPlan(subTree, null, chosenIndex, optFuncExpr, false,
                 false, false, context);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
-        subTree.dataSourceRef.setValue(indexPlanRootOp);
+        // Temporary - disable verification
+//      selectRef.setValue(indexPlanRootOp);
+         subTree.dataSourceRef.setValue(indexPlanRootOp);
         return true;
     }
 
@@ -807,7 +819,11 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private void addFunctionSpecificArgs(IOptimizableFuncExpr optFuncExpr, InvertedIndexJobGenParams jobGenParams) {
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_FUNCTION) {
+            jobGenParams.setSearchModifierType(SearchModifierType.CONJUNCTIVE);
+            jobGenParams.setSimilarityThreshold(new AsterixConstantValue(ANull.NULL));
+        }
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
             jobGenParams.setSearchModifierType(SearchModifierType.CONJUNCTIVE);
             jobGenParams.setSimilarityThreshold(new AsterixConstantValue(ANull.NULL));
         }
@@ -855,7 +871,11 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             return isJaccardFuncOptimizable(index, optFuncExpr);
         }
 
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_FUNCTION) {
+            return isContainsSubstringFuncOptimizable(index, optFuncExpr);
+        }
+
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
             return isContainsFuncOptimizable(index, optFuncExpr);
         }
 
@@ -1042,14 +1062,42 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return false;
     }
 
+    private boolean isContainsSubstringFuncOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+        if (optFuncExpr.getNumLogicalVars() == 2) {
+            return isContainsSubstringFuncJoinOptimizable(index, optFuncExpr);
+        } else {
+            return isContainsSubstringFuncSelectOptimizable(index, optFuncExpr);
+        }
+    }
+
     private boolean isContainsFuncOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         if (optFuncExpr.getNumLogicalVars() == 2) {
-            return isContainsFuncJoinOptimizable(index, optFuncExpr);
+            return false;
         } else {
             return isContainsFuncSelectOptimizable(index, optFuncExpr);
         }
     }
 
+    private boolean isContainsSubstringFuncSelectOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+        AsterixConstantValue strConstVal = (AsterixConstantValue) optFuncExpr.getConstantVal(0);
+        IAObject strObj = strConstVal.getObject();
+        ATypeTag typeTag = strObj.getType().getTypeTag();
+
+        if (!isContainsSubstringFuncCompatible(typeTag, index.getIndexType())) {
+            return false;
+        }
+
+        // Check that the constant search string has at least gramLength characters.
+        if (strObj.getType().getTypeTag() == ATypeTag.STRING) {
+            AString astr = (AString) strObj;
+            if (astr.getStringValue().length() >= index.getGramLength()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // For full-text search
     private boolean isContainsFuncSelectOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         AsterixConstantValue strConstVal = (AsterixConstantValue) optFuncExpr.getConstantVal(0);
         IAObject strObj = strConstVal.getObject();
@@ -1069,17 +1117,26 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return false;
     }
 
-    private boolean isContainsFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+    private boolean isContainsSubstringFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         if (index.isEnforcingKeyFileds())
-            return isContainsFuncCompatible(index.getKeyFieldTypes().get(0).getTypeTag(), index.getIndexType());
+            return isContainsSubstringFuncCompatible(index.getKeyFieldTypes().get(0).getTypeTag(), index.getIndexType());
         else
-            return isContainsFuncCompatible(optFuncExpr.getFieldType(0).getTypeTag(), index.getIndexType());
+            return isContainsSubstringFuncCompatible(optFuncExpr.getFieldType(0).getTypeTag(), index.getIndexType());
+    }
+
+    private boolean isContainsSubstringFuncCompatible(ATypeTag typeTag, IndexType indexType) {
+        //We can only optimize contains-substring with ngram indexes.
+        if ((typeTag == ATypeTag.STRING)
+                && (indexType == IndexType.SINGLE_PARTITION_NGRAM_INVIX || indexType == IndexType.LENGTH_PARTITIONED_NGRAM_INVIX)) {
+            return true;
+        }
+        return false;
     }
 
     private boolean isContainsFuncCompatible(ATypeTag typeTag, IndexType indexType) {
-        //We can only optimize contains with ngram indexes.
+        //We can only optimize contains with full-text indexes.
         if ((typeTag == ATypeTag.STRING)
-                && (indexType == IndexType.SINGLE_PARTITION_NGRAM_INVIX || indexType == IndexType.LENGTH_PARTITIONED_NGRAM_INVIX)) {
+                && (indexType == IndexType.SINGLE_PARTITION_WORD_INVIX)) {
             return true;
         }
         return false;
@@ -1090,7 +1147,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         switch (index.getIndexType()) {
             case SINGLE_PARTITION_WORD_INVIX:
             case LENGTH_PARTITIONED_WORD_INVIX: {
-                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(searchKeyType, false);
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(searchKeyType, false, false);
             }
             case SINGLE_PARTITION_NGRAM_INVIX:
             case LENGTH_PARTITIONED_NGRAM_INVIX: {

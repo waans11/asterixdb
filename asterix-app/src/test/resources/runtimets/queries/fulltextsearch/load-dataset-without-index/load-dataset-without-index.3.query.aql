@@ -1,0 +1,11 @@
+use dataverse test;
+
+count(
+for $o in dataset('DBLP')
+//where $o.title contains text ("systems database")
+where $o.title contains text ("database")
+//where $o.title contains text ($o.abstract)
+//where contains-substring($o.title,"database")
+//where $o.title = $o.abstract
+return $o
+);
