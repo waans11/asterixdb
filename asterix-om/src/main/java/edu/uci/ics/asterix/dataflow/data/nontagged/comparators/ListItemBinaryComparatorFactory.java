@@ -15,7 +15,6 @@
 
 package edu.uci.ics.asterix.dataflow.data.nontagged.comparators;
 
-import edu.uci.ics.asterix.formats.nontagged.UTF8StringLowercasePointable;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparator;
@@ -26,6 +25,7 @@ import edu.uci.ics.hyracks.data.std.primitive.ByteArrayPointable;
 import edu.uci.ics.hyracks.data.std.primitive.DoublePointable;
 import edu.uci.ics.hyracks.data.std.primitive.FloatPointable;
 import edu.uci.ics.hyracks.data.std.primitive.IntegerPointable;
+import edu.uci.ics.hyracks.data.std.primitive.UTF8StringLowercasePointable;
 import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
 
 public class ListItemBinaryComparatorFactory implements IBinaryComparatorFactory {

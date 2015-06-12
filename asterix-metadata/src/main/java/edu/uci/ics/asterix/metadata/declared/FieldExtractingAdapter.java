@@ -153,7 +153,7 @@ public class FieldExtractingAdapter implements IDatasourceAdapter {
                     tb.addFieldEndOffset();
                 }
                 tb.addField(record, recStart, tRef.getFieldLength(0));
-                appendToFrameFromTupleBuilder(tb);
+                appendToFrameFromTupleBuilder(tb, null);
             }
         }
 

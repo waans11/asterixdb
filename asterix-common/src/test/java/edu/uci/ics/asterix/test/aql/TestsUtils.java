@@ -265,7 +265,7 @@ public class TestsUtils {
 
         String theHandle = IOUtils.toString(resultStream, "UTF-8");
 
-        //take the handle and parse it so results can be retrieved 
+        //take the handle and parse it so results can be retrieved
         InputStream handleResult = getHandleResult(theHandle, fmt);
         return handleResult;
     }
@@ -384,7 +384,8 @@ public class TestsUtils {
 
         List<CompilationUnit> cUnits = testCaseCtx.getTestCase().getCompilationUnit();
         for (CompilationUnit cUnit : cUnits) {
-            LOGGER.info("Starting [TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName() + " ... ");
+
+        	LOGGER.info("Starting [TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName() + " ... ");
             testFileCtxs = testCaseCtx.getTestFiles(cUnit);
             expectedResultFileCtxs = testCaseCtx.getExpectedResultFiles(cUnit);
             for (TestFileContext ctx : testFileCtxs) {

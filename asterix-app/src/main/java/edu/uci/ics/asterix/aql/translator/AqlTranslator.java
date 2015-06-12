@@ -170,6 +170,7 @@ import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionCons
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraintHelper;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
 import edu.uci.ics.hyracks.algebricks.data.IAWriterFactory;
 import edu.uci.ics.hyracks.algebricks.data.IResultSerializerFactoryProvider;
@@ -187,7 +188,8 @@ import edu.uci.ics.hyracks.api.dataset.ResultSetId;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.api.job.JobId;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
-import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
+import edu.uci.ics.hyracks.api.util.ExecutionTimeProfiler;
+import edu.uci.ics.hyracks.api.util.ExecutionTimeStopWatch;
 import edu.uci.ics.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
@@ -218,10 +220,17 @@ public class AqlTranslator extends AbstractAqlTranslator {
     private Dataverse activeDefaultDataverse;
     private final List<FunctionDecl> declaredFunctions;
 
+    // For Experiment Profiler
+    private ExecutionTimeStopWatch profilerSW;
+
     public AqlTranslator(List<Statement> aqlStatements, SessionConfig conf) throws MetadataException, AsterixException {
         this.aqlStatements = aqlStatements;
         this.sessionConfig = conf;
         declaredFunctions = getDeclaredFunctions(aqlStatements);
+        // For Experiment Profiler
+        if (ExecutionTimeProfiler.PROFILE_MODE) {
+            profilerSW = new ExecutionTimeStopWatch();
+        }
     }
 
     private List<FunctionDecl> getDeclaredFunctions(List<Statement> statements) {
@@ -236,7 +245,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
 
     /**
      * Compiles and submits for execution a list of AQL statements.
-     * 
+     *
      * @param hcc
      *            A Hyracks client connection that is used to submit a jobspec to Hyracks.
      * @param hdc
@@ -253,6 +262,13 @@ public class AqlTranslator extends AbstractAqlTranslator {
         IAWriterFactory writerFactory = PrinterBasedWriterFactory.INSTANCE;
         IResultSerializerFactoryProvider resultSerializerFactoryProvider = ResultSerializerFactoryProvider.INSTANCE;
         Map<String, String> config = new HashMap<String, String>();
+
+        // For Experiment Profiler
+        //        if(ExperimentProfiler.PROFILE_MODE) {
+        //            profilerSW.start();
+        //            OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("compileAndExecute", String.valueOf(profilerSW.getStartTimeStamp()), "init", false);
+        //            System.out.println("complieAndExecute start " + profilerSW.getStartTimeStamp());
+        //        }
 
         for (Statement stmt : aqlStatements) {
             validateOperation(activeDefaultDataverse, stmt);
@@ -404,6 +420,15 @@ public class AqlTranslator extends AbstractAqlTranslator {
                 }
             }
         }
+
+        // For Experiment Profiler
+        //        if(ExperimentProfiler.PROFILE_MODE) {
+        //            profilerSW.suspend();
+        //            profilerSW.finish();
+        //            OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("compileAndExecute", String.valueOf(profilerSW.getStartTimeStamp()), profilerSW.getMessage("compileAndExecute", profilerSW.getStartTimeStamp()), true);
+        //            System.out.println("complieAndExecute end " + profilerSW.getStartTimeStamp());
+        //        }
+
     }
 
     private void handleSetStatement(AqlMetadataProvider metadataProvider, Statement stmt, Map<String, String> config)
@@ -1522,7 +1547,6 @@ public class AqlTranslator extends AbstractAqlTranslator {
                 }
             }
 
-
             if (ds.getDatasetType() == DatasetType.INTERNAL) {
                 indexName = stmtIndexDrop.getIndexName().getValue();
                 Index index = MetadataManager.INSTANCE.getIndex(mdTxnCtx, dataverseName, datasetName, indexName);
@@ -1952,7 +1976,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
             MetadataLockManager.INSTANCE.createFeedEnd(dataverseName, dataverseName + "." + feedName);
         }
     }
-    
+
     private void handleCreateFeedPolicyStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
@@ -2050,7 +2074,6 @@ public class AqlTranslator extends AbstractAqlTranslator {
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
 
-
         } catch (Exception e) {
             abort(e, e, mdTxnCtx);
             throw e;
@@ -2058,7 +2081,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
             MetadataLockManager.INSTANCE.dropFeedEnd(dataverseName, dataverseName + "." + feedName);
         }
     }
-    
+
     private void handleDropFeedPolicyStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
 
@@ -2085,7 +2108,6 @@ public class AqlTranslator extends AbstractAqlTranslator {
             MetadataLockManager.INSTANCE.dropFeedPolicyEnd(dataverseName, dataverseName + "." + policyName);
         }
     }
-
 
     private void handleConnectFeedStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
@@ -2130,8 +2152,8 @@ public class AqlTranslator extends AbstractAqlTranslator {
             // All Metadata checks have passed. Feed connect request is valid. //
 
             FeedPolicyAccessor policyAccessor = new FeedPolicyAccessor(feedPolicy.getProperties());
-            Triple<FeedConnectionRequest, Boolean, List<IFeedJoint>> triple = getFeedConnectionRequest(dataverseName, feed,
-                    cbfs.getDatasetName(), feedPolicy, mdTxnCtx);
+            Triple<FeedConnectionRequest, Boolean, List<IFeedJoint>> triple = getFeedConnectionRequest(dataverseName,
+                    feed, cbfs.getDatasetName(), feedPolicy, mdTxnCtx);
             FeedConnectionRequest connectionRequest = triple.first;
             boolean createFeedIntakeJob = triple.second;
 
@@ -2145,8 +2167,8 @@ public class AqlTranslator extends AbstractAqlTranslator {
                         metadataProvider, policyAccessor);
                 // adapter configuration are valid at this stage
                 // register the feed joints (these are auto-de-registered)
-                for (IFeedJoint fj : triple.third){
-                    FeedLifecycleListener.INSTANCE.registerFeedJoint(fj);   
+                for (IFeedJoint fj : triple.third) {
+                    FeedLifecycleListener.INSTANCE.registerFeedJoint(fj);
                 }
                 runJob(hcc, pair.first, false);
                 IFeedAdapterFactory adapterFactory = pair.second;
@@ -2156,8 +2178,8 @@ public class AqlTranslator extends AbstractAqlTranslator {
                 }
                 eventSubscriber.assertEvent(FeedLifecycleEvent.FEED_INTAKE_STARTED);
             } else {
-                for (IFeedJoint fj : triple.third){
-                    FeedLifecycleListener.INSTANCE.registerFeedJoint(fj);   
+                for (IFeedJoint fj : triple.third) {
+                    FeedLifecycleListener.INSTANCE.registerFeedJoint(fj);
                 }
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -2190,11 +2212,11 @@ public class AqlTranslator extends AbstractAqlTranslator {
             }
         }
     }
-    
+
     /**
      * Generates a subscription request corresponding to a connect feed request. In addition, provides a boolean
      * flag indicating if feed intake job needs to be started (source primary feed not found to be active).
-     * 
+     *
      * @param dataverse
      * @param feed
      * @param dataset
@@ -2203,8 +2225,9 @@ public class AqlTranslator extends AbstractAqlTranslator {
      * @return
      * @throws MetadataException
      */
-    private Triple<FeedConnectionRequest, Boolean, List<IFeedJoint>> getFeedConnectionRequest(String dataverse, Feed feed, String dataset,
-            FeedPolicy feedPolicy, MetadataTransactionContext mdTxnCtx) throws MetadataException {
+    private Triple<FeedConnectionRequest, Boolean, List<IFeedJoint>> getFeedConnectionRequest(String dataverse,
+            Feed feed, String dataset, FeedPolicy feedPolicy, MetadataTransactionContext mdTxnCtx)
+            throws MetadataException {
         IFeedJoint sourceFeedJoint = null;
         FeedConnectionRequest request = null;
         List<String> functionsToApply = new ArrayList<String>();
@@ -2219,7 +2242,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
             sourceFeedJoint = FeedLifecycleListener.INSTANCE.getAvailableFeedJoint(feedJointKey);
             if (sourceFeedJoint == null) { // the feed is currently not being ingested, i.e., it is unavailable.
                 connectionLocation = ConnectionLocation.SOURCE_FEED_INTAKE_STAGE;
-                FeedId sourceFeedId = feedJointKey.getFeedId(); // the root/primary feedId 
+                FeedId sourceFeedId = feedJointKey.getFeedId(); // the root/primary feedId
                 Feed primaryFeed = MetadataManager.INSTANCE.getFeed(mdTxnCtx, dataverse, sourceFeedId.getFeedName());
                 FeedJointKey intakeFeedJointKey = new FeedJointKey(sourceFeedId, new ArrayList<String>());
                 sourceFeedJoint = new FeedJoint(intakeFeedJointKey, primaryFeed.getFeedId(), connectionLocation,
@@ -2238,7 +2261,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
                 }
             }
             // register the compute feed point that represents the final output from the collection of
-            // functions that will be applied. 
+            // functions that will be applied.
             if (!functionsToApply.isEmpty()) {
                 FeedJointKey computeFeedJointKey = new FeedJointKey(feed.getFeedId(), functionsToApply);
                 IFeedJoint computeFeedJoint = new FeedJoint(computeFeedJointKey, feed.getFeedId(),
@@ -2259,9 +2282,9 @@ public class AqlTranslator extends AbstractAqlTranslator {
         sourceFeedJoint.addConnectionRequest(request);
         return new Triple<FeedConnectionRequest, Boolean, List<IFeedJoint>>(request, needIntakeJob, jointsToRegister);
     }
-    
+
     /*
-     * Gets the feed joint corresponding to the feed definition. Tuples constituting the feed are 
+     * Gets the feed joint corresponding to the feed definition. Tuples constituting the feed are
      * available at this feed joint.
      */
     private FeedJointKey getFeedJointKey(Feed feed, MetadataTransactionContext ctx) throws MetadataException {
@@ -2282,7 +2305,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
 
         return new FeedJointKey(sourceFeed.getFeedId(), appliedFunctions);
     }
-    
+
     private void handleDisconnectFeedStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
         DisconnectFeedStatement cfs = (DisconnectFeedStatement) stmt;
@@ -2335,7 +2358,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
                     dataverseName + "." + cfs.getFeedName());
         }
     }
-    
+
     private void handleSubscribeFeedStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
 
@@ -2367,7 +2390,6 @@ public class AqlTranslator extends AbstractAqlTranslator {
 
         try {
 
-          
             JobSpecification alteredJobSpec = FeedUtil.alterJobSpecificationForFeed(compiled, feedConnectionId, bfs
                     .getSubscriptionRequest().getPolicyParameters());
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);

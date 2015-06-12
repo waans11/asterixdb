@@ -6719,6 +6719,18 @@
             </compilation-unit>
         </test-case>
     </test-group>
+    <test-group name="fulltextsearch">
+        <test-case FilePath="fulltextsearch">
+            <compilation-unit name="load-dataset-without-index">
+                <output-dir compare="Text">load-dataset-without-index</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="fulltextsearch">
+            <compilation-unit name="load-with-fulltext-index">
+                <output-dir compare="Text">load-with-fulltext-index</output-dir>
+            </compilation-unit>
+        </test-case>
+    </test-group>
     <test-group name="temp-dataset">
         <test-case FilePath="temp-dataset">
             <compilation-unit name="delete-from-loaded-dataset">

@@ -1,0 +1,11 @@
+use dataverse test;
+
+count(
+for $o in dataset('DBLP')
+// where $o.title = "Active Database Systems."
+// where contains-substring($o.title, "Active Database")
+// where $o.title contains text ("systems")
+// where $o.title contains text ($o.abstract)
+where $o.numid < 3
+return $o
+);
