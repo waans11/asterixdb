@@ -32,6 +32,9 @@ public class AqlBinaryTokenizerFactoryProvider implements IBinaryTokenizerFactor
     private static final IBinaryTokenizerFactory aqlStringTokenizer = new DelimitedUTF8StringBinaryTokenizerFactory(
             true, true, new UTF8WordTokenFactory(ATypeTag.STRING.serialize(), ATypeTag.INT32.serialize()));
 
+    private static final IBinaryTokenizerFactory aqlStringWithOutTypeTagTokenizer = new DelimitedUTF8StringBinaryTokenizerFactory(
+            true, false, new UTF8WordTokenFactory(ATypeTag.STRING.serialize(), ATypeTag.INT32.serialize()));
+
     private static final IBinaryTokenizerFactory aqlHashingStringTokenizer = new DelimitedUTF8StringBinaryTokenizerFactory(
             true, true, new HashedUTF8WordTokenFactory(ATypeTag.INT32.serialize(), ATypeTag.INT32.serialize()));
 
@@ -42,13 +45,15 @@ public class AqlBinaryTokenizerFactoryProvider implements IBinaryTokenizerFactor
             new AListElementTokenFactory());
 
     @Override
-    public IBinaryTokenizerFactory getWordTokenizerFactory(ATypeTag typeTag, boolean hashedTokens) {
+    public IBinaryTokenizerFactory getWordTokenizerFactory(ATypeTag typeTag, boolean hashedTokens, boolean typeTageAlreadyRemoved) {
         switch (typeTag) {
             case STRING: {
                 if (hashedTokens) {
                     return aqlHashingStringTokenizer;
-                } else {
+                } else if (!typeTageAlreadyRemoved){
                     return aqlStringTokenizer;
+                } else {
+                	return aqlStringWithOutTypeTagTokenizer;
                 }
             }
             case ORDEREDLIST: {

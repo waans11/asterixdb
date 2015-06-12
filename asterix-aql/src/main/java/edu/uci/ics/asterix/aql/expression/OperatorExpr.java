@@ -79,7 +79,7 @@ public class OperatorExpr extends AbstractExpression {
 
     public final static boolean opIsComparison(OperatorType t) {
         return t == OperatorType.EQ || t == OperatorType.NEQ || t == OperatorType.GT || t == OperatorType.GE
-                || t == OperatorType.LT || t == OperatorType.LE;
+                || t == OperatorType.LT || t == OperatorType.LE || t == OperatorType.CONTAINS;
     }
 
     public void addOperator(String strOp) {
@@ -117,6 +117,8 @@ public class OperatorExpr extends AbstractExpression {
             opList.add(OperatorType.IDIV);
         else if ("~=".equals(strOp))
             opList.add(OperatorType.FUZZY_EQ);
+        else if ("contains".equals(strOp))
+            opList.add(OperatorType.CONTAINS);
     }
 
     @Override

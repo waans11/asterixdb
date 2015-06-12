@@ -286,7 +286,7 @@ public class AsterixBuiltinFunctions {
     public final static FunctionIdentifier SUBSTRING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "substring", 3);
     public final static FunctionIdentifier LIKE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "like", 2);
-    public final static FunctionIdentifier CONTAINS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "contains",
+    public final static FunctionIdentifier CONTAINS_FUNCTION = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "contains-substring",
             2);
     public final static FunctionIdentifier STARTS_WITH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "starts-with", 2);
@@ -701,6 +701,7 @@ public class AsterixBuiltinFunctions {
     public static final FunctionIdentifier LT = AlgebricksBuiltinFunctions.LT;
     public static final FunctionIdentifier GT = AlgebricksBuiltinFunctions.GT;
     public static final FunctionIdentifier NEQ = AlgebricksBuiltinFunctions.NEQ;
+    public static final FunctionIdentifier CONTAINS = AlgebricksBuiltinFunctions.CONTAINS;
     public static final FunctionIdentifier AND = AlgebricksBuiltinFunctions.AND;
     public static final FunctionIdentifier OR = AlgebricksBuiltinFunctions.OR;
     public static final FunctionIdentifier NOT = AlgebricksBuiltinFunctions.NOT;
@@ -739,6 +740,7 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(GT, BinaryBooleanOrNullFunctionTypeComputer.INSTANCE, true);
         addPrivateFunction(AND, BinaryBooleanOrNullFunctionTypeComputer.INSTANCE, true);
         addPrivateFunction(NEQ, BinaryBooleanOrNullFunctionTypeComputer.INSTANCE, true);
+        addPrivateFunction(CONTAINS, BinaryBooleanOrNullFunctionTypeComputer.INSTANCE, true);
         addPrivateFunction(OR, BinaryBooleanOrNullFunctionTypeComputer.INSTANCE, true);
         addPrivateFunction(NUMERIC_ADD, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE, true);
 
@@ -751,7 +753,7 @@ public class AsterixBuiltinFunctions {
         addFunction(CIRCLE_CONSTRUCTOR, OptionalACircleTypeComputer.INSTANCE, true);
         addPrivateFunction(CONCAT_NON_NULL, ConcatNonNullTypeComputer.INSTANCE, true);
 
-        addFunction(CONTAINS, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(CONTAINS_FUNCTION, ABooleanTypeComputer.INSTANCE, true);
         addFunction(COUNT, AInt64TypeComputer.INSTANCE, true);
         addPrivateFunction(COUNTHASHED_GRAM_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE, true);
         addPrivateFunction(COUNTHASHED_WORD_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE, true);

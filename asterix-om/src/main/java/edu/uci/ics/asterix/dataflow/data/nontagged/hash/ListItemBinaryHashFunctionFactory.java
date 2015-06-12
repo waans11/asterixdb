@@ -17,7 +17,6 @@ package edu.uci.ics.asterix.dataflow.data.nontagged.hash;
 
 import java.io.IOException;
 
-import edu.uci.ics.asterix.formats.nontagged.UTF8StringLowercasePointable;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunction;
@@ -25,6 +24,7 @@ import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunctionFactory;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.accessors.MurmurHash3BinaryHashFunctionFamily;
 import edu.uci.ics.hyracks.data.std.accessors.PointableBinaryHashFunctionFactory;
+import edu.uci.ics.hyracks.data.std.primitive.UTF8StringLowercasePointable;
 import edu.uci.ics.hyracks.data.std.util.GrowableArray;
 
 /**

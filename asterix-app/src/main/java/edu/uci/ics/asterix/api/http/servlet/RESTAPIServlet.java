@@ -17,6 +17,7 @@ package edu.uci.ics.asterix.api.http.servlet;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -44,6 +45,8 @@ import edu.uci.ics.asterix.result.ResultReader;
 import edu.uci.ics.asterix.result.ResultUtils;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.dataset.IHyracksDataset;
+import edu.uci.ics.hyracks.api.util.ExperimentProfiler;
+import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
 import edu.uci.ics.hyracks.client.dataset.HyracksDataset;
 
 abstract class RESTAPIServlet extends HttpServlet {
@@ -149,12 +152,24 @@ abstract class RESTAPIServlet extends HttpServlet {
             }
 
             AQLParser parser = new AQLParser(query);
+
+//            if(ExperimentProfiler.PROFILE_MODE) {
+//                OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("RESTAPIServlet", "Initialized", false);
+//            }
+
             List<Statement> aqlStatements = parser.parse();
             if (!containsForbiddenStatements(aqlStatements)) {
                 MetadataManager.INSTANCE.init();
                 AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, sessionConfig);
                 aqlTranslator.compileAndExecute(hcc, hds, resultDelivery);
             }
+
+//            if(ExperimentProfiler.PROFILE_MODE) {
+//            	String messageToWrite = "\n\n" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss,SSS").format(System.currentTimeMillis()) + "\t***** Query:\n" + query;
+//                OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("RESTAPIServlet", messageToWrite + "\n\n", false);
+//            }
+
+
         } catch (ParseException | TokenMgrError | edu.uci.ics.asterix.aqlplus.parser.TokenMgrError pe) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, pe.getMessage(), pe);
             String errorMessage = ResultUtils.buildParseExceptionMessage(pe, query);

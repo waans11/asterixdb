@@ -20,6 +20,7 @@ import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
+import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -116,6 +117,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
             OperatorPropertiesUtil.typeOpRec(opRef, context);
         }
         context.addToDontApplySet(this, select);
+
         return res;
     }
 

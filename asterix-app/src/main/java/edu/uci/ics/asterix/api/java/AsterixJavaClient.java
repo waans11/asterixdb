@@ -16,6 +16,7 @@ package edu.uci.ics.asterix.api.java;
 
 import java.io.PrintWriter;
 import java.io.Reader;
+import java.text.SimpleDateFormat;
 import java.util.List;
 
 import edu.uci.ics.asterix.api.common.APIFramework;
@@ -30,6 +31,8 @@ import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
+import edu.uci.ics.hyracks.api.util.ExperimentProfiler;
+import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
 
 public class AsterixJavaClient {
     private IHyracksClientConnection hcc;
@@ -68,6 +71,7 @@ public class AsterixJavaClient {
             builder.append((char) ch);
         }
         AQLParser parser = new AQLParser(builder.toString());
+
         List<Statement> aqlStatements;
         try {
             aqlStatements = parser.parse();

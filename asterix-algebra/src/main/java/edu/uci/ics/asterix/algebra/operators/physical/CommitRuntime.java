@@ -29,6 +29,9 @@ import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.api.util.ExperimentProfiler;
+import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
+import edu.uci.ics.hyracks.api.util.StopWatch;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ITupleReference;
@@ -53,6 +56,11 @@ public class CommitRuntime implements IPushRuntime {
     private FrameTupleAccessor frameTupleAccessor;
     private final FrameTupleReference frameTupleReference;
 
+	// For Experiment Profiler
+	private StopWatch profilerSW;
+	private String nodeJobSignature;
+	private String taskId;
+
     public CommitRuntime(IHyracksTaskContext ctx, JobId jobId, int datasetId, int[] primaryKeyFields,
             boolean isTemporaryDatasetWriteJob, boolean isWriteTransaction) {
         this.hyracksTaskCtx = ctx;
@@ -72,6 +80,28 @@ public class CommitRuntime implements IPushRuntime {
 
     @Override
     public void open() throws HyracksDataException {
+		// For Experiment Profiler
+		if (ExperimentProfiler.PROFILE_MODE) {
+			profilerSW = new StopWatch();
+			profilerSW.start();
+
+			// The key of this job: nodeId + JobId + Joblet hash code
+			nodeJobSignature = hyracksTaskCtx.getJobletContext()
+					.getApplicationContext().getNodeId()
+					+ hyracksTaskCtx.getJobletContext().getJobId()
+					+ hyracksTaskCtx.getJobletContext().hashCode();
+
+			// taskId: partition + taskId
+			taskId = hyracksTaskCtx.getTaskAttemptId()
+					+ this.toString()
+					+ profilerSW.getStartTimeStamp();
+
+			// Initialize the counter for this runtime instance
+			OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler
+					.add(nodeJobSignature, taskId, "init", false);
+			System.out.println("EXTENSION_OPERATOR start "
+					+ nodeJobSignature + " " + taskId);
+		}
         try {
             transactionContext = transactionManager.getTransactionContext(jobId, false);
             transactionContext.setWriteTxn(isWriteTransaction);
@@ -82,6 +112,10 @@ public class CommitRuntime implements IPushRuntime {
 
     @Override
     public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+		// For Experiment Profiler
+		if (ExperimentProfiler.PROFILE_MODE) {
+			profilerSW.resume();
+		}
         int pkHash = 0;
         frameTupleAccessor.reset(buffer);
         int nTuple = frameTupleAccessor.getTupleCount();
@@ -110,6 +144,10 @@ public class CommitRuntime implements IPushRuntime {
                 }
             }
         }
+		// For Experiment Profiler
+		if (ExperimentProfiler.PROFILE_MODE) {
+			profilerSW.suspend();
+		}
     }
 
     private int computePrimaryKeyHashValue(ITupleReference tuple, int[] primaryKeyFields) {
@@ -119,12 +157,34 @@ public class CommitRuntime implements IPushRuntime {
 
     @Override
     public void fail() throws HyracksDataException {
+		// For Experiment Profiler
+		if (ExperimentProfiler.PROFILE_MODE) {
+			profilerSW.finish();
+			OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler
+					.add(nodeJobSignature, taskId, profilerSW
+							.getMessage(
+									"EXTENSION_OPERATOR fail",
+									profilerSW.getStartTimeStamp()),
+							false);
+			System.out.println("EXTENSION_OPERATOR fail end " + taskId);
 
+		}
     }
 
     @Override
     public void close() throws HyracksDataException {
+		// For Experiment Profiler
+		if (ExperimentProfiler.PROFILE_MODE) {
+			profilerSW.finish();
+			OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler
+					.add(nodeJobSignature, taskId, profilerSW
+							.getMessage(
+									"EXTENSION_OPERATOR",
+									profilerSW.getStartTimeStamp()),
+							false);
+			System.out.println("EXTENSION_OPERATOR end " + taskId);
 
+		}
     }
 
     @Override
