@@ -33,7 +33,12 @@ public class PrimaryIndexSearchOperationCallbackFactory extends AbstractOperatio
 
     public PrimaryIndexSearchOperationCallbackFactory(JobId jobId, int datasetId, int[] entityIdFields,
             ITransactionSubsystemProvider txnSubsystemProvider, byte resourceType) {
-        super(jobId, datasetId, entityIdFields, txnSubsystemProvider, resourceType);
+        this(jobId, datasetId, entityIdFields, txnSubsystemProvider, resourceType, false);
+    }
+
+    public PrimaryIndexSearchOperationCallbackFactory(JobId jobId, int datasetId, int[] entityIdFields,
+            ITransactionSubsystemProvider txnSubsystemProvider, byte resourceType, boolean isIndexOnlyPlanEnabled) {
+        super(jobId, datasetId, entityIdFields, txnSubsystemProvider, resourceType, isIndexOnlyPlanEnabled);
     }
 
     @Override
@@ -42,8 +47,15 @@ public class PrimaryIndexSearchOperationCallbackFactory extends AbstractOperatio
         ITransactionSubsystem txnSubsystem = txnSubsystemProvider.getTransactionSubsystem(ctx);
         try {
             ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(jobId, false);
-            return new PrimaryIndexSearchOperationCallback(datasetId, primaryKeyFields, txnSubsystem.getLockManager(),
-                    txnCtx);
+            if (isIndexOnlyPlanEnabled) {
+            	// If we are using an index-only query plan, we need to apply a record level lock.
+                return new PrimaryIndexRecordSearchOperationCallback(datasetId, primaryKeyFields, txnSubsystem.getLockManager(),
+                        txnCtx);
+            } else {
+                // Return the dataset level lock
+                return new PrimaryIndexSearchOperationCallback(datasetId, primaryKeyFields, txnSubsystem.getLockManager(),
+                        txnCtx);
+            }
         } catch (ACIDException e) {
             throw new HyracksDataException(e);
         }

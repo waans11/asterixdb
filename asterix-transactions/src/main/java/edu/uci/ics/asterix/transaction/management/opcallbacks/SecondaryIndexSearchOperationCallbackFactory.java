@@ -15,18 +15,48 @@
 
 package edu.uci.ics.asterix.transaction.management.opcallbacks;
 
+import edu.uci.ics.asterix.common.context.ITransactionSubsystemProvider;
+import edu.uci.ics.asterix.common.exceptions.ACIDException;
+import edu.uci.ics.asterix.common.transactions.AbstractOperationCallbackFactory;
+import edu.uci.ics.asterix.common.transactions.ITransactionContext;
+import edu.uci.ics.asterix.common.transactions.ITransactionSubsystem;
+import edu.uci.ics.asterix.common.transactions.JobId;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.storage.am.common.api.ISearchOperationCallback;
 import edu.uci.ics.hyracks.storage.am.common.api.ISearchOperationCallbackFactory;
 
-public class SecondaryIndexSearchOperationCallbackFactory implements ISearchOperationCallbackFactory {
+public class SecondaryIndexSearchOperationCallbackFactory extends AbstractOperationCallbackFactory implements ISearchOperationCallbackFactory {
 
     private static final long serialVersionUID = 1L;
+
+    public SecondaryIndexSearchOperationCallbackFactory() {
+    	super();
+    }
+
+    public SecondaryIndexSearchOperationCallbackFactory(JobId jobId, int datasetId, int[] entityIdFields,
+            ITransactionSubsystemProvider txnSubsystemProvider, byte resourceType, boolean isIndexOnlyPlanEnabled) {
+        super(jobId, datasetId, entityIdFields, txnSubsystemProvider, resourceType, isIndexOnlyPlanEnabled);
+    }
 
     @Override
     public ISearchOperationCallback createSearchOperationCallback(long resourceId, IHyracksTaskContext ctx)
             throws HyracksDataException {
-        return new SecondaryIndexSearchOperationCallback();
+
+    	ITransactionSubsystem txnSubsystem = txnSubsystemProvider.getTransactionSubsystem(ctx);
+        try {
+            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(jobId, false);
+            if (isIndexOnlyPlanEnabled) {
+            	// If we are using an index-only query plan, we need to try to get a record level lock on PK.
+            	// If a tryLock on PK fails, we do not attempt to do a lock since the operations will be dealt with in above operators.
+                return new PrimaryIndexRecordSearchTryLockOnlyOperationCallback(datasetId, primaryKeyFields, txnSubsystem.getLockManager(),
+                        txnCtx);
+            } else {
+                // Return the empty operation call-back
+            	return new SecondaryIndexSearchOperationCallback();
+            }
+        } catch (ACIDException e) {
+            throw new HyracksDataException(e);
+        }
     }
 }

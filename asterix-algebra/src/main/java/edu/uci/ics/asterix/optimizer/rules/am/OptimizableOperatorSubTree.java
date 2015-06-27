@@ -66,6 +66,9 @@ public class OptimizableOperatorSubTree {
     public Dataset dataset = null;
     public ARecordType recordType = null;
 
+    /**
+     * Initialize assign, unnest and datasource information
+     */
     public boolean initFromSubTree(Mutable<ILogicalOperator> subTreeOpRef) {
         reset();
         rootRef = subTreeOpRef;
@@ -82,7 +85,7 @@ public class OptimizableOperatorSubTree {
             if (subTreeOp.getOperatorTag() != LogicalOperatorTag.ASSIGN
                     && subTreeOp.getOperatorTag() != LogicalOperatorTag.UNNEST) {
                 // Pattern may still match if we are looking for primary index matches as well.
-                return initializeDataSource(subTreeOpRef);
+                return initDataSourceInfo(subTreeOpRef);
             }
             // Match (assign | unnest)+.
             while (subTreeOp.getOperatorTag() == LogicalOperatorTag.ASSIGN
@@ -96,10 +99,13 @@ public class OptimizableOperatorSubTree {
         } while (subTreeOp.getOperatorTag() == LogicalOperatorTag.SELECT);
 
         // Match data source (datasource scan or primary index search).
-        return initializeDataSource(subTreeOpRef);
+        return initDataSourceInfo(subTreeOpRef);
     }
 
-    private boolean initializeDataSource(Mutable<ILogicalOperator> subTreeOpRef) {
+    /**
+     * Initialize datasource information
+     */
+    private boolean initDataSourceInfo(Mutable<ILogicalOperator> subTreeOpRef) {
         AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
         if (subTreeOp.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
             dataSourceType = DataSourceType.DATASOURCE_SCAN;

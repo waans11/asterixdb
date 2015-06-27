@@ -346,7 +346,7 @@ public abstract class SecondaryIndexOperationsHelper {
                         LSMBTreeIOOperationCallbackFactory.INSTANCE, storageProperties
                                 .getBloomFilterFalsePositiveRate(), true, filterTypeTraits, filterCmpFactories,
                         primaryBTreeFields, primaryFilterFields, !temp), false, false, null,
-                searchCallbackFactory, null, null);
+                searchCallbackFactory, null, null, false);
 
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, primarySearchOp,
                 primaryPartitionConstraint);

@@ -45,7 +45,7 @@ public class IndexInfoOperatorDescriptor implements IIndexOperatorDescriptor{
         this.fileSplitProvider = fileSplitProvider;
         this.lifecycleManagerProvider = lifecycleManagerProvider;
         this.storageManager = storageManager;
-        
+
     }
 
     @Override
@@ -118,5 +118,11 @@ public class IndexInfoOperatorDescriptor implements IIndexOperatorDescriptor{
     public INullWriterFactory getNullWriterFactory() {
         return null;
     }
+
+	@Override
+	public boolean getIsIndexOnlyPlanEnabled() {
+		// TODO Auto-generated method stub
+		return false;
+	}
 
 }
