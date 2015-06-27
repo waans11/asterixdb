@@ -164,7 +164,7 @@ public class PKGeneratingAdapter implements IDatasourceAdapter {
                     //write the record
                     recBuilder.write(tb.getDataOutput(), true);
                     tb.addFieldEndOffset();
-                    appendToFrameFromTupleBuilder(tb, null);
+                    appendToFrameFromTupleBuilder(tb);
                 }
             } catch (Exception e) {
                 throw new HyracksDataException("Error in the auto id generation and merge of the record", e);

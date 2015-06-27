@@ -73,8 +73,9 @@ public interface IAccessMethod {
     /**
      * Applies the plan transformation to use chosenIndex to optimize a selection query.
      */
-    public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef,
-            OptimizableOperatorSubTree subTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
+    public boolean applySelectPlanTransformation(List<Mutable<ILogicalOperator>> aboveSelectRefs,
+    		Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
+            Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
             IOptimizationContext context) throws AlgebricksException;
 
     /**
@@ -89,7 +90,7 @@ public interface IAccessMethod {
 
     /**
      * Analyzes expr to see whether it is optimizable by the given concrete index.
-     * 
+     *
      * @throws AlgebricksException
      */
     public boolean exprIsOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) throws AlgebricksException;

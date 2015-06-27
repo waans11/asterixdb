@@ -143,7 +143,7 @@ public abstract class PullBasedAdapter implements IPullBasedFeedAdapter {
 
     /**
      * Discontinue the ingestion of data and end the feed.
-     * 
+     *
      * @throws Exception
      */
     public void stop() throws Exception {

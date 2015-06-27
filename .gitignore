@@ -9,6 +9,7 @@ ittest
 asterix_logs
 build
 bin
+asterix-app/executionTime*.txt
 asterix-app/rttest/
 asterix-app/mdtest/
 asterix-app/opttest/

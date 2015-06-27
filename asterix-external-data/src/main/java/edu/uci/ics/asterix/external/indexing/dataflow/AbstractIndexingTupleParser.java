@@ -42,12 +42,12 @@ public abstract class AbstractIndexingTupleParser implements ITupleParser{
     protected final IAsterixHDFSRecordParser deserializer;
     protected final AMutableInt32 aMutableInt = new AMutableInt32(0);
     protected final AMutableInt64 aMutableLong = new AMutableInt64(0);
-    
+
     @SuppressWarnings("rawtypes")
     protected final ISerializerDeserializer intSerde = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
     @SuppressWarnings("rawtypes")
     protected final ISerializerDeserializer longSerde = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT64);
-    
+
     public AbstractIndexingTupleParser(IHyracksTaskContext ctx, ARecordType recType, IAsterixHDFSRecordParser deserializer) throws HyracksDataException {
         appender = new FrameTupleAppender(new VSizeFrame(ctx));
         this.recType = recType;

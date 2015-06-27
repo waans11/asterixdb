@@ -48,6 +48,14 @@ public class ATypeHierarchy {
         ANY
     }
 
+    // mathFunction that will be used to type-cast a FLOAT value when it is fed into an INT index look-up
+    public static enum mathFunctionType {
+        CEIL,
+        FLOOR,
+        CEIL_FLOOR,
+        NONE
+    }
+
     private static BitSet typePromotionHierachyMap = new BitSet(ATypeTag.TYPE_COUNT * ATypeTag.TYPE_COUNT);
     private static BitSet typeDemotionHierachyMap = new BitSet(ATypeTag.TYPE_COUNT * ATypeTag.TYPE_COUNT);
     private static HashMap<Integer, ITypeConvertComputer> promoteComputerMap = new HashMap<Integer, ITypeConvertComputer>();
@@ -176,6 +184,15 @@ public class ATypeHierarchy {
     // Get an AsterixConstantValue from a source Object
     public static AsterixConstantValue getAsterixConstantValueFromNumericTypeObject(IAObject sourceObject,
             ATypeTag targetTypeTag) throws AlgebricksException {
+    	return getAsterixConstantValueFromNumericTypeObject(sourceObject, targetTypeTag, mathFunctionType.NONE);
+    }
+
+    // Get an AsterixConstantValue from a source Object
+    // mathFunction is required when type-casting a FLOAT or DOUBLE value to an INT value
+    // that will be fed into an index lookup
+    // 0: CEIL, 1: FLOOR
+    public static AsterixConstantValue getAsterixConstantValueFromNumericTypeObject(IAObject sourceObject,
+            ATypeTag targetTypeTag, mathFunctionType mathFunction) throws AlgebricksException {
         ATypeTag sourceTypeTag = sourceObject.getType().getTypeTag();
         AsterixConstantValue asterixNewConstantValue = null;
         short tmpShortValue = 0;
@@ -209,14 +226,36 @@ public class ATypeHierarchy {
                             break;
 
                         case FLOAT:
-                            tmpFloatValue = ((AFloat) sourceObject).getFloatValue();
+                        	// Some methods require to get a value after CEIL() or FLOOR() is applied.
+                            switch (mathFunction) {
+                        	case CEIL:
+                        		tmpFloatValue = (float) Math.ceil(((AFloat) sourceObject).getFloatValue());
+                        		break;
+                        	case FLOOR:
+                        		tmpFloatValue = (float) Math.floor(((AFloat) sourceObject).getFloatValue());
+                        		break;
+                        	default:
+                                tmpFloatValue = ((AFloat) sourceObject).getFloatValue();
+                                break;
+                            }
                             // Check whether this value is within the range of the field type
                             valueSanitycheck(ATypeTag.FLOAT, ATypeTag.INT64, tmpFloatValue);
                             asterixNewConstantValue = new AsterixConstantValue(new AInt64((long) tmpFloatValue));
                             break;
 
                         case DOUBLE:
-                            tmpDoubleValue = ((ADouble) sourceObject).getDoubleValue();
+                        	// Some methods require to get a value after CEIL() or FLOOR() is applied.
+                            switch (mathFunction) {
+                        	case CEIL:
+                        		tmpDoubleValue = Math.ceil(((ADouble) sourceObject).getDoubleValue());
+                        		break;
+                        	case FLOOR:
+                        		tmpDoubleValue = Math.floor(((ADouble) sourceObject).getDoubleValue());
+                        		break;
+                        	default:
+                        		tmpDoubleValue = ((ADouble) sourceObject).getDoubleValue();
+                                break;
+                            }
                             // Check whether this value is within the range of the field type
                             valueSanitycheck(ATypeTag.DOUBLE, ATypeTag.INT64, tmpDoubleValue);
                             asterixNewConstantValue = new AsterixConstantValue(new AInt64((long) tmpDoubleValue));
@@ -251,14 +290,36 @@ public class ATypeHierarchy {
                             break;
 
                         case FLOAT:
-                            tmpFloatValue = ((AFloat) sourceObject).getFloatValue();
+                        	// Some methods require to get a value after CEIL() or FLOOR() is applied.
+                            switch (mathFunction) {
+                        	case CEIL:
+                        		tmpFloatValue = (float) Math.ceil(((AFloat) sourceObject).getFloatValue());
+                        		break;
+                        	case FLOOR:
+                        		tmpFloatValue = (float) Math.floor(((AFloat) sourceObject).getFloatValue());
+                        		break;
+                        	default:
+                                tmpFloatValue = ((AFloat) sourceObject).getFloatValue();
+                                break;
+                            }
                             // Check whether this value is within the range of the field type
                             valueSanitycheck(ATypeTag.FLOAT, ATypeTag.INT32, tmpFloatValue);
                             asterixNewConstantValue = new AsterixConstantValue(new AInt32((int) tmpFloatValue));
                             break;
 
                         case DOUBLE:
-                            tmpDoubleValue = ((ADouble) sourceObject).getDoubleValue();
+                        	// Some methods require to get a value after CEIL() or FLOOR() is applied.
+                            switch (mathFunction) {
+                        	case CEIL:
+                        		tmpDoubleValue = Math.ceil(((ADouble) sourceObject).getDoubleValue());
+                        		break;
+                        	case FLOOR:
+                        		tmpDoubleValue = Math.floor(((ADouble) sourceObject).getDoubleValue());
+                        		break;
+                        	default:
+                        		tmpDoubleValue = ((ADouble) sourceObject).getDoubleValue();
+                                break;
+                            }
                             // Check whether this value is within the range of the field type
                             valueSanitycheck(ATypeTag.FLOAT, ATypeTag.INT32, tmpDoubleValue);
                             asterixNewConstantValue = new AsterixConstantValue(new AInt32((int) tmpDoubleValue));
@@ -297,14 +358,36 @@ public class ATypeHierarchy {
                             break;
 
                         case FLOAT:
-                            tmpFloatValue = ((AFloat) sourceObject).getFloatValue();
+                        	// Some methods require to get a value after CEIL() or FLOOR() is applied.
+                            switch (mathFunction) {
+                        	case CEIL:
+                        		tmpFloatValue = (float) Math.ceil(((AFloat) sourceObject).getFloatValue());
+                        		break;
+                        	case FLOOR:
+                        		tmpFloatValue = (float) Math.floor(((AFloat) sourceObject).getFloatValue());
+                        		break;
+                        	default:
+                                tmpFloatValue = ((AFloat) sourceObject).getFloatValue();
+                                break;
+                            }
                             // Check whether this value is within the range of the field type
                             valueSanitycheck(ATypeTag.FLOAT, ATypeTag.INT8, tmpFloatValue);
                             asterixNewConstantValue = new AsterixConstantValue(new AInt8((byte) tmpFloatValue));
                             break;
 
                         case DOUBLE:
-                            tmpDoubleValue = ((ADouble) sourceObject).getDoubleValue();
+                        	// Some methods require to get a value after CEIL() or FLOOR() is applied.
+                            switch (mathFunction) {
+                        	case CEIL:
+                        		tmpDoubleValue = Math.ceil(((ADouble) sourceObject).getDoubleValue());
+                        		break;
+                        	case FLOOR:
+                        		tmpDoubleValue = Math.floor(((ADouble) sourceObject).getDoubleValue());
+                        		break;
+                        	default:
+                        		tmpDoubleValue = ((ADouble) sourceObject).getDoubleValue();
+                                break;
+                            }
                             // Check whether this value is within the range of the field type
                             valueSanitycheck(ATypeTag.DOUBLE, ATypeTag.INT8, tmpDoubleValue);
                             asterixNewConstantValue = new AsterixConstantValue(new AInt8((byte) tmpDoubleValue));
@@ -339,14 +422,36 @@ public class ATypeHierarchy {
                             break;
 
                         case FLOAT:
-                            tmpFloatValue = ((AFloat) sourceObject).getFloatValue();
+                        	// Some methods require to get a value after CEIL() or FLOOR() is applied.
+                            switch (mathFunction) {
+                        	case CEIL:
+                        		tmpFloatValue = (float) Math.ceil(((AFloat) sourceObject).getFloatValue());
+                        		break;
+                        	case FLOOR:
+                        		tmpFloatValue = (float) Math.floor(((AFloat) sourceObject).getFloatValue());
+                        		break;
+                        	default:
+                                tmpFloatValue = ((AFloat) sourceObject).getFloatValue();
+                                break;
+                            }
                             // Check whether this value is within the range of the field type
                             valueSanitycheck(ATypeTag.FLOAT, ATypeTag.INT16, tmpFloatValue);
                             asterixNewConstantValue = new AsterixConstantValue(new AInt16((short) tmpFloatValue));
                             break;
 
                         case DOUBLE:
-                            tmpDoubleValue = ((ADouble) sourceObject).getDoubleValue();
+                        	// Some methods require to get a value after CEIL() or FLOOR() is applied.
+                            switch (mathFunction) {
+                        	case CEIL:
+                        		tmpDoubleValue = Math.ceil(((ADouble) sourceObject).getDoubleValue());
+                        		break;
+                        	case FLOOR:
+                        		tmpDoubleValue = Math.floor(((ADouble) sourceObject).getDoubleValue());
+                        		break;
+                        	default:
+                        		tmpDoubleValue = ((ADouble) sourceObject).getDoubleValue();
+                                break;
+                            }
                             // Check whether this value is within the range of the field type
                             valueSanitycheck(ATypeTag.DOUBLE, ATypeTag.INT16, tmpDoubleValue);
                             asterixNewConstantValue = new AsterixConstantValue(new AInt16((short) tmpDoubleValue));
@@ -437,8 +542,8 @@ public class ATypeHierarchy {
 
             return new AsterixConstantValue(sourceObject);
         }
-
     }
+
 
     // checks whether the source value is within the range of the target type
     private static void valueSanitycheck(ATypeTag sourceType, ATypeTag targetType, double sourceValue)
