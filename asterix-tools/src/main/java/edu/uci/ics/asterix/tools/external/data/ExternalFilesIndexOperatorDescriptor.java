@@ -65,7 +65,7 @@ public class ExternalFilesIndexOperatorDescriptor extends AbstractTreeIndexOpera
                 FilesIndexDescription.EXTERNAL_FILE_INDEX_TYPE_TRAITS,
                 FilesIndexDescription.FILES_INDEX_COMP_FACTORIES, FilesIndexDescription.BLOOM_FILTER_FIELDS,
                 dataflowHelperFactory, null, false, false, null, localResourceFactoryProvider,
-                NoOpOperationCallbackFactory.INSTANCE, NoOpOperationCallbackFactory.INSTANCE);
+                NoOpOperationCallbackFactory.INSTANCE, NoOpOperationCallbackFactory.INSTANCE, false);
         this.createNewIndex = createNewIndex;
         this.files = files;
     }

@@ -35,19 +35,22 @@ public class AccessMethodAnalysisContext {
     public List<IOptimizableFuncExpr> matchedFuncExprs = new ArrayList<IOptimizableFuncExpr>();
 
     // Contains candidate indexes and a list of (integer,integer) tuples that index into matchedFuncExprs and matched variable inside this expr.
-    // We are mapping from candidate indexes to a list of function expressions 
+    // We are mapping from candidate indexes to a list of function expressions
     // that match one of the index's expressions.
     public Map<Index, List<Pair<Integer, Integer>>> indexExprsAndVars = new TreeMap<Index, List<Pair<Integer, Integer>>>();
 
     // Maps from index to the dataset it is indexing.
     public Map<Index, Dataset> indexDatasetMap = new TreeMap<Index, Dataset>();
-    
+
     // Maps from an index to the number of matched fields in the query plan (for performing prefix search)
     public Map<Index, Integer> indexNumMatchedKeys = new TreeMap<Index, Integer>();
 
     // variables for resetting null placeholder for left-outer-join
     private Mutable<ILogicalOperator> lojGroupbyOpRef = null;
     private ScalarFunctionCallExpression lojIsNullFuncInGroupBy = null;
+
+    // For a secondary index, if we use only PK and secondary key field in a plan, it is an index-only plan.
+    private boolean indexOnlySelectPlanEnabled = false;
 
     public void addIndexExpr(Dataset dataset, Index index, Integer exprIndex, Integer varIndex) {
         List<Pair<Integer, Integer>> exprs = indexExprsAndVars.get(index);
@@ -79,4 +82,11 @@ public class AccessMethodAnalysisContext {
         return lojIsNullFuncInGroupBy;
     }
 
+    public void setIndexOnlyPlanEnabled(boolean enabled) {
+    	this.indexOnlySelectPlanEnabled = enabled;
+    }
+
+    public boolean isIndexOnlyPlanEnabled() {
+    	return this.indexOnlySelectPlanEnabled;
+    }
 }

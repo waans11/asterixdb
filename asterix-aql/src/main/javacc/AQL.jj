@@ -442,7 +442,7 @@ DatasetDecl DatasetSpecification() throws ParseException:
     | ("internal" | "temporary" {
             temp = token.image.toLowerCase().equals("temporary");
         }
-      )? 
+      )?
     <DATASET> nameComponents = QualifiedName()
     <LEFTPAREN> typeName = Identifier() <RIGHTPAREN>
     ifNotExists = IfNotExists()

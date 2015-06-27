@@ -252,7 +252,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
 
                     //for the case when jaccard similarity is measured between ordered & unordered lists
                     boolean jaccardSimilarity = optFuncExpr.getFuncExpr().getFunctionIdentifier().getName()
-                            .startsWith("similarity-jaccard-check");
+                            .startsWith(AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK.getName());
 
                     for (int j = 0; j < indexedTypes.size(); j++)
                         for (int k = j + 1; k < indexedTypes.size(); k++)
@@ -388,7 +388,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
 
     /**
      * Finds secondary indexes whose keys include fieldName, and adds a mapping
-     * in analysisCtx.indexEsprs from that index to the a corresponding
+     * in analysisCtx.indexExprs from that index to the a corresponding
      * optimizable function expression.
      *
      * @return true if a candidate index was added to foundIndexExprs, false
@@ -420,13 +420,17 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         return true;
     }
 
+    /**
+     * Match each variable to a field name and assign the corresponding type
+     */
     protected void fillAllIndexExprs(OptimizableOperatorSubTree subTree, AccessMethodAnalysisContext analysisCtx,
             IOptimizationContext context) throws AlgebricksException {
         int optFuncExprIndex = 0;
         List<Index> datasetIndexes = new ArrayList<Index>();
-        if (subTree.dataSourceType != DataSourceType.COLLECTION_SCAN)
+        if (subTree.dataSourceType != DataSourceType.COLLECTION_SCAN) {
             datasetIndexes = metadataProvider.getDatasetIndexes(subTree.dataset.getDataverseName(),
                     subTree.dataset.getDatasetName());
+        }
         for (IOptimizableFuncExpr optFuncExpr : analysisCtx.matchedFuncExprs) {
             // Try to match variables from optFuncExpr to assigns or unnests.
             for (int assignOrUnnestIndex = 0; assignOrUnnestIndex < subTree.assignsAndUnnests.size(); assignOrUnnestIndex++) {
@@ -544,7 +548,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
      * Returns the field name corresponding to the assigned variable at
      * varIndex. Returns null if the expr at varIndex does not yield to a field
      * access function after following a set of allowed functions.
-     * 
+     *
      * @throws AlgebricksException
      */
     protected List<String> getFieldNameFromSubTree(IOptimizableFuncExpr optFuncExpr,
@@ -655,7 +659,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                         parentFuncExpr);
 
                 if (parentFieldNames == null) {
-                    //Nested assign was not a field access. 
+                    //Nested assign was not a field access.
                     //We will not use index
                     return null;
                 }

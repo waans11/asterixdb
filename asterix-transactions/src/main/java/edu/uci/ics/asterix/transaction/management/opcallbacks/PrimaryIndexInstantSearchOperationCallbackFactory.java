@@ -33,7 +33,12 @@ public class PrimaryIndexInstantSearchOperationCallbackFactory extends AbstractO
 
     public PrimaryIndexInstantSearchOperationCallbackFactory(JobId jobId, int datasetId, int[] entityIdFields,
             ITransactionSubsystemProvider txnSubsystemProvider, byte resourceType) {
-        super(jobId, datasetId, entityIdFields, txnSubsystemProvider, resourceType);
+        this(jobId, datasetId, entityIdFields, txnSubsystemProvider, resourceType, false);
+    }
+
+    public PrimaryIndexInstantSearchOperationCallbackFactory(JobId jobId, int datasetId, int[] entityIdFields,
+            ITransactionSubsystemProvider txnSubsystemProvider, byte resourceType, boolean isIndexOnlyPlanEnabled) {
+        super(jobId, datasetId, entityIdFields, txnSubsystemProvider, resourceType, isIndexOnlyPlanEnabled);
     }
 
     @Override

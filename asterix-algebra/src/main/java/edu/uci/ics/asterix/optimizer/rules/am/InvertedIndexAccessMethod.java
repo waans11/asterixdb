@@ -363,10 +363,22 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return false;
     }
 
-    private ILogicalOperator createSecondaryToPrimaryPlan(OptimizableOperatorSubTree indexSubTree,
+    private ILogicalOperator createSecondaryToPrimaryPlan(List<Mutable<ILogicalOperator>> afterTopOpRefs,
+    		Mutable<ILogicalOperator> topOpRef, Mutable<ILogicalOperator> assignBeforeTopOpRef,
+    		OptimizableOperatorSubTree indexSubTree,
             OptimizableOperatorSubTree probeSubTree, Index chosenIndex, IOptimizableFuncExpr optFuncExpr,
-            boolean retainInput, boolean retainNull, boolean requiresBroadcast, IOptimizationContext context)
+            boolean retainInput, boolean retainNull, boolean requiresBroadcast,
+            IOptimizationContext context, AccessMethodAnalysisContext analysisCtx)
             throws AlgebricksException {
+
+        // Check whether assign (unnest) operator exists before the select operator
+        Mutable<ILogicalOperator> assignBeforeSelectOpRef = (indexSubTree.assignsAndUnnestsRefs.isEmpty()) ? null
+                : indexSubTree.assignsAndUnnestsRefs.get(0);
+        ILogicalOperator assignBeforeSelectOp = null;
+        if (assignBeforeSelectOpRef != null) {
+        	assignBeforeSelectOp = assignBeforeSelectOpRef.getValue();
+        }
+
         Dataset dataset = indexSubTree.dataset;
         ARecordType recordType = indexSubTree.recordType;
         // we made sure indexSubTree has datasource scan
@@ -404,11 +416,19 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         }
         jobGenParams.setKeyVarList(keyVarList);
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
-                chosenIndex, inputOp, jobGenParams, context, true, retainInput);
+                chosenIndex, inputOp, jobGenParams, context, true, retainInput, analysisCtx.isIndexOnlyPlanEnabled());
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
-        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceScan, dataset,
-                recordType, secondaryIndexUnnestOp, context, true, retainInput, retainNull, false);
+//      UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceScan, dataset,
+//      recordType, secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex);
+
+        SelectOperator select = (SelectOperator) topOpRef.getValue();
+        Mutable<ILogicalExpression> conditionRef = select.getCondition();
+
+        ILogicalOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(afterTopOpRefs, topOpRef, conditionRef,
+        		assignBeforeSelectOpRef, dataSourceScan, dataset,
+                recordType, secondaryIndexUnnestOp, context, true,
+                retainInput, retainNull, false, chosenIndex, analysisCtx);
 
         return primaryIndexUnnestOp;
     }
@@ -429,12 +449,22 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef,
-            OptimizableOperatorSubTree subTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
+    public boolean applySelectPlanTransformation(List<Mutable<ILogicalOperator>> aboveSelectRefs,
+    		Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
+            Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
             IOptimizationContext context) throws AlgebricksException {
+
+        Mutable<ILogicalOperator> assignBeforeSelectOpRef = (subTree.assignsAndUnnestsRefs.isEmpty()) ? null
+                : subTree.assignsAndUnnestsRefs.get(0);
+        ILogicalOperator assignBeforeSelectOp = null;
+        if (assignBeforeSelectOpRef != null) {
+        	assignBeforeSelectOp = assignBeforeSelectOpRef.getValue();
+        }
+
         IOptimizableFuncExpr optFuncExpr = AccessMethodUtils.chooseFirstOptFuncExpr(chosenIndex, analysisCtx);
-        ILogicalOperator indexPlanRootOp = createSecondaryToPrimaryPlan(subTree, null, chosenIndex, optFuncExpr, false,
-                false, false, context);
+        ILogicalOperator indexPlanRootOp = createSecondaryToPrimaryPlan(aboveSelectRefs, selectRef,
+        		assignBeforeSelectOpRef, subTree, null, chosenIndex,
+        		optFuncExpr, false, false, false, context, analysisCtx);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         // Temporary - disable verification
 //      selectRef.setValue(indexPlanRootOp);
@@ -519,8 +549,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             probeSubTree.root = newProbeRootRef.getValue();
         }
         // Create regular indexed-nested loop join path.
-        ILogicalOperator indexPlanRootOp = createSecondaryToPrimaryPlan(indexSubTree, probeSubTree, chosenIndex,
-                optFuncExpr, true, isLeftOuterJoin, true, context);
+        ILogicalOperator indexPlanRootOp = createSecondaryToPrimaryPlan(null, joinRef, null, indexSubTree,
+        		probeSubTree, chosenIndex,
+                optFuncExpr, true, isLeftOuterJoin, true, context, analysisCtx);
         indexSubTree.dataSourceRef.setValue(indexPlanRootOp);
 
         // Change join into a select with the same condition.

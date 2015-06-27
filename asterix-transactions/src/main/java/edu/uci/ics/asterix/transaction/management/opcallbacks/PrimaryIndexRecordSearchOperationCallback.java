@@ -26,12 +26,12 @@ import edu.uci.ics.hyracks.storage.am.common.api.ISearchOperationCallback;
 
 /**
  * Assumes LSM-BTrees as primary indexes. Implements try/locking and unlocking on primary keys.
- * This Callback method acquires/releases a record level instant lock.
+ * This Callback method acquires/releases a record level lock.
  */
-public class PrimaryIndexInstantSearchOperationCallback extends AbstractOperationCallback implements
+public class PrimaryIndexRecordSearchOperationCallback extends AbstractOperationCallback implements
         ISearchOperationCallback {
 
-    public PrimaryIndexInstantSearchOperationCallback(int datasetId, int[] entityIdFields, ILockManager lockManager,
+    public PrimaryIndexRecordSearchOperationCallback(int datasetId, int[] entityIdFields, ILockManager lockManager,
             ITransactionContext txnCtx) {
         super(datasetId, entityIdFields, txnCtx, lockManager);
     }
@@ -40,7 +40,7 @@ public class PrimaryIndexInstantSearchOperationCallback extends AbstractOperatio
     public boolean proceed(ITupleReference tuple) throws HyracksDataException {
         int pkHash = computePrimaryKeyHashValue(tuple, primaryKeyFields);
         try {
-            return lockManager.instantTryLock(datasetId, pkHash, LockMode.S, txnCtx);
+            return lockManager.tryLock(datasetId, pkHash, LockMode.S, txnCtx);
         } catch (ACIDException e) {
             throw new HyracksDataException(e);
         }
