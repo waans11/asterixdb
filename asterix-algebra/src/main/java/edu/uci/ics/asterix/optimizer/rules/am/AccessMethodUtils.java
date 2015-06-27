@@ -73,7 +73,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ExternalDat
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ReplicateOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
@@ -548,7 +547,8 @@ public class AccessMethodUtils {
         SelectOperator topOp = null;
         AssignOperator assignBeforeTopOp = null;
         UnionAllOperator unionAllOp = null;
-        SplitOperator splitOp = null;
+//        SplitOperator splitOp = null;
+        ReplicateOperator splitOp = null;
         List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> unionVarMap = null;
         List<LogicalVariable> conditionalSplitVars = null;
         boolean isIndexOnlyPlanEnabled = !secondaryIndex.canProduceFalsePositive() && analysisCtx.isIndexOnlyPlanEnabled();
@@ -674,7 +674,8 @@ public class AccessMethodUtils {
             conditionalSplitVars = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(dataset, recordType,
                     inputOp, secondaryIndex, 2);
 
-    		splitOp = new SplitOperator(2, conditionalSplitVars.get(0));
+//    		splitOp = new SplitOperator(2, conditionalSplitVars.get(0));
+    		splitOp = new ReplicateOperator(2);
             splitOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
             splitOp.setExecutionMode(ExecutionMode.PARTITIONED);
             context.computeAndSetTypeEnvironmentForOperator(splitOp);
@@ -698,6 +699,7 @@ public class AccessMethodUtils {
             // If tryLock() optimization is possible, the replicateOp provides PK into this Order Operator
             if (!secondaryIndex.canProduceFalsePositive() && isIndexOnlyPlanEnabled) {
                 order.getInputs().add(new MutableObject<ILogicalOperator>(splitOp));
+                splitOp.getOutputs().add(new MutableObject<ILogicalOperator>(order));
             } else {
                 order.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
             }
@@ -740,37 +742,38 @@ public class AccessMethodUtils {
         primaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
         context.computeAndSetTypeEnvironmentForOperator(primaryIndexUnnestOp);
 
-
-        // Copy original SELECT operator
-        topOp = (SelectOperator) topOpRef.getValue();
-
-//        SelectOperator newSelectOp = new SelectOperator(topOp.getCondition(), topOp.getRetainNull(), topOp.getNullPlaceholderVariable());
-//        newSelectOp.getInputs().clear();
-
-        // If there is an assign operator before SELECT operator, we need to propagate this variable to UNION too.
-        if (assignBeforeTopOp != null) {
-//            AssignOperator newAssignOp = new AssignOperator(assignBeforeTopOp.getVariables(), assignBeforeTopOp.getExpressions());
-//            newAssignOp.getInputs().clear();
-//            newAssignOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
-//            context.computeAndSetTypeEnvironmentForOperator(newAssignOp);
-            assignBeforeTopOp.getInputs().clear();
-            assignBeforeTopOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
-//            newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(newAssignOp));
-            context.computeAndSetTypeEnvironmentForOperator(assignBeforeTopOp);
-//            newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeTopOp));
-//            newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeTopOp));
-        } else {
-//            newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
-            topOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
-        }
-
-//        newSelectOp.setExecutionMode(ExecutionMode.PARTITIONED);
-        topOp.setExecutionMode(ExecutionMode.PARTITIONED);
-//        context.computeAndSetTypeEnvironmentForOperator(newSelectOp);
-        context.computeAndSetTypeEnvironmentForOperator(topOp);
-
         // Generate UnionOperator to merge the left and right paths
         if (!secondaryIndex.canProduceFalsePositive() && isIndexOnlyPlanEnabled) {
+            // Copy original SELECT operator
+            topOp = (SelectOperator) topOpRef.getValue();
+
+//            SelectOperator newSelectOp = new SelectOperator(topOp.getCondition(), topOp.getRetainNull(), topOp.getNullPlaceholderVariable());
+//            newSelectOp.getInputs().clear();
+
+        	// If there is an assign operator before SELECT operator, we need to propagate this variable to UNION too.
+	        if (assignBeforeTopOp != null) {
+	//            AssignOperator newAssignOp = new AssignOperator(assignBeforeTopOp.getVariables(), assignBeforeTopOp.getExpressions());
+	//            newAssignOp.getInputs().clear();
+	//            newAssignOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
+	//            context.computeAndSetTypeEnvironmentForOperator(newAssignOp);
+	            assignBeforeTopOp.getInputs().clear();
+	            assignBeforeTopOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
+	//            newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(newAssignOp));
+	            context.computeAndSetTypeEnvironmentForOperator(assignBeforeTopOp);
+	            topOp.getInputs().clear();
+	            topOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeTopOp));
+	//            newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeTopOp));
+	//            newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeTopOp));
+	        } else {
+	//            newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
+	            topOp.getInputs().clear();
+	            topOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
+	        }
+
+	//        newSelectOp.setExecutionMode(ExecutionMode.PARTITIONED);
+	        topOp.setExecutionMode(ExecutionMode.PARTITIONED);
+	//        context.computeAndSetTypeEnvironmentForOperator(newSelectOp);
+	        context.computeAndSetTypeEnvironmentForOperator(topOp);
 
 //            // If there is an assign operator before SELECT operator, we need to propagate this variable to UNION too.
 //            if (assignBeforeTopOp != null) {
