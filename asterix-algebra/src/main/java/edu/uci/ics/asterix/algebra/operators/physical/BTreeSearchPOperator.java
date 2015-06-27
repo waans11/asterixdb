@@ -120,7 +120,7 @@ public class BTreeSearchPOperator extends IndexSearchPOperator {
                 builder.getJobSpec(), outputVars, opSchema, typeEnv, context, jobGenParams.getRetainInput(),
                 jobGenParams.getRetainNull(), dataset, jobGenParams.getIndexName(), lowKeyIndexes, highKeyIndexes,
                 jobGenParams.isLowKeyInclusive(), jobGenParams.isHighKeyInclusive(), implConfig, minFilterFieldIndexes,
-                maxFilterFieldIndexes);
+                maxFilterFieldIndexes, jobGenParams.getCanProduceFalsePositive(), jobGenParams.getIsIndexOnlyPlanEnabled());
 
         builder.contributeHyracksOperator(unnestMap, btreeSearch.first);
         builder.contributeAlgebricksPartitionConstraint(btreeSearch.first, btreeSearch.second);

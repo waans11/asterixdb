@@ -31,7 +31,7 @@ import edu.uci.ics.hyracks.storage.am.lsm.btree.dataflow.ExternalBTreeWithBuddyD
 import edu.uci.ics.hyracks.storage.am.lsm.rtree.dataflow.ExternalRTreeDataflowHelperFactory;
 
 // This is an operator that takes a single file index and an array of secondary indexes
-// it is intended to be used for 
+// it is intended to be used for
 // 1. commit transaction operation
 // 2. abort transaction operation
 // 3. recover transaction operation

@@ -28,13 +28,30 @@ public abstract class AbstractOperationCallbackFactory implements Serializable {
     protected final int[] primaryKeyFields;
     protected final ITransactionSubsystemProvider txnSubsystemProvider;
     protected final byte resourceType;
+    protected boolean isIndexOnlyPlanEnabled;
+
+    // Blank constructor for the callers that does not do anything
+    public AbstractOperationCallbackFactory() {
+    	jobId = null;
+    	datasetId = -1;
+    	primaryKeyFields = null;
+    	txnSubsystemProvider = null;
+    	resourceType = -1;
+    	isIndexOnlyPlanEnabled = false;
+    }
 
     public AbstractOperationCallbackFactory(JobId jobId, int datasetId, int[] primaryKeyFields,
             ITransactionSubsystemProvider txnSubsystemProvider, byte resourceType) {
+    	this(jobId, datasetId, primaryKeyFields, txnSubsystemProvider, resourceType, false);
+    }
+
+    public AbstractOperationCallbackFactory(JobId jobId, int datasetId, int[] primaryKeyFields,
+            ITransactionSubsystemProvider txnSubsystemProvider, byte resourceType, boolean isIndexOnlyPlanEnabled) {
         this.jobId = jobId;
         this.datasetId = datasetId;
         this.primaryKeyFields = primaryKeyFields;
         this.txnSubsystemProvider = txnSubsystemProvider;
         this.resourceType = resourceType;
+        this.isIndexOnlyPlanEnabled = isIndexOnlyPlanEnabled;
     }
 }

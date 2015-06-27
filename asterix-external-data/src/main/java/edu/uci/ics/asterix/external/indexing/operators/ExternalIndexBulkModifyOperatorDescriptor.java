@@ -48,7 +48,7 @@ public class ExternalIndexBulkModifyOperatorDescriptor extends AbstractTreeIndex
         super(spec, 1, 0, null, storageManager, lifecycleManagerProvider, fileSplitProvider, typeTraits,
                 comparatorFactories, bloomFilterKeyFields, dataflowHelperFactory, null, false, false, null,
                 NoOpLocalResourceFactoryProvider.INSTANCE, NoOpOperationCallbackFactory.INSTANCE,
-                modificationOpCallbackFactory);
+                modificationOpCallbackFactory, false);
         this.deletedFiles = deletedFiles;
         this.fieldPermutation = fieldPermutation;
         this.fillFactor = fillFactor;

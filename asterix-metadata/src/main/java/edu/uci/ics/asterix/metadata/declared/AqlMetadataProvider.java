@@ -541,7 +541,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
 
         return buildBtreeRuntime(jobSpec, outputVars, opSchema, typeEnv, context, true, false,
                 ((DatasetDataSource) dataSource).getDataset(), primaryIndex.getIndexName(), null, null, true, true,
-                implConfig, minFilterFieldIndexes, maxFilterFieldIndexes);
+                implConfig, minFilterFieldIndexes, maxFilterFieldIndexes, primaryIndex.canProduceFalsePositive(), false);
     }
 
     private IAdapterFactory getConfiguredAdapterFactory(Dataset dataset, String adapterName,
@@ -669,7 +669,8 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             List<LogicalVariable> outputVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,
             JobGenContext context, boolean retainInput, boolean retainNull, Dataset dataset, String indexName,
             int[] lowKeyFields, int[] highKeyFields, boolean lowKeyInclusive, boolean highKeyInclusive,
-            Object implConfig, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes) throws AlgebricksException {
+            Object implConfig, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes,
+            boolean canProduceFalsePositive, boolean isIndexOnlyPlanEnabled) throws AlgebricksException {
 
         boolean isSecondary = true;
         int numSecondaryKeys = 0;
@@ -740,27 +741,42 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             }
 
             ISearchOperationCallbackFactory searchCallbackFactory = null;
-            if (isSecondary) {
-                searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
-                        : new SecondaryIndexSearchOperationCallbackFactory();
-            } else {
-                JobId jobId = ((JobEventListenerFactory) jobSpec.getJobletEventListenerFactory()).getJobId();
-                int datasetId = dataset.getDatasetId();
-                int[] primaryKeyFields = new int[numPrimaryKeys];
-                for (int i = 0; i < numPrimaryKeys; i++) {
-                    primaryKeyFields[i] = i;
-                }
 
-                AqlMetadataImplConfig aqlMetadataImplConfig = (AqlMetadataImplConfig) implConfig;
-                ITransactionSubsystemProvider txnSubsystemProvider = new TransactionSubsystemProvider();
+            JobId jobId = ((JobEventListenerFactory) jobSpec.getJobletEventListenerFactory()).getJobId();
+            int datasetId = dataset.getDatasetId();
+            int[] primaryKeyFields = new int[numPrimaryKeys];
+            for (int i = 0; i < numPrimaryKeys; i++) {
+                primaryKeyFields[i] = i;
+            }
+
+            AqlMetadataImplConfig aqlMetadataImplConfig = (AqlMetadataImplConfig) implConfig;
+            ITransactionSubsystemProvider txnSubsystemProvider = new TransactionSubsystemProvider();
+
+            if (isSecondary) {
+            	// If it's an index-only plan, we try to get a record-level lock on PK.
+            	// For the details, refer to IntroduceSelectAccessMethod rule.
+                searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                        : new SecondaryIndexSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
+                                txnSubsystemProvider, ResourceType.LSM_BTREE, isIndexOnlyPlanEnabled);
+            } else {
                 if (aqlMetadataImplConfig != null && aqlMetadataImplConfig.isInstantLock()) {
-                    searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
-                            : new PrimaryIndexInstantSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
-                                    txnSubsystemProvider, ResourceType.LSM_BTREE);
+                	if (!isIndexOnlyPlanEnabled) {
+                		// We need to get an instant record-level lock if this is not an index-only plan
+                		// and we have only one data-source scan.
+                    	searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                                : new PrimaryIndexInstantSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
+                                        txnSubsystemProvider, ResourceType.LSM_BTREE, isIndexOnlyPlanEnabled);
+                	} else {
+                		// We need to get a record-level lock if this is an index-only plan.
+                    	searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                                : new PrimaryIndexSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
+                                        txnSubsystemProvider, ResourceType.LSM_BTREE, isIndexOnlyPlanEnabled);
+                	}
                 } else {
+                	// Dataset-level lock since we have multiple data-source scan.
                     searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
                             : new PrimaryIndexSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
-                                    txnSubsystemProvider, ResourceType.LSM_BTREE);
+                                    txnSubsystemProvider, ResourceType.LSM_BTREE, isIndexOnlyPlanEnabled);
                 }
             }
             Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
@@ -775,12 +791,12 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
                                 new AsterixVirtualBufferCacheProvider(dataset.getDatasetId()), compactionInfo.first,
                                 compactionInfo.second, isSecondary ? new SecondaryIndexOperationTrackerProvider(
                                         dataset.getDatasetId()) : new PrimaryIndexOperationTrackerProvider(
-                                                dataset.getDatasetId()), rtcProvider,
-                                                LSMBTreeIOOperationCallbackFactory.INSTANCE,
-                                                storageProperties.getBloomFilterFalsePositiveRate(), !isSecondary, filterTypeTraits,
-                                                filterCmpFactories, btreeFields, filterFields, !temp), retainInput, retainNull,
-                                                context.getNullWriterFactory(), searchCallbackFactory, minFilterFieldIndexes,
-                                                maxFilterFieldIndexes);
+                                        dataset.getDatasetId()), rtcProvider,
+                                LSMBTreeIOOperationCallbackFactory.INSTANCE,
+                                storageProperties.getBloomFilterFalsePositiveRate(), !isSecondary, filterTypeTraits,
+                                filterCmpFactories, btreeFields, filterFields, !temp), retainInput, retainNull,
+                        context.getNullWriterFactory(), searchCallbackFactory, minFilterFieldIndexes,
+                        maxFilterFieldIndexes, isIndexOnlyPlanEnabled);
             } else {
                 // External dataset <- use the btree with buddy btree->
                 // Be Careful of Key Start Index ?
@@ -885,6 +901,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
 
             RTreeSearchOperatorDescriptor rtreeSearchOp;
             if (dataset.getDatasetType() == DatasetType.INTERNAL) {
+            	// TODO: the last false flag is for the index-only plan. If R-tree part is revised, I need to fix this flag.
                 rtreeSearchOp = new RTreeSearchOperatorDescriptor(jobSpec, outputRecDesc,
                         appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
                         spPc.first, typeTraits, comparatorFactories, keyFields, new LSMRTreeDataflowHelperFactory(
@@ -892,13 +909,12 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
                                 new AsterixVirtualBufferCacheProvider(dataset.getDatasetId()), compactionInfo.first,
                                 compactionInfo.second, new SecondaryIndexOperationTrackerProvider(
                                         dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                                        LSMRTreeIOOperationCallbackFactory.INSTANCE, proposeLinearizer(
-                                                nestedKeyType.getTypeTag(), comparatorFactories.length),
-                                                storageProperties.getBloomFilterFalsePositiveRate(), rtreeFields, btreeFields,
-                                                filterTypeTraits, filterCmpFactories, filterFields, !temp), retainInput, retainNull,
-                                                context.getNullWriterFactory(), searchCallbackFactory, minFilterFieldIndexes,
-                                                maxFilterFieldIndexes);
-
+                                LSMRTreeIOOperationCallbackFactory.INSTANCE, proposeLinearizer(
+                                        nestedKeyType.getTypeTag(), comparatorFactories.length),
+                                storageProperties.getBloomFilterFalsePositiveRate(), rtreeFields, btreeFields,
+                                filterTypeTraits, filterCmpFactories, filterFields, !temp), retainInput, retainNull,
+                        context.getNullWriterFactory(), searchCallbackFactory, minFilterFieldIndexes,
+                        maxFilterFieldIndexes, false);
             } else {
                 // External Dataset
                 ExternalRTreeDataflowHelperFactory indexDataflowHelperFactory = new ExternalRTreeDataflowHelperFactory(
