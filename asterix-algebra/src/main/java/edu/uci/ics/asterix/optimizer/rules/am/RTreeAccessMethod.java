@@ -90,23 +90,22 @@ public class RTreeAccessMethod implements IAccessMethod {
 
     @Override
     public boolean applySelectPlanTransformation(List<Mutable<ILogicalOperator>> aboveSelectRefs,
-    		Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
-            Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
-            IOptimizationContext context) throws AlgebricksException {
+            Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree, Index chosenIndex,
+            AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
 
         // Check whether assign (unnest) operator exists before the select operator
         Mutable<ILogicalOperator> assignBeforeSelectOpRef = (subTree.assignsAndUnnestsRefs.isEmpty()) ? null
                 : subTree.assignsAndUnnestsRefs.get(0);
         ILogicalOperator assignBeforeSelectOp = null;
         if (assignBeforeSelectOpRef != null) {
-        	assignBeforeSelectOp = assignBeforeSelectOpRef.getValue();
+            assignBeforeSelectOp = assignBeforeSelectOpRef.getValue();
         }
 
         // TODO: We can probably do something smarter here based on selectivity or MBR area.
         IOptimizableFuncExpr optFuncExpr = AccessMethodUtils.chooseFirstOptFuncExpr(chosenIndex, analysisCtx);
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(aboveSelectRefs, selectRef,
-        		assignBeforeSelectOpRef, subTree, null, chosenIndex, optFuncExpr,
-        		analysisCtx, false, false, false, context);
+                assignBeforeSelectOpRef, subTree, null, chosenIndex, optFuncExpr, analysisCtx, false, false, false,
+                context);
         if (primaryIndexUnnestOp == null) {
             return false;
         }
@@ -149,8 +148,7 @@ public class RTreeAccessMethod implements IAccessMethod {
         // TODO: We can probably do something smarter here based on selectivity or MBR area.
         IOptimizableFuncExpr optFuncExpr = AccessMethodUtils.chooseFirstOptFuncExpr(chosenIndex, analysisCtx);
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(null, joinRef, null, indexSubTree,
-        		probeSubTree, chosenIndex,
-                optFuncExpr, analysisCtx, true, isLeftOuterJoin, true, context);
+                probeSubTree, chosenIndex, optFuncExpr, analysisCtx, true, isLeftOuterJoin, true, context);
         if (primaryIndexUnnestOp == null) {
             return false;
         }
@@ -173,11 +171,10 @@ public class RTreeAccessMethod implements IAccessMethod {
     }
 
     private ILogicalOperator createSecondaryToPrimaryPlan(List<Mutable<ILogicalOperator>> afterTopRefs,
-    		Mutable<ILogicalOperator> topRef, Mutable<ILogicalOperator> assignBeforeTopRef,
-    		OptimizableOperatorSubTree indexSubTree,
-            OptimizableOperatorSubTree probeSubTree, Index chosenIndex, IOptimizableFuncExpr optFuncExpr,
-            AccessMethodAnalysisContext analysisCtx, boolean retainInput, boolean retainNull,
-            boolean requiresBroadcast, IOptimizationContext context) throws AlgebricksException {
+            Mutable<ILogicalOperator> topRef, Mutable<ILogicalOperator> assignBeforeTopRef,
+            OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, Index chosenIndex,
+            IOptimizableFuncExpr optFuncExpr, AccessMethodAnalysisContext analysisCtx, boolean retainInput,
+            boolean retainNull, boolean requiresBroadcast, IOptimizationContext context) throws AlgebricksException {
         Dataset dataset = indexSubTree.dataset;
         ARecordType recordType = indexSubTree.recordType;
 
@@ -203,10 +200,10 @@ public class RTreeAccessMethod implements IAccessMethod {
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
         // List of expressions for the assign.
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
-//        Pair<ILogicalExpression, Boolean> returnedSearchKeyExpr = AccessMethodUtils.createSearchKeyExpr(optFuncExpr,
-//                indexSubTree, probeSubTree);
-        ILogicalExpression searchKeyExpr = AccessMethodUtils.createSearchKeyExpr(optFuncExpr,
-                indexSubTree, probeSubTree).first;
+        //        Pair<ILogicalExpression, Boolean> returnedSearchKeyExpr = AccessMethodUtils.createSearchKeyExpr(optFuncExpr,
+        //                indexSubTree, probeSubTree);
+        ILogicalExpression searchKeyExpr = AccessMethodUtils.createSearchKeyExpr(optFuncExpr, indexSubTree,
+                probeSubTree).first;
 
         for (int i = 0; i < numSecondaryKeys; i++) {
             // The create MBR function "extracts" one field of an MBR around the given spatial object.
@@ -241,26 +238,28 @@ public class RTreeAccessMethod implements IAccessMethod {
             assignSearchKeys.getInputs().add(probeSubTree.rootRef);
         }
 
+        boolean outputPrimaryKeysOnlyFromSIdxSearch = false;
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
-                chosenIndex, assignSearchKeys, jobGenParams, context, false, retainInput, analysisCtx.isIndexOnlyPlanEnabled());
+                chosenIndex, assignSearchKeys, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput,
+                analysisCtx.isIndexOnlyPlanEnabled());
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
             ExternalDataLookupOperator externalDataAccessOp = AccessMethodUtils.createExternalDataLookupUnnestMap(
                     dataSourceOp, dataset, recordType, secondaryIndexUnnestOp, context, chosenIndex, retainInput,
-                    retainNull);
+                    retainNull, outputPrimaryKeysOnlyFromSIdxSearch);
             return externalDataAccessOp;
         } else {
-//            UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceOp,
-//                    dataset, recordType, secondaryIndexUnnestOp, context, true, retainInput, false, false, chosenIndex);
+            //            UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceOp,
+            //                    dataset, recordType, secondaryIndexUnnestOp, context, true, retainInput, false, false, chosenIndex);
 
-        	SelectOperator select = (SelectOperator) topRef.getValue();
+            SelectOperator select = (SelectOperator) topRef.getValue();
             Mutable<ILogicalExpression> conditionRef = select.getCondition();
 
             ILogicalOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(afterTopRefs, topRef,
-            		conditionRef, assignBeforeTopRef, dataSourceOp,
-                    dataset, recordType, secondaryIndexUnnestOp, context, true,
-                    retainInput, false, false, chosenIndex, analysisCtx);
+                    conditionRef, assignBeforeTopRef, dataSourceOp, dataset, recordType, secondaryIndexUnnestOp,
+                    context, true, retainInput, false, false, chosenIndex, analysisCtx,
+                    outputPrimaryKeysOnlyFromSIdxSearch);
 
             return primaryIndexUnnestOp;
         }

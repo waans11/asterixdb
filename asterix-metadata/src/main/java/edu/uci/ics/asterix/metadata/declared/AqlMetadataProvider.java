@@ -38,12 +38,7 @@ import edu.uci.ics.asterix.common.dataflow.AsterixLSMInvertedIndexInsertDeleteOp
 import edu.uci.ics.asterix.common.dataflow.AsterixLSMTreeInsertDeleteOperatorDescriptor;
 import edu.uci.ics.asterix.common.dataflow.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.common.feeds.FeedActivity;
-import edu.uci.ics.asterix.common.feeds.FeedActivity.FeedActivityDetails;
 import edu.uci.ics.asterix.common.feeds.FeedConnectionId;
-import edu.uci.ics.asterix.common.feeds.FeedConstants;
-import edu.uci.ics.asterix.common.feeds.FeedPolicyAccessor;
-import edu.uci.ics.asterix.common.feeds.api.ICentralFeedManager;
 import edu.uci.ics.asterix.common.ioopcallbacks.LSMBTreeIOOperationCallbackFactory;
 import edu.uci.ics.asterix.common.ioopcallbacks.LSMBTreeWithBuddyIOOperationCallbackFactory;
 import edu.uci.ics.asterix.common.ioopcallbacks.LSMInvertedIndexIOOperationCallbackFactory;
@@ -74,16 +69,11 @@ import edu.uci.ics.asterix.metadata.entities.Feed;
 import edu.uci.ics.asterix.metadata.entities.FeedPolicy;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
-import edu.uci.ics.asterix.metadata.entities.PrimaryFeed;
-import edu.uci.ics.asterix.metadata.external.IAdapterFactory;
-import edu.uci.ics.asterix.metadata.external.IAdapterFactory.SupportedOperation;
 import edu.uci.ics.asterix.metadata.external.IndexingConstants;
 import edu.uci.ics.asterix.metadata.feeds.BuiltinFeedPolicies;
 import edu.uci.ics.asterix.metadata.feeds.ExternalDataScanOperatorDescriptor;
-import edu.uci.ics.asterix.metadata.feeds.FeedCollectOperatorDescriptor;
 import edu.uci.ics.asterix.metadata.feeds.FeedIntakeOperatorDescriptor;
 import edu.uci.ics.asterix.metadata.feeds.FeedUtil;
-import edu.uci.ics.asterix.metadata.feeds.IFeedAdapterFactory;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.metadata.utils.ExternalDatasetsRegistry;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
@@ -378,110 +368,111 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
     }
 
-@SuppressWarnings("rawtypes")
-public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildFeedCollectRuntime(JobSpecification jobSpec,
-        IDataSource<AqlSourceId> dataSource) throws AlgebricksException {
+    @SuppressWarnings("rawtypes")
+    public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildFeedCollectRuntime(JobSpecification jobSpec,
+            IDataSource<AqlSourceId> dataSource) throws AlgebricksException {
 
-    FeedDataSource feedDataSource = (FeedDataSource) dataSource;
-    FeedCollectOperatorDescriptor feedCollector = null;
+        FeedDataSource feedDataSource = (FeedDataSource) dataSource;
+        FeedCollectOperatorDescriptor feedCollector = null;
 
-    try {
-        ARecordType feedOutputType = (ARecordType) feedDataSource.getItemType();
-        ISerializerDeserializer payloadSerde = NonTaggedDataFormat.INSTANCE.getSerdeProvider()
-                .getSerializerDeserializer(feedOutputType);
-        RecordDescriptor feedDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
+        try {
+            ARecordType feedOutputType = (ARecordType) feedDataSource.getItemType();
+            ISerializerDeserializer payloadSerde = NonTaggedDataFormat.INSTANCE.getSerdeProvider()
+                    .getSerializerDeserializer(feedOutputType);
+            RecordDescriptor feedDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
-        FeedPolicy feedPolicy = (FeedPolicy) ((AqlDataSource) dataSource).getProperties().get(
-                BuiltinFeedPolicies.CONFIG_FEED_POLICY_KEY);
-        if (feedPolicy == null) {
-            throw new AlgebricksException("Feed not configured with a policy");
+            FeedPolicy feedPolicy = (FeedPolicy) ((AqlDataSource) dataSource).getProperties().get(
+                    BuiltinFeedPolicies.CONFIG_FEED_POLICY_KEY);
+            if (feedPolicy == null) {
+                throw new AlgebricksException("Feed not configured with a policy");
+            }
+            feedPolicy.getProperties().put(BuiltinFeedPolicies.CONFIG_FEED_POLICY_KEY, feedPolicy.getPolicyName());
+            FeedConnectionId feedConnectionId = new FeedConnectionId(feedDataSource.getId().getDataverseName(),
+                    feedDataSource.getId().getDatasourceName(), feedDataSource.getTargetDataset());
+            feedCollector = new FeedCollectOperatorDescriptor(jobSpec, feedConnectionId,
+                    feedDataSource.getSourceFeedId(), (ARecordType) feedOutputType, feedDesc,
+                    feedPolicy.getProperties(), feedDataSource.getLocation());
+
+            return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedCollector,
+                    determineLocationConstraint(feedDataSource));
+
+        } catch (Exception e) {
+            throw new AlgebricksException(e);
         }
-        feedPolicy.getProperties().put(BuiltinFeedPolicies.CONFIG_FEED_POLICY_KEY, feedPolicy.getPolicyName());
-        FeedConnectionId feedConnectionId = new FeedConnectionId(feedDataSource.getId().getDataverseName(),
-                feedDataSource.getId().getDatasourceName(), feedDataSource.getTargetDataset());
-        feedCollector = new FeedCollectOperatorDescriptor(jobSpec, feedConnectionId,
-                feedDataSource.getSourceFeedId(), (ARecordType) feedOutputType, feedDesc,
-                feedPolicy.getProperties(), feedDataSource.getLocation());
-
-        return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedCollector,
-                determineLocationConstraint(feedDataSource));
-
-    } catch (Exception e) {
-        throw new AlgebricksException(e);
     }
-}
 
-private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDataSource feedDataSource)
-        throws AsterixException {
-    String[] locationArray = null;
-    String locations = null;;
-    switch (feedDataSource.getSourceFeedType()) {
-        case PRIMARY:
-            switch (feedDataSource.getLocation()) {
-                case SOURCE_FEED_COMPUTE_STAGE:
-                    if (feedDataSource.getFeed().getFeedId().equals(feedDataSource.getSourceFeedId())) {
-                        locationArray = feedDataSource.getLocations();
-                    } else {
-                        Collection<FeedActivity> activities = centralFeedManager.getFeedLoadManager()
-                                .getFeedActivities();
-                        Iterator<FeedActivity> it = activities.iterator();
-                        FeedActivity activity = null;
-                        while (it.hasNext()) {
-                            activity = it.next();
-                            if (activity.getDataverseName().equals(feedDataSource.getSourceFeedId().getDataverse())
-                                    && activity.getFeedName()
-                                            .equals(feedDataSource.getSourceFeedId().getFeedName())) {
-                                locations = activity.getFeedActivityDetails().get(
-                                        FeedActivityDetails.COMPUTE_LOCATIONS);
-                                locationArray = locations.split(",");
-                                break;
+    private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDataSource feedDataSource)
+            throws AsterixException {
+        String[] locationArray = null;
+        String locations = null;;
+        switch (feedDataSource.getSourceFeedType()) {
+            case PRIMARY:
+                switch (feedDataSource.getLocation()) {
+                    case SOURCE_FEED_COMPUTE_STAGE:
+                        if (feedDataSource.getFeed().getFeedId().equals(feedDataSource.getSourceFeedId())) {
+                            locationArray = feedDataSource.getLocations();
+                        } else {
+                            Collection<FeedActivity> activities = centralFeedManager.getFeedLoadManager()
+                                    .getFeedActivities();
+                            Iterator<FeedActivity> it = activities.iterator();
+                            FeedActivity activity = null;
+                            while (it.hasNext()) {
+                                activity = it.next();
+                                if (activity.getDataverseName().equals(feedDataSource.getSourceFeedId().getDataverse())
+                                        && activity.getFeedName()
+                                                .equals(feedDataSource.getSourceFeedId().getFeedName())) {
+                                    locations = activity.getFeedActivityDetails().get(
+                                            FeedActivityDetails.COMPUTE_LOCATIONS);
+                                    locationArray = locations.split(",");
+                                    break;
+                                }
                             }
                         }
-                    }
-                    break;
-                case SOURCE_FEED_INTAKE_STAGE:
-                    locationArray = feedDataSource.getLocations();
-                    break;
-            }
-            break;
-        case SECONDARY:
-            Collection<FeedActivity> activities = centralFeedManager.getFeedLoadManager().getFeedActivities();
-            Iterator<FeedActivity> it = activities.iterator();
-            FeedActivity activity = null;
-            while (it.hasNext()) {
-                activity = it.next();
-                if (activity.getDataverseName().equals(feedDataSource.getSourceFeedId().getDataverse())
-                        && activity.getFeedName().equals(feedDataSource.getSourceFeedId().getFeedName())) {
-                    switch (feedDataSource.getLocation()) {
-                        case SOURCE_FEED_INTAKE_STAGE:
-                            locations = activity.getFeedActivityDetails()
-                                    .get(FeedActivityDetails.COLLECT_LOCATIONS);
-                            break;
-                        case SOURCE_FEED_COMPUTE_STAGE:
-                            locations = activity.getFeedActivityDetails()
-                                    .get(FeedActivityDetails.COMPUTE_LOCATIONS);
-                            break;
-                    }
-                    break;
+                        break;
+                    case SOURCE_FEED_INTAKE_STAGE:
+                        locationArray = feedDataSource.getLocations();
+                        break;
                 }
-            }
+                break;
+            case SECONDARY:
+                Collection<FeedActivity> activities = centralFeedManager.getFeedLoadManager().getFeedActivities();
+                Iterator<FeedActivity> it = activities.iterator();
+                FeedActivity activity = null;
+                while (it.hasNext()) {
+                    activity = it.next();
+                    if (activity.getDataverseName().equals(feedDataSource.getSourceFeedId().getDataverse())
+                            && activity.getFeedName().equals(feedDataSource.getSourceFeedId().getFeedName())) {
+                        switch (feedDataSource.getLocation()) {
+                            case SOURCE_FEED_INTAKE_STAGE:
+                                locations = activity.getFeedActivityDetails()
+                                        .get(FeedActivityDetails.COLLECT_LOCATIONS);
+                                break;
+                            case SOURCE_FEED_COMPUTE_STAGE:
+                                locations = activity.getFeedActivityDetails()
+                                        .get(FeedActivityDetails.COMPUTE_LOCATIONS);
+                                break;
+                        }
+                        break;
+                    }
+                }
 
-            if (locations != null) {
-                locationArray = locations.split(",");
-            } else {
-                String message = "Unable to discover location(s) for source feed data hand-off "
-                        + feedDataSource.getSourceFeedId();
-                if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe(message);
+                if (locations != null) {
+                    locationArray = locations.split(",");
+                } else {
+                    String message = "Unable to discover location(s) for source feed data hand-off "
+                            + feedDataSource.getSourceFeedId();
+                    if (LOGGER.isLoggable(Level.SEVERE)) {
+                        LOGGER.severe(message);
+                    }
+                    throw new AsterixException(message);
                 }
-                throw new AsterixException(message);
-            }
-            break;
+                break;
+        }
+        AlgebricksAbsolutePartitionConstraint locationConstraint = new AlgebricksAbsolutePartitionConstraint(
+                locationArray);
+        return locationConstraint;
     }
-    AlgebricksAbsolutePartitionConstraint locationConstraint = new AlgebricksAbsolutePartitionConstraint(
-            locationArray);
-    return locationConstraint;
-}
+
     private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildLoadableDatasetScan(JobSpecification jobSpec,
             LoadableDataSource alds, IAdapterFactory adapterFactory, RecordDescriptor rDesc, boolean isPKAutoGenerated,
             List<List<String>> primaryKeys, ARecordType recType, int pkIndex) throws AlgebricksException {
@@ -545,8 +536,8 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
     }
 
     private IAdapterFactory getConfiguredAdapterFactory(Dataset dataset, String adapterName,
-            Map<String, String> configuration, IAType itemType, boolean isPKAutoGenerated, List<List<String>> primaryKeys)
-            throws AlgebricksException {
+            Map<String, String> configuration, IAType itemType, boolean isPKAutoGenerated,
+            List<List<String>> primaryKeys) throws AlgebricksException {
         IAdapterFactory adapterFactory;
         DatasourceAdapter adapterEntity;
         String adapterFactoryClassname;
@@ -580,11 +571,11 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
                         iterator.remove();
                     }
                 }
-                // TODO Check this call, result of merge from master! 
+                // TODO Check this call, result of merge from master!
                 //  ((IGenericAdapterFactory) adapterFactory).setFiles(files);
             }
-            
-           return adapterFactory; 
+
+            return adapterFactory;
         } catch (Exception e) {
             throw new AlgebricksException("Unable to create adapter " + e);
         }
@@ -592,7 +583,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
 
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildExternalDatasetDataScannerRuntime(
             JobSpecification jobSpec, IAType itemType, IAdapterFactory adapterFactory, IDataFormat format)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         if (itemType.getTypeTag() != ATypeTag.RECORD) {
             throw new AlgebricksException("Can only scan datasets of records.");
         }
@@ -663,7 +654,6 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
         return new Triple<IOperatorDescriptor, AlgebricksPartitionConstraint, IFeedAdapterFactory>(feedIngestor,
                 partitionConstraint, adapterFactory);
     }
-   
 
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildBtreeRuntime(JobSpecification jobSpec,
             List<LogicalVariable> outputVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,
@@ -745,38 +735,51 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             JobId jobId = ((JobEventListenerFactory) jobSpec.getJobletEventListenerFactory()).getJobId();
             int datasetId = dataset.getDatasetId();
             int[] primaryKeyFields = new int[numPrimaryKeys];
+            int[] primaryKeyFieldsInSecondaryIndex = new int[numPrimaryKeys];
             for (int i = 0; i < numPrimaryKeys; i++) {
                 primaryKeyFields[i] = i;
+                primaryKeyFieldsInSecondaryIndex[i] = i + numSecondaryKeys;
             }
 
             AqlMetadataImplConfig aqlMetadataImplConfig = (AqlMetadataImplConfig) implConfig;
             ITransactionSubsystemProvider txnSubsystemProvider = new TransactionSubsystemProvider();
 
+            boolean proceedIndexOnlyPlan = isIndexOnlyPlanEnabled && !canProduceFalsePositive && isSecondary;
+
             if (isSecondary) {
-            	// If it's an index-only plan, we try to get a record-level lock on PK.
-            	// For the details, refer to IntroduceSelectAccessMethod rule.
-                searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
-                        : new SecondaryIndexSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
-                                txnSubsystemProvider, ResourceType.LSM_BTREE, isIndexOnlyPlanEnabled);
+                if (!proceedIndexOnlyPlan) {
+                    // If the plan is not an index-only plan, we don't require any locking on PK
+                    // while traversing this secondary index.
+                    searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                            : new SecondaryIndexSearchOperationCallbackFactory();
+                } else {
+                    // If it's an index-only plan, we try to get a record-level lock on PK.
+                    // For the details, refer to IntroduceSelectAccessMethod rule.
+                    searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                            : new SecondaryIndexSearchOperationCallbackFactory(jobId, datasetId,
+                                    primaryKeyFieldsInSecondaryIndex, txnSubsystemProvider, ResourceType.LSM_BTREE,
+                                    proceedIndexOnlyPlan);
+                }
             } else {
                 if (aqlMetadataImplConfig != null && aqlMetadataImplConfig.isInstantLock()) {
-                	if (!isIndexOnlyPlanEnabled) {
-                		// We need to get an instant record-level lock if this is not an index-only plan
-                		// and we have only one data-source scan.
-                    	searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
-                                : new PrimaryIndexInstantSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
-                                        txnSubsystemProvider, ResourceType.LSM_BTREE, isIndexOnlyPlanEnabled);
-                	} else {
-                		// We need to get a record-level lock if this is an index-only plan.
-                    	searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                    if (!proceedIndexOnlyPlan) {
+                        // We need to get an instant record-level lock if this is not an index-only plan
+                        // and we have only one data-source scan.
+                        searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                                : new PrimaryIndexInstantSearchOperationCallbackFactory(jobId, datasetId,
+                                        primaryKeyFields, txnSubsystemProvider, ResourceType.LSM_BTREE,
+                                        proceedIndexOnlyPlan);
+                    } else {
+                        // We need to get a record-level lock if this is an index-only plan.
+                        searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
                                 : new PrimaryIndexSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
-                                        txnSubsystemProvider, ResourceType.LSM_BTREE, isIndexOnlyPlanEnabled);
-                	}
+                                        txnSubsystemProvider, ResourceType.LSM_BTREE, proceedIndexOnlyPlan);
+                    }
                 } else {
-                	// Dataset-level lock since we have multiple data-source scan.
+                    // Dataset-level lock since we have multiple data-source scan.
                     searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
                             : new PrimaryIndexSearchOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
-                                    txnSubsystemProvider, ResourceType.LSM_BTREE, isIndexOnlyPlanEnabled);
+                                    txnSubsystemProvider, ResourceType.LSM_BTREE, proceedIndexOnlyPlan);
                 }
             }
             Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
@@ -796,7 +799,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
                                 storageProperties.getBloomFilterFalsePositiveRate(), !isSecondary, filterTypeTraits,
                                 filterCmpFactories, btreeFields, filterFields, !temp), retainInput, retainNull,
                         context.getNullWriterFactory(), searchCallbackFactory, minFilterFieldIndexes,
-                        maxFilterFieldIndexes, isIndexOnlyPlanEnabled);
+                        maxFilterFieldIndexes, proceedIndexOnlyPlan);
             } else {
                 // External dataset <- use the btree with buddy btree->
                 // Be Careful of Key Start Index ?
@@ -804,9 +807,9 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
                 ExternalBTreeWithBuddyDataflowHelperFactory indexDataflowHelperFactory = new ExternalBTreeWithBuddyDataflowHelperFactory(
                         compactionInfo.first, compactionInfo.second, new SecondaryIndexOperationTrackerProvider(
                                 dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                                LSMBTreeWithBuddyIOOperationCallbackFactory.INSTANCE, getStorageProperties()
+                        LSMBTreeWithBuddyIOOperationCallbackFactory.INSTANCE, getStorageProperties()
                                 .getBloomFilterFalsePositiveRate(), buddyBreeFields,
-                                ExternalDatasetsRegistry.INSTANCE.getAndLockDatasetVersion(dataset, this), !temp);
+                        ExternalDatasetsRegistry.INSTANCE.getAndLockDatasetVersion(dataset, this), !temp);
                 btreeSearchOp = new ExternalBTreeSearchOperatorDescriptor(jobSpec, outputRecDesc, rtcProvider,
                         rtcProvider, spPc.first, typeTraits, comparatorFactories, bloomFilterKeyFields, lowKeyFields,
                         highKeyFields, lowKeyInclusive, highKeyInclusive, indexDataflowHelperFactory, retainInput,
@@ -901,7 +904,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
 
             RTreeSearchOperatorDescriptor rtreeSearchOp;
             if (dataset.getDatasetType() == DatasetType.INTERNAL) {
-            	// TODO: the last false flag is for the index-only plan. If R-tree part is revised, I need to fix this flag.
+                // TODO: the last false flag is for the index-only plan. If R-tree part is revised, I need to fix this flag.
                 rtreeSearchOp = new RTreeSearchOperatorDescriptor(jobSpec, outputRecDesc,
                         appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
                         spPc.first, typeTraits, comparatorFactories, keyFields, new LSMRTreeDataflowHelperFactory(
@@ -1011,7 +1014,8 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
         IAType itemType = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, aqlId.getDataverseName(), tName).getDatatype();
         AqlDataSourceType datasourceType = dataset.getDatasetType().equals(DatasetType.EXTERNAL) ? AqlDataSourceType.EXTERNAL_DATASET
                 : AqlDataSourceType.INTERNAL_DATASET;
-        return new DatasetDataSource(aqlId, aqlId.getDataverseName(), aqlId.getDatasourceName(), itemType, datasourceType);
+        return new DatasetDataSource(aqlId, aqlId.getDataverseName(), aqlId.getDatasourceName(), itemType,
+                datasourceType);
     }
 
     @Override
@@ -1108,9 +1112,9 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
                     new LSMBTreeDataflowHelperFactory(new AsterixVirtualBufferCacheProvider(dataset.getDatasetId()),
                             compactionInfo.first, compactionInfo.second, new PrimaryIndexOperationTrackerProvider(
                                     dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                                    LSMBTreeIOOperationCallbackFactory.INSTANCE,
-                                    storageProperties.getBloomFilterFalsePositiveRate(), true, filterTypeTraits,
-                                    filterCmpFactories, btreeFields, filterFields, !temp));
+                            LSMBTreeIOOperationCallbackFactory.INSTANCE,
+                            storageProperties.getBloomFilterFalsePositiveRate(), true, filterTypeTraits,
+                            filterCmpFactories, btreeFields, filterFields, !temp));
             return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad,
                     splitsAndConstraint.second);
         } catch (MetadataException me) {
@@ -1122,7 +1126,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             IDataSource<AqlSourceId> dataSource, IOperatorSchema propagatedSchema, IVariableTypeEnvironment typeEnv,
             List<LogicalVariable> keys, LogicalVariable payload, List<LogicalVariable> additionalNonKeyFields,
             RecordDescriptor recordDesc, JobGenContext context, JobSpecification spec, boolean bulkload)
-                    throws AlgebricksException {
+            throws AlgebricksException {
 
         String datasetName = dataSource.getId().getDatasourceName();
         Dataset dataset = findDataset(dataSource.getId().getDataverseName(), datasetName);
@@ -1185,30 +1189,30 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             TransactionSubsystemProvider txnSubsystemProvider = new TransactionSubsystemProvider();
             IModificationOperationCallbackFactory modificationCallbackFactory = temp ? new TempDatasetPrimaryIndexModificationOperationCallbackFactory(
                     jobId, datasetId, primaryKeyFields, txnSubsystemProvider, indexOp, ResourceType.LSM_BTREE)
-            : new PrimaryIndexModificationOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
-                    txnSubsystemProvider, indexOp, ResourceType.LSM_BTREE);
+                    : new PrimaryIndexModificationOperationCallbackFactory(jobId, datasetId, primaryKeyFields,
+                            txnSubsystemProvider, indexOp, ResourceType.LSM_BTREE);
 
-                    Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
-                            dataset, mdTxnCtx);
-                    IIndexDataflowHelperFactory idfh = new LSMBTreeDataflowHelperFactory(new AsterixVirtualBufferCacheProvider(
-                            datasetId), compactionInfo.first, compactionInfo.second, new PrimaryIndexOperationTrackerProvider(
-                                    dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                                    LSMBTreeIOOperationCallbackFactory.INSTANCE, storageProperties.getBloomFilterFalsePositiveRate(),
-                                    true, filterTypeTraits, filterCmpFactories, btreeFields, filterFields, !temp);
-                    IOperatorDescriptor op;
-                    if (bulkload) {
-                        long numElementsHint = getCardinalityPerPartitionHint(dataset);
-                        op = new TreeIndexBulkLoadOperatorDescriptor(spec, recordDesc, appContext.getStorageManagerInterface(),
-                                appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
-                                comparatorFactories, bloomFilterKeyFields, fieldPermutation,
-                                GlobalConfig.DEFAULT_TREE_FILL_FACTOR, true, numElementsHint, true, idfh);
-                    } else {
-                        op = new AsterixLSMTreeInsertDeleteOperatorDescriptor(spec, recordDesc,
-                                appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
-                                splitsAndConstraint.first, typeTraits, comparatorFactories, bloomFilterKeyFields,
-                                fieldPermutation, indexOp, idfh, null, modificationCallbackFactory, true, indexName);
-                    }
-                    return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(op, splitsAndConstraint.second);
+            Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
+                    dataset, mdTxnCtx);
+            IIndexDataflowHelperFactory idfh = new LSMBTreeDataflowHelperFactory(new AsterixVirtualBufferCacheProvider(
+                    datasetId), compactionInfo.first, compactionInfo.second, new PrimaryIndexOperationTrackerProvider(
+                    dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
+                    LSMBTreeIOOperationCallbackFactory.INSTANCE, storageProperties.getBloomFilterFalsePositiveRate(),
+                    true, filterTypeTraits, filterCmpFactories, btreeFields, filterFields, !temp);
+            IOperatorDescriptor op;
+            if (bulkload) {
+                long numElementsHint = getCardinalityPerPartitionHint(dataset);
+                op = new TreeIndexBulkLoadOperatorDescriptor(spec, recordDesc, appContext.getStorageManagerInterface(),
+                        appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
+                        comparatorFactories, bloomFilterKeyFields, fieldPermutation,
+                        GlobalConfig.DEFAULT_TREE_FILL_FACTOR, true, numElementsHint, true, idfh);
+            } else {
+                op = new AsterixLSMTreeInsertDeleteOperatorDescriptor(spec, recordDesc,
+                        appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
+                        splitsAndConstraint.first, typeTraits, comparatorFactories, bloomFilterKeyFields,
+                        fieldPermutation, indexOp, idfh, null, modificationCallbackFactory, true, indexName);
+            }
+            return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(op, splitsAndConstraint.second);
 
         } catch (MetadataException me) {
             throw new AlgebricksException(me);
@@ -1220,7 +1224,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             IDataSource<AqlSourceId> dataSource, IOperatorSchema propagatedSchema, IVariableTypeEnvironment typeEnv,
             List<LogicalVariable> keys, LogicalVariable payload, List<LogicalVariable> additionalNonKeyFields,
             RecordDescriptor recordDesc, JobGenContext context, JobSpecification spec, boolean bulkload)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         return getInsertOrDeleteRuntime(IndexOperation.INSERT, dataSource, propagatedSchema, typeEnv, keys, payload,
                 additionalNonKeyFields, recordDesc, context, spec, bulkload);
     }
@@ -1348,7 +1352,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             IVariableTypeEnvironment typeEnv, List<LogicalVariable> primaryKeys, List<LogicalVariable> secondaryKeys,
             AsterixTupleFilterFactory filterFactory, RecordDescriptor recordDesc, JobGenContext context,
             JobSpecification spec, IndexOperation indexOp, IndexType indexType, boolean bulkload)
-                    throws AlgebricksException {
+            throws AlgebricksException {
 
         // Sanity checks.
         if (primaryKeys.size() > 1) {
@@ -1538,7 +1542,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             IOperatorSchema[] inputSchemas, IVariableTypeEnvironment typeEnv, List<LogicalVariable> primaryKeys,
             List<LogicalVariable> secondaryKeys, List<LogicalVariable> additionalNonKeyFields,
             ILogicalExpression filterExpr, RecordDescriptor recordDesc, JobGenContext context, JobSpecification spec)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         return getIndexInsertOrDeleteRuntime(IndexOperation.DELETE, dataSourceIndex, propagatedSchema, inputSchemas,
                 typeEnv, primaryKeys, secondaryKeys, additionalNonKeyFields, filterExpr, recordDesc, context, spec,
                 false);
@@ -1546,7 +1550,7 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
 
     private AsterixTupleFilterFactory createTupleFilterFactory(IOperatorSchema[] inputSchemas,
             IVariableTypeEnvironment typeEnv, ILogicalExpression filterExpr, JobGenContext context)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         // No filtering condition.
         if (filterExpr == null) {
             return null;
@@ -1660,37 +1664,37 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             IModificationOperationCallbackFactory modificationCallbackFactory = temp ? new TempDatasetSecondaryIndexModificationOperationCallbackFactory(
                     jobId, datasetId, modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp,
                     ResourceType.LSM_BTREE) : new SecondaryIndexModificationOperationCallbackFactory(jobId, datasetId,
-                            modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp, ResourceType.LSM_BTREE);
+                    modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp, ResourceType.LSM_BTREE);
 
-                    Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
-                            dataset, mdTxnCtx);
-                    IIndexDataflowHelperFactory idfh = new LSMBTreeDataflowHelperFactory(new AsterixVirtualBufferCacheProvider(
-                            datasetId), compactionInfo.first, compactionInfo.second,
-                            new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
-                            AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, LSMBTreeIOOperationCallbackFactory.INSTANCE,
-                            storageProperties.getBloomFilterFalsePositiveRate(), false, filterTypeTraits, filterCmpFactories,
-                            btreeFields, filterFields, !temp);
-                    IOperatorDescriptor op;
-                    if (bulkload) {
-                        long numElementsHint = getCardinalityPerPartitionHint(dataset);
-                        op = new TreeIndexBulkLoadOperatorDescriptor(spec, recordDesc, appContext.getStorageManagerInterface(),
-                                appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
-                                comparatorFactories, bloomFilterKeyFields, fieldPermutation,
-                                GlobalConfig.DEFAULT_TREE_FILL_FACTOR, false, numElementsHint, false, idfh);
-                    } else {
-                        op = new AsterixLSMTreeInsertDeleteOperatorDescriptor(spec, recordDesc,
-                                appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
-                                splitsAndConstraint.first, typeTraits, comparatorFactories, bloomFilterKeyFields,
-                                fieldPermutation, indexOp, new LSMBTreeDataflowHelperFactory(
-                                        new AsterixVirtualBufferCacheProvider(datasetId), compactionInfo.first,
-                                        compactionInfo.second, new SecondaryIndexOperationTrackerProvider(
-                                                dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                                                LSMBTreeIOOperationCallbackFactory.INSTANCE,
-                                                storageProperties.getBloomFilterFalsePositiveRate(), false, filterTypeTraits,
-                                                filterCmpFactories, btreeFields, filterFields, !temp), filterFactory,
-                                                modificationCallbackFactory, false, indexName);
-                    }
-                    return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(op, splitsAndConstraint.second);
+            Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
+                    dataset, mdTxnCtx);
+            IIndexDataflowHelperFactory idfh = new LSMBTreeDataflowHelperFactory(new AsterixVirtualBufferCacheProvider(
+                    datasetId), compactionInfo.first, compactionInfo.second,
+                    new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
+                    AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, LSMBTreeIOOperationCallbackFactory.INSTANCE,
+                    storageProperties.getBloomFilterFalsePositiveRate(), false, filterTypeTraits, filterCmpFactories,
+                    btreeFields, filterFields, !temp);
+            IOperatorDescriptor op;
+            if (bulkload) {
+                long numElementsHint = getCardinalityPerPartitionHint(dataset);
+                op = new TreeIndexBulkLoadOperatorDescriptor(spec, recordDesc, appContext.getStorageManagerInterface(),
+                        appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
+                        comparatorFactories, bloomFilterKeyFields, fieldPermutation,
+                        GlobalConfig.DEFAULT_TREE_FILL_FACTOR, false, numElementsHint, false, idfh);
+            } else {
+                op = new AsterixLSMTreeInsertDeleteOperatorDescriptor(spec, recordDesc,
+                        appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
+                        splitsAndConstraint.first, typeTraits, comparatorFactories, bloomFilterKeyFields,
+                        fieldPermutation, indexOp, new LSMBTreeDataflowHelperFactory(
+                                new AsterixVirtualBufferCacheProvider(datasetId), compactionInfo.first,
+                                compactionInfo.second, new SecondaryIndexOperationTrackerProvider(
+                                        dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
+                                LSMBTreeIOOperationCallbackFactory.INSTANCE,
+                                storageProperties.getBloomFilterFalsePositiveRate(), false, filterTypeTraits,
+                                filterCmpFactories, btreeFields, filterFields, !temp), filterFactory,
+                        modificationCallbackFactory, false, indexName);
+            }
+            return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(op, splitsAndConstraint.second);
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
         } catch (IOException e) {
@@ -1861,46 +1865,46 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             IModificationOperationCallbackFactory modificationCallbackFactory = temp ? new TempDatasetSecondaryIndexModificationOperationCallbackFactory(
                     jobId, datasetId, modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp,
                     ResourceType.LSM_INVERTED_INDEX) : new SecondaryIndexModificationOperationCallbackFactory(jobId,
-                            datasetId, modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp,
-                            ResourceType.LSM_INVERTED_INDEX);
+                    datasetId, modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp,
+                    ResourceType.LSM_INVERTED_INDEX);
 
-                    Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
-                            dataset, mdTxnCtx);
-                    IIndexDataflowHelperFactory indexDataFlowFactory;
-                    if (!isPartitioned) {
-                        indexDataFlowFactory = new LSMInvertedIndexDataflowHelperFactory(new AsterixVirtualBufferCacheProvider(
-                                datasetId), compactionInfo.first, compactionInfo.second,
-                                new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
-                                AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                                LSMInvertedIndexIOOperationCallbackFactory.INSTANCE,
-                                storageProperties.getBloomFilterFalsePositiveRate(), invertedIndexFields, filterTypeTraits,
-                                filterCmpFactories, filterFields, filterFieldsForNonBulkLoadOps,
-                                invertedIndexFieldsForNonBulkLoadOps, !temp);
-                    } else {
-                        indexDataFlowFactory = new PartitionedLSMInvertedIndexDataflowHelperFactory(
-                                new AsterixVirtualBufferCacheProvider(dataset.getDatasetId()), compactionInfo.first,
-                                compactionInfo.second, new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
-                                AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                                LSMInvertedIndexIOOperationCallbackFactory.INSTANCE,
-                                storageProperties.getBloomFilterFalsePositiveRate(), invertedIndexFields, filterTypeTraits,
-                                filterCmpFactories, filterFields, filterFieldsForNonBulkLoadOps,
-                                invertedIndexFieldsForNonBulkLoadOps, !temp);
-                    }
-                    IOperatorDescriptor op;
-                    if (bulkload) {
-                        long numElementsHint = getCardinalityPerPartitionHint(dataset);
-                        op = new LSMInvertedIndexBulkLoadOperatorDescriptor(spec, recordDesc, fieldPermutation, false,
-                                numElementsHint, false, appContext.getStorageManagerInterface(), splitsAndConstraint.first,
-                                appContext.getIndexLifecycleManagerProvider(), tokenTypeTraits, tokenComparatorFactories,
-                                invListsTypeTraits, invListComparatorFactories, tokenizerFactory, indexDataFlowFactory);
-                    } else {
-                        op = new AsterixLSMInvertedIndexInsertDeleteOperatorDescriptor(spec, recordDesc,
-                                appContext.getStorageManagerInterface(), splitsAndConstraint.first,
-                                appContext.getIndexLifecycleManagerProvider(), tokenTypeTraits, tokenComparatorFactories,
-                                invListsTypeTraits, invListComparatorFactories, tokenizerFactory, fieldPermutation, indexOp,
-                                indexDataFlowFactory, filterFactory, modificationCallbackFactory, indexName);
-                    }
-                    return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(op, splitsAndConstraint.second);
+            Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
+                    dataset, mdTxnCtx);
+            IIndexDataflowHelperFactory indexDataFlowFactory;
+            if (!isPartitioned) {
+                indexDataFlowFactory = new LSMInvertedIndexDataflowHelperFactory(new AsterixVirtualBufferCacheProvider(
+                        datasetId), compactionInfo.first, compactionInfo.second,
+                        new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
+                        AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
+                        LSMInvertedIndexIOOperationCallbackFactory.INSTANCE,
+                        storageProperties.getBloomFilterFalsePositiveRate(), invertedIndexFields, filterTypeTraits,
+                        filterCmpFactories, filterFields, filterFieldsForNonBulkLoadOps,
+                        invertedIndexFieldsForNonBulkLoadOps, !temp);
+            } else {
+                indexDataFlowFactory = new PartitionedLSMInvertedIndexDataflowHelperFactory(
+                        new AsterixVirtualBufferCacheProvider(dataset.getDatasetId()), compactionInfo.first,
+                        compactionInfo.second, new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
+                        AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
+                        LSMInvertedIndexIOOperationCallbackFactory.INSTANCE,
+                        storageProperties.getBloomFilterFalsePositiveRate(), invertedIndexFields, filterTypeTraits,
+                        filterCmpFactories, filterFields, filterFieldsForNonBulkLoadOps,
+                        invertedIndexFieldsForNonBulkLoadOps, !temp);
+            }
+            IOperatorDescriptor op;
+            if (bulkload) {
+                long numElementsHint = getCardinalityPerPartitionHint(dataset);
+                op = new LSMInvertedIndexBulkLoadOperatorDescriptor(spec, recordDesc, fieldPermutation, false,
+                        numElementsHint, false, appContext.getStorageManagerInterface(), splitsAndConstraint.first,
+                        appContext.getIndexLifecycleManagerProvider(), tokenTypeTraits, tokenComparatorFactories,
+                        invListsTypeTraits, invListComparatorFactories, tokenizerFactory, indexDataFlowFactory);
+            } else {
+                op = new AsterixLSMInvertedIndexInsertDeleteOperatorDescriptor(spec, recordDesc,
+                        appContext.getStorageManagerInterface(), splitsAndConstraint.first,
+                        appContext.getIndexLifecycleManagerProvider(), tokenTypeTraits, tokenComparatorFactories,
+                        invListsTypeTraits, invListComparatorFactories, tokenizerFactory, fieldPermutation, indexOp,
+                        indexDataFlowFactory, filterFactory, modificationCallbackFactory, indexName);
+            }
+            return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(op, splitsAndConstraint.second);
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
         } catch (IOException e) {
@@ -2009,41 +2013,41 @@ private AlgebricksAbsolutePartitionConstraint determineLocationConstraint(FeedDa
             IModificationOperationCallbackFactory modificationCallbackFactory = temp ? new TempDatasetSecondaryIndexModificationOperationCallbackFactory(
                     jobId, datasetId, modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp,
                     ResourceType.LSM_RTREE) : new SecondaryIndexModificationOperationCallbackFactory(jobId, datasetId,
-                            modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp, ResourceType.LSM_RTREE);
+                    modificationCallbackPrimaryKeyFields, txnSubsystemProvider, indexOp, ResourceType.LSM_RTREE);
 
-                    Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
-                            dataset, mdTxnCtx);
-                    IIndexDataflowHelperFactory idfh = new LSMRTreeDataflowHelperFactory(valueProviderFactories,
-                            RTreePolicyType.RTREE, primaryComparatorFactories, new AsterixVirtualBufferCacheProvider(
-                                    dataset.getDatasetId()), compactionInfo.first, compactionInfo.second,
-                                    new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
-                                    AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, LSMRTreeIOOperationCallbackFactory.INSTANCE,
-                                    proposeLinearizer(nestedKeyType.getTypeTag(), comparatorFactories.length),
-                                    storageProperties.getBloomFilterFalsePositiveRate(), rtreeFields, btreeFields, filterTypeTraits,
-                                    filterCmpFactories, filterFields, !temp);
-                    IOperatorDescriptor op;
-                    if (bulkload) {
-                        long numElementsHint = getCardinalityPerPartitionHint(dataset);
-                        op = new TreeIndexBulkLoadOperatorDescriptor(spec, recordDesc, appContext.getStorageManagerInterface(),
-                                appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
-                                primaryComparatorFactories, btreeFields, fieldPermutation,
-                                GlobalConfig.DEFAULT_TREE_FILL_FACTOR, false, numElementsHint, false, idfh);
-                    } else {
-                        op = new AsterixLSMTreeInsertDeleteOperatorDescriptor(spec, recordDesc,
-                                appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
-                                splitsAndConstraint.first, typeTraits, comparatorFactories, null, fieldPermutation, indexOp,
-                                new LSMRTreeDataflowHelperFactory(valueProviderFactories, RTreePolicyType.RTREE,
-                                        primaryComparatorFactories, new AsterixVirtualBufferCacheProvider(dataset
-                                                .getDatasetId()), compactionInfo.first, compactionInfo.second,
-                                                new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
-                                                AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                                                LSMRTreeIOOperationCallbackFactory.INSTANCE, proposeLinearizer(
-                                                        nestedKeyType.getTypeTag(), comparatorFactories.length), storageProperties
-                                                        .getBloomFilterFalsePositiveRate(), rtreeFields, btreeFields, filterTypeTraits,
-                                                        filterCmpFactories, filterFields, !temp), filterFactory,
-                                                        modificationCallbackFactory, false, indexName);
-                    }
-                    return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(op, splitsAndConstraint.second);
+            Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
+                    dataset, mdTxnCtx);
+            IIndexDataflowHelperFactory idfh = new LSMRTreeDataflowHelperFactory(valueProviderFactories,
+                    RTreePolicyType.RTREE, primaryComparatorFactories, new AsterixVirtualBufferCacheProvider(
+                            dataset.getDatasetId()), compactionInfo.first, compactionInfo.second,
+                    new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
+                    AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, LSMRTreeIOOperationCallbackFactory.INSTANCE,
+                    proposeLinearizer(nestedKeyType.getTypeTag(), comparatorFactories.length),
+                    storageProperties.getBloomFilterFalsePositiveRate(), rtreeFields, btreeFields, filterTypeTraits,
+                    filterCmpFactories, filterFields, !temp);
+            IOperatorDescriptor op;
+            if (bulkload) {
+                long numElementsHint = getCardinalityPerPartitionHint(dataset);
+                op = new TreeIndexBulkLoadOperatorDescriptor(spec, recordDesc, appContext.getStorageManagerInterface(),
+                        appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
+                        primaryComparatorFactories, btreeFields, fieldPermutation,
+                        GlobalConfig.DEFAULT_TREE_FILL_FACTOR, false, numElementsHint, false, idfh);
+            } else {
+                op = new AsterixLSMTreeInsertDeleteOperatorDescriptor(spec, recordDesc,
+                        appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
+                        splitsAndConstraint.first, typeTraits, comparatorFactories, null, fieldPermutation, indexOp,
+                        new LSMRTreeDataflowHelperFactory(valueProviderFactories, RTreePolicyType.RTREE,
+                                primaryComparatorFactories, new AsterixVirtualBufferCacheProvider(dataset
+                                        .getDatasetId()), compactionInfo.first, compactionInfo.second,
+                                new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
+                                AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
+                                LSMRTreeIOOperationCallbackFactory.INSTANCE, proposeLinearizer(
+                                        nestedKeyType.getTypeTag(), comparatorFactories.length), storageProperties
+                                        .getBloomFilterFalsePositiveRate(), rtreeFields, btreeFields, filterTypeTraits,
+                                filterCmpFactories, filterFields, !temp), filterFactory,
+                        modificationCallbackFactory, false, indexName);
+            }
+            return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(op, splitsAndConstraint.second);
         } catch (MetadataException | IOException e) {
             throw new AlgebricksException(e);
         }

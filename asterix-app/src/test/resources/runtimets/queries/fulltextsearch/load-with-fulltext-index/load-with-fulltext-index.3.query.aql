@@ -1,7 +1,22 @@
 use dataverse test;
 
+/* B+Tree index query */
+/*
 count(
 for $o in dataset DBLP
 where $o.numid < 5
-return $o.numid
+//return $o.numid
+//return $o
+return {"pk":$o.id, "non-sk":$o.numid2}
+);
+*/
+
+/* Full-text index query */
+
+count(
+for $o in dataset DBLP
+where $o.title contains text ("database")
+//return $o.id
+//return $o
+return {"pk":$o.id}
 );

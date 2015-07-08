@@ -47,7 +47,7 @@ public class PrimaryIndexInstantSearchOperationCallbackFactory extends AbstractO
         ITransactionSubsystem txnSubsystem = txnSubsystemProvider.getTransactionSubsystem(ctx);
         try {
             ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(jobId, false);
-            return new PrimaryIndexInstantSearchOperationCallback(datasetId, primaryKeyFields,
+            return new PrimaryIndexInstantRecordSearchOperationCallback(datasetId, primaryKeyFields,
                     txnSubsystem.getLockManager(), txnCtx);
         } catch (ACIDException e) {
             throw new HyracksDataException(e);
