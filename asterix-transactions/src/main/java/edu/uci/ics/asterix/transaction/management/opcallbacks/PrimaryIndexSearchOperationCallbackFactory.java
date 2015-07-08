@@ -47,14 +47,14 @@ public class PrimaryIndexSearchOperationCallbackFactory extends AbstractOperatio
         ITransactionSubsystem txnSubsystem = txnSubsystemProvider.getTransactionSubsystem(ctx);
         try {
             ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(jobId, false);
-            if (isIndexOnlyPlanEnabled) {
-            	// If we are using an index-only query plan, we need to apply a record level lock.
-                return new PrimaryIndexRecordSearchOperationCallback(datasetId, primaryKeyFields, txnSubsystem.getLockManager(),
-                        txnCtx);
-            } else {
+            if (!isIndexOnlyPlanEnabled) {
                 // Return the dataset level lock
-                return new PrimaryIndexSearchOperationCallback(datasetId, primaryKeyFields, txnSubsystem.getLockManager(),
-                        txnCtx);
+                return new PrimaryIndexSearchOperationCallback(datasetId, primaryKeyFields,
+                        txnSubsystem.getLockManager(), txnCtx);
+            } else {
+                // If we are using an index-only query plan, we need to apply a record level lock.
+                return new PrimaryIndexRecordSearchOperationCallback(datasetId, primaryKeyFields,
+                        txnSubsystem.getLockManager(), txnCtx);
             }
         } catch (ACIDException e) {
             throw new HyracksDataException(e);

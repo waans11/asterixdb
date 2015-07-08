@@ -120,7 +120,7 @@ public class IndexInfoOperatorDescriptor implements IIndexOperatorDescriptor{
     }
 
 	@Override
-	public boolean getIsIndexOnlyPlanEnabled() {
+	public boolean getUseOpercationCallbackProceedReturnResult() {
 		// TODO Auto-generated method stub
 		return false;
 	}

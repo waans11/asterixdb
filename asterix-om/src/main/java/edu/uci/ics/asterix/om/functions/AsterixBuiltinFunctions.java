@@ -286,7 +286,7 @@ public class AsterixBuiltinFunctions {
     public final static FunctionIdentifier SUBSTRING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "substring", 3);
     public final static FunctionIdentifier LIKE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "like", 2);
-    public final static FunctionIdentifier CONTAINS_FUNCTION = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "contains-substring",
+    public final static FunctionIdentifier CONTAINS_SUBSTRING_FUNCTION = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "contains-substring",
             2);
     public final static FunctionIdentifier STARTS_WITH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "starts-with", 2);
@@ -753,7 +753,7 @@ public class AsterixBuiltinFunctions {
         addFunction(CIRCLE_CONSTRUCTOR, OptionalACircleTypeComputer.INSTANCE, true);
         addPrivateFunction(CONCAT_NON_NULL, ConcatNonNullTypeComputer.INSTANCE, true);
 
-        addFunction(CONTAINS_FUNCTION, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(CONTAINS_SUBSTRING_FUNCTION, ABooleanTypeComputer.INSTANCE, true);
         addFunction(COUNT, AInt64TypeComputer.INSTANCE, true);
         addPrivateFunction(COUNTHASHED_GRAM_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE, true);
         addPrivateFunction(COUNTHASHED_WORD_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE, true);

@@ -37,6 +37,7 @@ public class PrimaryIndexRecordSearchOperationCallback extends AbstractOperation
     }
 
     @Override
+    // Attempt to get a record level S lock
     public boolean proceed(ITupleReference tuple) throws HyracksDataException {
         int pkHash = computePrimaryKeyHashValue(tuple, primaryKeyFields);
         try {
@@ -47,6 +48,7 @@ public class PrimaryIndexRecordSearchOperationCallback extends AbstractOperation
     }
 
     @Override
+    // When proceed() is failed, get a record level S lock
     public void reconcile(ITupleReference tuple) throws HyracksDataException {
         int pkHash = computePrimaryKeyHashValue(tuple, primaryKeyFields);
         try {
@@ -57,17 +59,14 @@ public class PrimaryIndexRecordSearchOperationCallback extends AbstractOperation
     }
 
     @Override
+    // We need to decide whether this method should reverse the effect of proceed() or reconcile()
+    // or just keep this as no-op
     public void cancel(ITupleReference tuple) throws HyracksDataException {
-        //no op
+    	//no op - lock will be released in CommitOp
     }
 
     @Override
     public void complete(ITupleReference tuple) throws HyracksDataException {
-        int pkHash = computePrimaryKeyHashValue(tuple, primaryKeyFields);
-        try {
-            lockManager.unlock(datasetId, pkHash, LockMode.S, txnCtx);
-        } catch (ACIDException e) {
-            throw new HyracksDataException(e);
-        }
+    	//no op - lock will be released in CommitOp
     }
 }
