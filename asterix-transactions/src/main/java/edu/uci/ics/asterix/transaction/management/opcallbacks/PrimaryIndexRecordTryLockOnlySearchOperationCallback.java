@@ -26,12 +26,13 @@ import edu.uci.ics.hyracks.storage.am.common.api.ISearchOperationCallback;
 
 /**
  * Assumes LSM-BTrees as primary indexes. Implements try/locking and unlocking on primary keys.
- * This Callback method acquires/releases a record level instant lock.
+ * This Callback method tries to get a lock. If it fails, do nothing since its purpose is attempt to get a lock and get the result of it.
+ * This operation callback is used on index-only plan
  */
-public class PrimaryIndexInstantSearchOperationCallback extends AbstractOperationCallback implements
+public class PrimaryIndexRecordTryLockOnlySearchOperationCallback extends AbstractOperationCallback implements
         ISearchOperationCallback {
 
-    public PrimaryIndexInstantSearchOperationCallback(int datasetId, int[] entityIdFields, ILockManager lockManager,
+    public PrimaryIndexRecordTryLockOnlySearchOperationCallback(int datasetId, int[] entityIdFields, ILockManager lockManager,
             ITransactionContext txnCtx) {
         super(datasetId, entityIdFields, txnCtx, lockManager);
     }
@@ -40,7 +41,7 @@ public class PrimaryIndexInstantSearchOperationCallback extends AbstractOperatio
     public boolean proceed(ITupleReference tuple) throws HyracksDataException {
         int pkHash = computePrimaryKeyHashValue(tuple, primaryKeyFields);
         try {
-            return lockManager.instantTryLock(datasetId, pkHash, LockMode.S, txnCtx);
+            return lockManager.tryLock(datasetId, pkHash, LockMode.S, txnCtx);
         } catch (ACIDException e) {
             throw new HyracksDataException(e);
         }
@@ -48,26 +49,16 @@ public class PrimaryIndexInstantSearchOperationCallback extends AbstractOperatio
 
     @Override
     public void reconcile(ITupleReference tuple) throws HyracksDataException {
-        int pkHash = computePrimaryKeyHashValue(tuple, primaryKeyFields);
-        try {
-            lockManager.lock(datasetId, pkHash, LockMode.S, txnCtx);
-        } catch (ACIDException e) {
-            throw new HyracksDataException(e);
-        }
-    }
-
-    @Override
-    public void cancel(ITupleReference tuple) throws HyracksDataException {
         //no op
     }
 
     @Override
+    public void cancel(ITupleReference tuple) throws HyracksDataException {
+        // no op
+    }
+
+    @Override
     public void complete(ITupleReference tuple) throws HyracksDataException {
-        int pkHash = computePrimaryKeyHashValue(tuple, primaryKeyFields);
-        try {
-            lockManager.unlock(datasetId, pkHash, LockMode.S, txnCtx);
-        } catch (ACIDException e) {
-            throw new HyracksDataException(e);
-        }
+        //no op
     }
 }
