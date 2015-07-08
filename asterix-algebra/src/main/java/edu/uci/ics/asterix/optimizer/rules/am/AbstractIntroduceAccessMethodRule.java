@@ -331,6 +331,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         if (funcIdent == AlgebricksBuiltinFunctions.OR) {
             return false;
         }
+        // A function itself and/or its argument are analyzed.
         boolean found = analyzeFunctionExpr(funcExpr, assignsAndUnnests, analyzedAMs);
         for (Mutable<ILogicalExpression> arg : funcExpr.getArguments()) {
             ILogicalExpression argExpr = arg.getValue();
