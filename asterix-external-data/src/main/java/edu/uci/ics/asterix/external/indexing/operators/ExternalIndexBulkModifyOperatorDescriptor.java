@@ -48,7 +48,7 @@ public class ExternalIndexBulkModifyOperatorDescriptor extends AbstractTreeIndex
         super(spec, 1, 0, null, storageManager, lifecycleManagerProvider, fileSplitProvider, typeTraits,
                 comparatorFactories, bloomFilterKeyFields, dataflowHelperFactory, null, false, false, null,
                 NoOpLocalResourceFactoryProvider.INSTANCE, NoOpOperationCallbackFactory.INSTANCE,
-                modificationOpCallbackFactory, false);
+                modificationOpCallbackFactory);
         this.deletedFiles = deletedFiles;
         this.fieldPermutation = fieldPermutation;
         this.fillFactor = fillFactor;
@@ -60,6 +60,12 @@ public class ExternalIndexBulkModifyOperatorDescriptor extends AbstractTreeIndex
             IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions) throws HyracksDataException {
         return new ExternalIndexBulkModifyOperatorNodePushable(this, ctx, partition, fieldPermutation, fillFactor,
                 numElementsHint, recordDescProvider, deletedFiles);
+    }
+
+    @Override
+    public boolean getUseOpercationCallbackProceedReturnResult() {
+        // TODO Auto-generated method stub
+        return false;
     }
 
 }

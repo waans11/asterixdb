@@ -29,10 +29,10 @@ import edu.uci.ics.hyracks.storage.am.common.api.ISearchOperationCallback;
  * This Callback method tries to get a lock. If it fails, do nothing since its purpose is attempt to get a lock and get the result of it.
  * This operation callback is used on index-only plan
  */
-public class PrimaryIndexRecordTryLockOnlySearchOperationCallback extends AbstractOperationCallback implements
+public class SecondaryIndexRecordTryLockOnlySearchOperationCallback extends AbstractOperationCallback implements
         ISearchOperationCallback {
 
-    public PrimaryIndexRecordTryLockOnlySearchOperationCallback(int datasetId, int[] entityIdFields, ILockManager lockManager,
+    public SecondaryIndexRecordTryLockOnlySearchOperationCallback(int datasetId, int[] entityIdFields, ILockManager lockManager,
             ITransactionContext txnCtx) {
         super(datasetId, entityIdFields, txnCtx, lockManager);
     }

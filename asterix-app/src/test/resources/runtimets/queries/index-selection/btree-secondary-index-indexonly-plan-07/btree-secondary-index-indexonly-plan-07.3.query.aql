@@ -1,0 +1,9 @@
+use dataverse test;
+
+count(
+for $o in dataset('MyData')
+where $o.docid < 3
+order by $o.id
+return {"rec":$o, "pk":$o.id}
+);
+
