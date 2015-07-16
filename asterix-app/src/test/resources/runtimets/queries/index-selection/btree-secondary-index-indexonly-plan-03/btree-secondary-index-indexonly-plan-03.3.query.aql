@@ -1,0 +1,6 @@
+use dataverse test;
+
+for $o in dataset('MyData')
+where $o.docid < 3
+order by $o.id
+return {"sk":$o.docid}

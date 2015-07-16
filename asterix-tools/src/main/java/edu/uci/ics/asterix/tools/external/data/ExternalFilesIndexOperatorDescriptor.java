@@ -65,7 +65,7 @@ public class ExternalFilesIndexOperatorDescriptor extends AbstractTreeIndexOpera
                 FilesIndexDescription.EXTERNAL_FILE_INDEX_TYPE_TRAITS,
                 FilesIndexDescription.FILES_INDEX_COMP_FACTORIES, FilesIndexDescription.BLOOM_FILTER_FIELDS,
                 dataflowHelperFactory, null, false, false, null, localResourceFactoryProvider,
-                NoOpOperationCallbackFactory.INSTANCE, NoOpOperationCallbackFactory.INSTANCE, false);
+                NoOpOperationCallbackFactory.INSTANCE, NoOpOperationCallbackFactory.INSTANCE);
         this.createNewIndex = createNewIndex;
         this.files = files;
     }
@@ -156,6 +156,12 @@ public class ExternalFilesIndexOperatorDescriptor extends AbstractTreeIndexOpera
             }
 
         };
+    }
+
+    @Override
+    public boolean getUseOpercationCallbackProceedReturnResult() {
+        // TODO Auto-generated method stub
+        return false;
     }
 
 }

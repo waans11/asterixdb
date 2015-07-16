@@ -17,7 +17,4 @@ create type DBLPType as closed {
 create dataset DBLP(DBLPType) primary key id;
 
 create index fulltext_ix on DBLP(title) type fulltext;
-//create index keyword_ix on DBLP(title) type keyword;
-//create index ngram_ix on DBLP(title) type ngram(3);
 create index btree_ix on DBLP(numid) type btree;
-//create index btree_ix2 on DBLP(numid2) type btree;

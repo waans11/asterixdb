@@ -171,7 +171,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         // At this stage, we know that this plan is utilizing an index, however we are not sure
         // that this plan is an index-only plan that only uses PK and/or a secondary key field.
         // Thus, we check whether select operator is only using variables from assign or data-source-scan
-        // This is to ensure that an assign before select is not creating more variables other than a secondary key field.
+        // and the field-name of those variables are only PK or SK.
 
         // Need to check whether variables from select operator only contain SK and/or PK condition
         List<IOptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;
@@ -184,9 +184,10 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         boolean isIndexOnlyPlanPossible = false;
 
-        // #1. Check whether variables in the SELECT operator only contains secondary key field and/or PK field condition
-        int varFoundCount = 0;
+        // #1. Check whether variables in the SELECT operator are from secondary key fields and/or PK fields
+        int selectVarFoundCount = 0;
         for (IOptimizableFuncExpr matchedFuncExpr : matchedFuncExprs) {
+            // for each select condition,
             for (LogicalVariable selectVar : usedVarsInSelect) {
                 int varIndex = matchedFuncExpr.findLogicalVar(selectVar);
                 if (varIndex != -1) {
@@ -202,14 +203,14 @@ public class BTreeAccessMethod implements IAccessMethod {
                         } else {
                             if (!chosenIndexVars.contains(selectVar)) {
                                 chosenIndexVars.add(selectVar);
-                                varFoundCount++;
+                                selectVarFoundCount++;
                             }
                             isIndexOnlyPlanPossible = true;
                         }
                     } else {
                         if (!chosenIndexVars.contains(selectVar)) {
                             chosenIndexVars.add(selectVar);
-                            varFoundCount++;
+                            selectVarFoundCount++;
                         }
                         isIndexOnlyPlanPossible = true;
                     }
@@ -222,47 +223,81 @@ public class BTreeAccessMethod implements IAccessMethod {
             }
         }
         // All variables in the SELECT condition should be found.
-        if (varFoundCount < usedVarsInSelect.size()) {
+        if (selectVarFoundCount < usedVarsInSelect.size()) {
             isIndexOnlyPlanPossible = false;
         }
 
         // #2. Check whether operators after the SELECT operator only use PK or secondary field variables.
         //     We exclude the variables produced after the SELECT operator.
+        boolean countIsUsedInThePlan = false;
+        List<LogicalVariable> countUsedVars = new ArrayList<LogicalVariable>();
+        List<LogicalVariable> producedVarsAfterSelect = new ArrayList<LogicalVariable>();
+
+        // From now on, check whether the given plan is an index-only plan
+        VariableUtilities.getUsedVariables((ILogicalOperator) selectRef.getValue(), usedVarsInSelect);
+
+        AbstractLogicalOperator aboveSelectRefOp = null;
+        AggregateOperator aggOp = null;
+        ILogicalExpression condExpr = null;
+        List<Mutable<ILogicalExpression>> condExprs = null;
+        AbstractFunctionCallExpression condExprFnCall = null;
+
         if (isIndexOnlyPlanPossible) {
             List<LogicalVariable> usedVarsAfterSelect = new ArrayList<LogicalVariable>();
+            // for each operator above SELECT operator
             for (Mutable<ILogicalOperator> aboveSelectRef : aboveSelectRefs) {
                 usedVarsAfterSelect.clear();
+                producedVarsAfterSelect.clear();
                 VariableUtilities.getUsedVariables((ILogicalOperator) aboveSelectRef.getValue(), usedVarsAfterSelect);
+                VariableUtilities.getProducedVariables((ILogicalOperator) aboveSelectRef.getValue(),
+                        producedVarsAfterSelect);
+                // Check whether COUNT exists since we can substitute record variable into PK variable.
+                aboveSelectRefOp = (AbstractLogicalOperator) aboveSelectRef.getValue();
+                if (aboveSelectRefOp.getOperatorTag() == LogicalOperatorTag.AGGREGATE) {
+                    aggOp = (AggregateOperator) aboveSelectRefOp;
+                    condExprs = aggOp.getExpressions();
+                    for (int i = 0; i < condExprs.size(); i++) {
+                        condExpr = (ILogicalExpression) condExprs.get(i).getValue();
+                        if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                            continue;
+                        } else {
+                            condExprFnCall = (AbstractFunctionCallExpression) condExpr;
+                            if (condExprFnCall.getFunctionIdentifier() != AsterixBuiltinFunctions.COUNT) {
+                                continue;
+                            } else {
+                                // COUNT found. count on record ($$0) can be replaced as PK variable
+                                countIsUsedInThePlan = true;
+                                VariableUtilities.getUsedVariables((ILogicalOperator) aboveSelectRef.getValue(),
+                                        countUsedVars);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // for each variable that is used in an operator above SELECT operator
                 for (LogicalVariable usedVarAfterSelect : usedVarsAfterSelect) {
                     // If this operator is using the variables that are created before the SELECT operator
                     if (liveVarsInSelect.contains(usedVarAfterSelect)) {
-                        if (dataScanPKRecordVars.contains(usedVarAfterSelect)) {
+                        // From PK?
+                        if (dataScanPKVars.contains(usedVarAfterSelect)) {
                             isIndexOnlyPlanPossible = true;
-                            AbstractLogicalOperator aboveSelectRefOp = (AbstractLogicalOperator) aboveSelectRef
-                                    .getValue();
-                            // aggregate on count?
-                            if (aboveSelectRefOp.getOperatorTag() == LogicalOperatorTag.AGGREGATE) {
-                                AggregateOperator aggOp = (AggregateOperator) aboveSelectRefOp;
-                                List<Mutable<ILogicalExpression>> condExprs = aggOp.getExpressions();
-                                for (int i = 0; i < condExprs.size(); i++) {
-                                    ILogicalExpression condExpr = (ILogicalExpression) condExprs.get(i).getValue();
-                                    if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                                        continue;
-                                    } else {
-                                        AbstractFunctionCallExpression condExprFnCall = (AbstractFunctionCallExpression) condExpr;
-                                        if (condExprFnCall.getFunctionIdentifier() != AsterixBuiltinFunctions.COUNT) {
-                                            continue;
-                                        } else {
-                                            // COUNT found. count on record ($$0) can be replaced as PK variable
-                                            if (dataScanRecordVars.contains(usedVarAfterSelect)) {
-                                                condExprFnCall.substituteVar(usedVarAfterSelect, dataScanPKVars.get(0));
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                         } else if (chosenIndexVars.contains(usedVarAfterSelect)) {
+                            // From SK?
                             isIndexOnlyPlanPossible = true;
+                        } else if (dataScanRecordVars.contains(usedVarAfterSelect)) {
+                            // The only case that we allow when a record variable is used is when
+                            // it is used with count either directly or indirectly via record-constructor
+                            if (!countIsUsedInThePlan) {
+                                // We don't need to care about this case since COUNT is not used.
+                                isIndexOnlyPlanPossible = false;
+                                break;
+                            } else if (countUsedVars.contains(usedVarAfterSelect)
+                                    || countUsedVars.containsAll(producedVarsAfterSelect)) {
+                                VariableUtilities.substituteVariables(aboveSelectRefOp, usedVarAfterSelect,
+                                        dataScanPKVars.get(0), context);
+                                isIndexOnlyPlanPossible = true;
+                            }
                         } else {
                             isIndexOnlyPlanPossible = false;
                             break;
@@ -278,7 +313,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             }
         }
 
-        if (isIndexOnlyPlanPossible && !chosenIndex.canProduceFalsePositive()) {
+        if (isIndexOnlyPlanPossible) {
             analysisCtx.setIndexOnlyPlanEnabled(true);
         } else {
             analysisCtx.setIndexOnlyPlanEnabled(false);
@@ -299,7 +334,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             //            select.getInputs().clear();
             if (assignBeforeSelectOp != null) {
                 // If a tryLock() on PK optimization is possible, we don't need to use select operator.
-                if (!chosenIndex.canProduceFalsePositive() && analysisCtx.isIndexOnlyPlanEnabled()) {
+                if (analysisCtx.isIndexOnlyPlanEnabled()) {
                     // Get dataSourceRef operator - unnest-map (PK, record)
                     // Right now, the order of opertors is: union -> select -> assign -> unnest-map
                     ILogicalOperator dataSourceRefOp = (ILogicalOperator) primaryIndexUnnestOp.getInputs().get(0)
@@ -316,7 +351,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
             } else {
                 // If a tryLock() on PK is possible, we don't need to use select operator.
-                if (!chosenIndex.canProduceFalsePositive() && analysisCtx.isIndexOnlyPlanEnabled()) {
+                if (analysisCtx.isIndexOnlyPlanEnabled()) {
                     select.getInputs().clear();
                     selectRef.setValue(primaryIndexUnnestOp);
                 } else {
@@ -411,7 +446,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         List<Pair<Integer, Integer>> exprAndVarList = analysisCtx.indexExprsAndVars.get(chosenIndex);
         List<IOptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;
         int numSecondaryKeys = analysisCtx.indexNumMatchedKeys.get(chosenIndex);
-        boolean isIndexOnlyPlanEnabled = !chosenIndex.canProduceFalsePositive() && analysisCtx.isIndexOnlyPlanEnabled();
+        boolean isIndexOnlyPlanEnabled = analysisCtx.isIndexOnlyPlanEnabled();
         // List of function expressions that will be replaced by the secondary-index search.
         // These func exprs will be removed from the select condition at the very end of this method.
         Set<ILogicalExpression> replacedFuncExprs = new HashSet<ILogicalExpression>();
@@ -701,11 +736,11 @@ public class BTreeAccessMethod implements IAccessMethod {
             tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
                     aboveTopOpRefs, opRef, conditionRef, assignBeforeTheOpRef, dataSourceOp, dataset, recordType,
                     secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex, analysisCtx,
-                    outputPrimaryKeysOnlyFromSIdxSearch);
+                    outputPrimaryKeysOnlyFromSIdxSearch, false, false, false);
 
             // Replace the datasource scan with the new plan rooted at
             // Get dataSourceRef operator - unnest-map (PK, record)
-            if (!chosenIndex.canProduceFalsePositive() && isIndexOnlyPlanEnabled) {
+            if (isIndexOnlyPlanEnabled) {
                 // Right now, the order of opertors is: union -> select -> assign -> unnest-map
                 AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) tmpPrimaryIndexUnnestOp.getInputs()
                         .get(0).getValue(); // select

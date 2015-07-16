@@ -52,7 +52,7 @@ public class ExternalLoopkupOperatorDiscriptor extends AbstractTreeIndexOperator
                 FilesIndexDescription.EXTERNAL_FILE_INDEX_TYPE_TRAITS,
                 FilesIndexDescription.FILES_INDEX_COMP_FACTORIES, FilesIndexDescription.BLOOM_FILTER_FIELDS,
                 externalFilesIndexDataFlowHelperFactory, null, propagateInput, retainNull, iNullWriterFactory, null,
-                searchOpCallbackFactory, null, false);
+                searchOpCallbackFactory, null);
         this.adapterFactory = adapterFactory;
         this.iNullWriterFactory = iNullWriterFactory;
     }

@@ -20,8 +20,13 @@ import java.util.Map;
 
 import edu.uci.ics.asterix.common.config.AsterixStorageProperties;
 import edu.uci.ics.asterix.common.context.AsterixVirtualBufferCacheProvider;
+import edu.uci.ics.asterix.common.context.ITransactionSubsystemProvider;
 import edu.uci.ics.asterix.common.dataflow.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.common.ioopcallbacks.LSMInvertedIndexIOOperationCallbackFactory;
+import edu.uci.ics.asterix.common.transactions.IRecoveryManager.ResourceType;
+import edu.uci.ics.asterix.common.transactions.JobId;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt32SerializerDeserializer;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.SerializerDeserializerUtil;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
@@ -29,6 +34,7 @@ import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
+import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
@@ -40,8 +46,11 @@ import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.optimizer.rules.am.InvertedIndexAccessMethod;
 import edu.uci.ics.asterix.optimizer.rules.am.InvertedIndexAccessMethod.SearchModifierType;
 import edu.uci.ics.asterix.optimizer.rules.am.InvertedIndexJobGenParams;
+import edu.uci.ics.asterix.runtime.job.listener.JobEventListenerFactory;
 import edu.uci.ics.asterix.transaction.management.opcallbacks.SecondaryIndexOperationTrackerProvider;
+import edu.uci.ics.asterix.transaction.management.opcallbacks.SecondaryIndexSearchOperationCallbackFactory;
 import edu.uci.ics.asterix.transaction.management.service.transaction.AsterixRuntimeComponentsProvider;
+import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionSubsystemProvider;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
@@ -64,10 +73,13 @@ import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
 import edu.uci.ics.hyracks.data.std.primitive.ShortPointable;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
+import edu.uci.ics.hyracks.storage.am.common.api.ISearchOperationCallbackFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.common.impls.NoOpOperationCallbackFactory;
 import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
@@ -132,7 +144,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 metadataProvider, context, builder.getJobSpec(), unnestMapOp, opSchema, jobGenParams.getRetainInput(),
                 jobGenParams.getRetainNull(), jobGenParams.getDatasetName(), dataset, jobGenParams.getIndexName(),
                 jobGenParams.getSearchKeyType(), keyIndexes, jobGenParams.getSearchModifierType(),
-                jobGenParams.getSimilarityThreshold(), minFilterFieldIndexes, maxFilterFieldIndexes);
+                jobGenParams.getSimilarityThreshold(), minFilterFieldIndexes, maxFilterFieldIndexes,
+                jobGenParams.getIsIndexOnlyPlanEnabled());
 
         // Contribute operator in hyracks job.
         builder.contributeHyracksOperator(unnestMapOp, invIndexSearch.first);
@@ -146,7 +159,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             UnnestMapOperator unnestMap, IOperatorSchema opSchema, boolean retainInput, boolean retainNull,
             String datasetName, Dataset dataset, String indexName, ATypeTag searchKeyType, int[] keyFields,
             SearchModifierType searchModifierType, IAlgebricksConstantValue similarityThreshold,
-            int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes) throws AlgebricksException {
+            int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isIndexOnlyPlanEnabled)
+            throws AlgebricksException {
 
         try {
             IAObject simThresh = ((AsterixConstantValue) similarityThreshold).getObject();
@@ -236,6 +250,51 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 }
             }
 
+            boolean temp = dataset.getDatasetDetails().isTemp();
+
+            ISearchOperationCallbackFactory searchCallbackFactory = null;
+            JobId jobId = ((JobEventListenerFactory) jobSpec.getJobletEventListenerFactory()).getJobId();
+
+            ITransactionSubsystemProvider txnSubsystemProvider = new TransactionSubsystemProvider();
+            int datasetId = dataset.getDatasetId();
+            int[] primaryKeyFieldsInSecondaryIndex = new int[numPrimaryKeys];
+
+            if (!isIndexOnlyPlanEnabled) {
+                // If the plan is not an index-only plan, we don't require any locking on PK
+                // while traversing this secondary index.
+                searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                        : new SecondaryIndexSearchOperationCallbackFactory();
+            } else {
+                // We deduct 1 because the last field will be the result of searchCallback.proceed()
+                for (int i = 0; i < numPrimaryKeys; i++) {
+                    primaryKeyFieldsInSecondaryIndex[i] = outputRecDesc.getFieldCount() - 1 - numPrimaryKeys + i;
+                }
+
+                // If it's an index-only plan, we try to get a record-level lock on PK.
+                // For the details, refer to IntroduceSelectAccessMethod rule.
+                searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                        : new SecondaryIndexSearchOperationCallbackFactory(jobId, datasetId,
+                                primaryKeyFieldsInSecondaryIndex, txnSubsystemProvider, ResourceType.LSM_BTREE,
+                                isIndexOnlyPlanEnabled);
+            }
+
+            // Define the return value from a secondary index search if this is an index-only plan
+            byte valuesForIndexOnlyPlan[] = new byte[10];
+            ArrayBackedValueStorage castBuffer = new ArrayBackedValueStorage();
+            try {
+                // false result - 1 byte tag + 4 bytes integer
+                AInt32 val0 = new AInt32(0);
+                AInt32 val1 = new AInt32(1);
+                SerializerDeserializerUtil.serializeTag(val0, castBuffer.getDataOutput());
+                AInt32SerializerDeserializer.INSTANCE.serialize(val0, castBuffer.getDataOutput());
+                // true result - 1 byte tag + 4 bytes integer
+                SerializerDeserializerUtil.serializeTag(val1, castBuffer.getDataOutput());
+                AInt32SerializerDeserializer.INSTANCE.serialize(val1, castBuffer.getDataOutput());
+            } catch (HyracksDataException e) {
+                throw new IllegalStateException("can't geenerate the return values for an index-only plan.");
+            }
+            valuesForIndexOnlyPlan = castBuffer.getByteArray();
+
             IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
             Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadataProvider
                     .splitProviderAndPartitionConstraintsForDataset(dataset.getDataverseName(), datasetName, indexName,
@@ -252,7 +311,6 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             AsterixStorageProperties storageProperties = AsterixAppContextInfo.getInstance().getStorageProperties();
             Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
                     dataset, metadataProvider.getMetadataTxnContext());
-            boolean temp = dataset.getDatasetDetails().isTemp();
             if (!isPartitioned) {
                 dataflowHelperFactory = new LSMInvertedIndexDataflowHelperFactory(
                         new AsterixVirtualBufferCacheProvider(dataset.getDatasetId()), compactionInfo.first,
@@ -277,7 +335,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                     appContext.getIndexLifecycleManagerProvider(), tokenTypeTraits, tokenComparatorFactories,
                     invListsTypeTraits, invListsComparatorFactories, dataflowHelperFactory, queryTokenizerFactory,
                     searchModifierFactory, outputRecDesc, retainInput, retainNull, context.getNullWriterFactory(),
-                    NoOpOperationCallbackFactory.INSTANCE, minFilterFieldIndexes, maxFilterFieldIndexes);
+                    searchCallbackFactory, minFilterFieldIndexes, maxFilterFieldIndexes, isIndexOnlyPlanEnabled,
+                    valuesForIndexOnlyPlan);
 
             return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp,
                     secondarySplitsAndConstraint.second);

@@ -54,7 +54,7 @@ public class SecondaryIndexSearchOperationCallbackFactory extends AbstractOperat
                 ITransactionSubsystem txnSubsystem = txnSubsystemProvider.getTransactionSubsystem(ctx);
                 ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(jobId, false);
 
-                return new PrimaryIndexRecordTryLockOnlySearchOperationCallback(datasetId, primaryKeyFields,
+                return new SecondaryIndexRecordTryLockOnlySearchOperationCallback(datasetId, primaryKeyFields,
                         txnSubsystem.getLockManager(), txnCtx);
             }
         } catch (ACIDException e) {
