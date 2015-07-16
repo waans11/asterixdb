@@ -34,14 +34,15 @@ import edu.uci.ics.hyracks.storage.common.file.ILocalResourceFactoryProvider;
 /*
  * This is a hack used to optain multiple index instances in a single operator and it is not actually used as an operator
  */
-public class IndexInfoOperatorDescriptor implements IIndexOperatorDescriptor{
+public class IndexInfoOperatorDescriptor implements IIndexOperatorDescriptor {
 
     private static final long serialVersionUID = 1L;
     private final IFileSplitProvider fileSplitProvider;
     private final IStorageManagerInterface storageManager;
     private final IIndexLifecycleManagerProvider lifecycleManagerProvider;
-    public IndexInfoOperatorDescriptor(IFileSplitProvider fileSplitProvider,IStorageManagerInterface storageManager,
-            IIndexLifecycleManagerProvider lifecycleManagerProvider){
+
+    public IndexInfoOperatorDescriptor(IFileSplitProvider fileSplitProvider, IStorageManagerInterface storageManager,
+            IIndexLifecycleManagerProvider lifecycleManagerProvider) {
         this.fileSplitProvider = fileSplitProvider;
         this.lifecycleManagerProvider = lifecycleManagerProvider;
         this.storageManager = storageManager;
@@ -119,10 +120,14 @@ public class IndexInfoOperatorDescriptor implements IIndexOperatorDescriptor{
         return null;
     }
 
-	@Override
-	public boolean getUseOpercationCallbackProceedReturnResult() {
-		// TODO Auto-generated method stub
-		return false;
-	}
+    @Override
+    public boolean getUseOpercationCallbackProceedReturnResult() {
+        return false;
+    }
+
+    @Override
+    public byte[] getValuesForOpercationCallbackProceedReturnResult() {
+        return null;
+    }
 
 }
