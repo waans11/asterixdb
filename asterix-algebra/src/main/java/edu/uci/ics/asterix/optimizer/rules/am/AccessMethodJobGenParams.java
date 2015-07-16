@@ -20,7 +20,6 @@ import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
-import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -41,26 +40,23 @@ public class AccessMethodJobGenParams {
     protected boolean retainNull;
     protected boolean requiresBroadcast;
     protected boolean isPrimaryIndex;
-	// Does this index can generate false-positive results?
-	// i.e., requires another verification (R-Tree, Length-partitioned n-gram or
-	// keyword index)
-    protected boolean canProduceFalsePositive;
     // In index-only plan, for a secondary index-search, we need to let the index know
     // that it needs to generate a variable that keeps the result of tryLock on PKs that are found.
     protected boolean splitValueForIndexOnlyPlanRequired;
 
-    private final int NUM_PARAMS = 9;
+    private final int NUM_PARAMS = 8;
 
     public AccessMethodJobGenParams() {
     }
 
     public AccessMethodJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
             boolean retainInput, boolean retainNull, boolean requiresBroadcast) {
-    	this(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast, false);
+        this(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast, false);
     }
 
     public AccessMethodJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
-            boolean retainInput, boolean retainNull, boolean requiresBroadcast, boolean splitValueForIndexOnlyPlanRequired) {
+            boolean retainInput, boolean retainNull, boolean requiresBroadcast,
+            boolean splitValueForIndexOnlyPlanRequired) {
         this.indexName = indexName;
         this.indexType = indexType;
         this.dataverseName = dataverseName;
@@ -69,7 +65,6 @@ public class AccessMethodJobGenParams {
         this.retainNull = retainNull;
         this.requiresBroadcast = requiresBroadcast;
         this.isPrimaryIndex = datasetName.equals(indexName);
-        this.canProduceFalsePositive = Index.canProduceFalsePositive(indexType);
         this.splitValueForIndexOnlyPlanRequired = splitValueForIndexOnlyPlanRequired;
     }
 
@@ -81,8 +76,8 @@ public class AccessMethodJobGenParams {
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(retainInput)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(retainNull)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(requiresBroadcast)));
-        funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(canProduceFalsePositive)));
-        funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(splitValueForIndexOnlyPlanRequired)));
+        funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils
+                .createBooleanConstant(splitValueForIndexOnlyPlanRequired)));
     }
 
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
@@ -94,8 +89,7 @@ public class AccessMethodJobGenParams {
         retainNull = AccessMethodUtils.getBooleanConstant(funcArgs.get(5));
         requiresBroadcast = AccessMethodUtils.getBooleanConstant(funcArgs.get(6));
         isPrimaryIndex = datasetName.equals(indexName);
-        canProduceFalsePositive = AccessMethodUtils.getBooleanConstant(funcArgs.get(7));
-        splitValueForIndexOnlyPlanRequired = AccessMethodUtils.getBooleanConstant(funcArgs.get(8));
+        splitValueForIndexOnlyPlanRequired = AccessMethodUtils.getBooleanConstant(funcArgs.get(7));
     }
 
     public String getIndexName() {
@@ -124,10 +118,6 @@ public class AccessMethodJobGenParams {
 
     public boolean getRequiresBroadcast() {
         return requiresBroadcast;
-    }
-
-    public boolean getCanProduceFalsePositive() {
-        return canProduceFalsePositive;
     }
 
     public boolean getIsIndexOnlyPlanEnabled() {

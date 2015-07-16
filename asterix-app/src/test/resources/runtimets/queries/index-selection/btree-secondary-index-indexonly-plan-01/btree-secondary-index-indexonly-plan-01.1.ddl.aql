@@ -1,0 +1,42 @@
+/*
+ *  Description     : Secondary BTree Index index-only selection plan verification test
+ *                  : This test is intended to verify that the secondary BTree index is used in the optimized query plan.
+ *                  : In this plan, we fetch PK and SK based on a select condition that utilizes a secondary index.
+ *                  : The plan should have two paths after the secondary index-lookup.
+ *                  : The left path:
+ *                      ... -> unnest-map (secondary index look-up) -> split -> unnest-map (primary index look-up) -> select -> union -> ...
+ *                  : The right path:
+ *                      ... -> unnest-map -> split -> union -> ...
+ *  Expected Result : Success
+ *
+*/
+
+drop dataverse test if exists;
+create dataverse test;
+use dataverse test;
+
+create type MyRecord as closed {
+  id: int64,
+  docid: int64,
+  val1: int64,
+  title: string,
+  point: point,
+  kwds: string,
+  line1: line,
+  line2: line,
+  poly1: polygon,
+  poly2: polygon,
+  rec: rectangle,
+  circle: circle
+}
+
+create dataset MyData(MyRecord)
+  primary key id;
+
+create index btree_index_docid on MyData(docid) type btree;
+create index btree_index_val1 on MyData(val1) type btree;
+create index rtree_index_point on MyData(point) type rtree;
+create index rtree_index_rec on MyData(rec) type rtree;
+create index fulltext_index_title on MyData(title) type fulltext;
+create index ngram_index_title on MyData(title) type ngram(3);
+create index keyword_index_title on MyData(title) type keyword;

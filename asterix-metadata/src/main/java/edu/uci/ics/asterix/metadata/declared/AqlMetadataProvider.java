@@ -51,6 +51,8 @@ import edu.uci.ics.asterix.common.ioopcallbacks.LSMRTreeIOOperationCallbackFacto
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.common.transactions.IRecoveryManager.ResourceType;
 import edu.uci.ics.asterix.common.transactions.JobId;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt32SerializerDeserializer;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.SerializerDeserializerUtil;
 import edu.uci.ics.asterix.dataflow.data.nontagged.valueproviders.AqlPrimitiveValueProviderFactory;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
@@ -86,6 +88,7 @@ import edu.uci.ics.asterix.metadata.feeds.FeedUtil;
 import edu.uci.ics.asterix.metadata.feeds.IFeedAdapterFactory;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.metadata.utils.ExternalDatasetsRegistry;
+import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
@@ -143,10 +146,12 @@ import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.dataset.ResultSetId;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
 import edu.uci.ics.hyracks.data.std.primitive.ShortPointable;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.marshalling.ShortSerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.std.file.ConstantFileSplitProvider;
 import edu.uci.ics.hyracks.dataflow.std.file.FileScanOperatorDescriptor;
@@ -542,7 +547,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 
         return buildBtreeRuntime(jobSpec, outputVars, opSchema, typeEnv, context, true, false,
                 ((DatasetDataSource) dataSource).getDataset(), primaryIndex.getIndexName(), null, null, true, true,
-                implConfig, minFilterFieldIndexes, maxFilterFieldIndexes, primaryIndex.canProduceFalsePositive(), false);
+                implConfig, minFilterFieldIndexes, maxFilterFieldIndexes, false);
     }
 
     private IAdapterFactory getConfiguredAdapterFactory(Dataset dataset, String adapterName,
@@ -669,8 +674,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             List<LogicalVariable> outputVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,
             JobGenContext context, boolean retainInput, boolean retainNull, Dataset dataset, String indexName,
             int[] lowKeyFields, int[] highKeyFields, boolean lowKeyInclusive, boolean highKeyInclusive,
-            Object implConfig, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes,
-            boolean canProduceFalsePositive, boolean isIndexOnlyPlanEnabled) throws AlgebricksException {
+            Object implConfig, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isIndexOnlyPlanEnabled)
+            throws AlgebricksException {
 
         boolean isSecondary = true;
         int numSecondaryKeys = 0;
@@ -754,7 +759,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             AqlMetadataImplConfig aqlMetadataImplConfig = (AqlMetadataImplConfig) implConfig;
             ITransactionSubsystemProvider txnSubsystemProvider = new TransactionSubsystemProvider();
 
-            boolean proceedIndexOnlyPlan = isIndexOnlyPlanEnabled && !canProduceFalsePositive && isSecondary;
+            boolean proceedIndexOnlyPlan = isIndexOnlyPlanEnabled && isSecondary;
 
             if (isSecondary) {
                 if (!proceedIndexOnlyPlan) {
@@ -796,6 +801,24 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                     dataset, mdTxnCtx);
             AsterixRuntimeComponentsProvider rtcProvider = AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER;
             BTreeSearchOperatorDescriptor btreeSearchOp;
+
+            // Define the return value from a secondary index search if this is an index-only plan
+            byte valuesForIndexOnlyPlan[] = new byte[10];
+            ArrayBackedValueStorage castBuffer = new ArrayBackedValueStorage();
+            try {
+                // false result - 1 byte tag + 4 bytes integer
+                AInt32 val0 = new AInt32(0);
+                AInt32 val1 = new AInt32(1);
+                SerializerDeserializerUtil.serializeTag(val0, castBuffer.getDataOutput());
+                AInt32SerializerDeserializer.INSTANCE.serialize(val0, castBuffer.getDataOutput());
+                // true result - 1 byte tag + 4 bytes integer
+                SerializerDeserializerUtil.serializeTag(val1, castBuffer.getDataOutput());
+                AInt32SerializerDeserializer.INSTANCE.serialize(val1, castBuffer.getDataOutput());
+            } catch (HyracksDataException e) {
+                throw new IllegalStateException("can't generate the return values for an index-only plan.");
+            }
+            valuesForIndexOnlyPlan = castBuffer.getByteArray();
+
             if (dataset.getDatasetType() == DatasetType.INTERNAL) {
                 btreeSearchOp = new BTreeSearchOperatorDescriptor(jobSpec, outputRecDesc,
                         appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
@@ -809,7 +832,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                                 storageProperties.getBloomFilterFalsePositiveRate(), !isSecondary, filterTypeTraits,
                                 filterCmpFactories, btreeFields, filterFields, !temp), retainInput, retainNull,
                         context.getNullWriterFactory(), searchCallbackFactory, minFilterFieldIndexes,
-                        maxFilterFieldIndexes, proceedIndexOnlyPlan);
+                        maxFilterFieldIndexes, proceedIndexOnlyPlan, valuesForIndexOnlyPlan);
             } else {
                 // External dataset <- use the btree with buddy btree->
                 // Be Careful of Key Start Index ?
@@ -836,7 +859,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildRtreeRuntime(JobSpecification jobSpec,
             List<LogicalVariable> outputVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,
             JobGenContext context, boolean retainInput, boolean retainNull, Dataset dataset, String indexName,
-            int[] keyFields, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes) throws AlgebricksException {
+            int[] keyFields, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isIndexOnlyPlanEnabled)
+            throws AlgebricksException {
 
         try {
             ARecordType recType = (ARecordType) findType(dataset.getDataverseName(), dataset.getItemTypeName());
@@ -909,12 +933,50 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
             Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo = DatasetUtils.getMergePolicyFactory(
                     dataset, mdTxnCtx);
-            ISearchOperationCallbackFactory searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
-                    : new SecondaryIndexSearchOperationCallbackFactory();
+
+            ISearchOperationCallbackFactory searchCallbackFactory = null;
+
+            ITransactionSubsystemProvider txnSubsystemProvider = new TransactionSubsystemProvider();
+            int datasetId = dataset.getDatasetId();
+            int[] primaryKeyFieldsInSecondaryIndex = new int[numPrimaryKeys];
+
+            for (int i = 0; i < numPrimaryKeys; i++) {
+                primaryKeyFieldsInSecondaryIndex[i] = i + numNestedSecondaryKeyFields;
+            }
+
+            if (!isIndexOnlyPlanEnabled) {
+                // If the plan is not an index-only plan, we don't require any locking on PK
+                // while traversing this secondary index.
+                searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                        : new SecondaryIndexSearchOperationCallbackFactory();
+            } else {
+                // If it's an index-only plan, we try to get a record-level lock on PK.
+                // For the details, refer to IntroduceSelectAccessMethod rule.
+                searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
+                        : new SecondaryIndexSearchOperationCallbackFactory(jobId, datasetId,
+                                primaryKeyFieldsInSecondaryIndex, txnSubsystemProvider, ResourceType.LSM_BTREE,
+                                isIndexOnlyPlanEnabled);
+            }
+
+            // Define the return value from a secondary index search if this is an index-only plan
+            byte valuesForIndexOnlyPlan[] = new byte[10];
+            ArrayBackedValueStorage castBuffer = new ArrayBackedValueStorage();
+            try {
+                // false result - 1 byte tag + 4 bytes integer
+                AInt32 val0 = new AInt32(0);
+                AInt32 val1 = new AInt32(1);
+                SerializerDeserializerUtil.serializeTag(val0, castBuffer.getDataOutput());
+                AInt32SerializerDeserializer.INSTANCE.serialize(val0, castBuffer.getDataOutput());
+                // true result - 1 byte tag + 4 bytes integer
+                SerializerDeserializerUtil.serializeTag(val1, castBuffer.getDataOutput());
+                AInt32SerializerDeserializer.INSTANCE.serialize(val1, castBuffer.getDataOutput());
+            } catch (HyracksDataException e) {
+                throw new IllegalStateException("can't generate the return values for an index-only plan.");
+            }
+            valuesForIndexOnlyPlan = castBuffer.getByteArray();
 
             RTreeSearchOperatorDescriptor rtreeSearchOp;
             if (dataset.getDatasetType() == DatasetType.INTERNAL) {
-                // TODO: the last false flag is for the index-only plan. If R-tree part is revised, I need to fix this flag.
                 rtreeSearchOp = new RTreeSearchOperatorDescriptor(jobSpec, outputRecDesc,
                         appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
                         spPc.first, typeTraits, comparatorFactories, keyFields, new LSMRTreeDataflowHelperFactory(
@@ -927,7 +989,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                                 storageProperties.getBloomFilterFalsePositiveRate(), rtreeFields, btreeFields,
                                 filterTypeTraits, filterCmpFactories, filterFields, !temp), retainInput, retainNull,
                         context.getNullWriterFactory(), searchCallbackFactory, minFilterFieldIndexes,
-                        maxFilterFieldIndexes, false);
+                        maxFilterFieldIndexes, isIndexOnlyPlanEnabled, valuesForIndexOnlyPlan);
             } else {
                 // External Dataset
                 ExternalRTreeDataflowHelperFactory indexDataflowHelperFactory = new ExternalRTreeDataflowHelperFactory(
