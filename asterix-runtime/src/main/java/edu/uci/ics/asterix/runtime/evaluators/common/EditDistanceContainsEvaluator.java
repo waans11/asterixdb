@@ -49,7 +49,7 @@ public class EditDistanceContainsEvaluator extends EditDistanceCheckEvaluator {
             }
 
             default: {
-                throw new AlgebricksException(AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS.getName()
+                throw new AlgebricksException(AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING.getName()
                         + ": expects input type as STRING or ORDEREDLIST but got " + argType + ".");
             }
 

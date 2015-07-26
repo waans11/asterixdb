@@ -1,7 +1,7 @@
 /*
- * Description  : Create a feed dataset that uses the feed simulator adapter. 
+ * Description  : Create a feed dataset that uses the feed simulator adapter.
                   Use hint (cardinality) for the feed dataset.
-                  Begin ingestion using a fully qualified name and verify contents of the dataset post completion.  
+                  Begin ingestion using a fully qualified name and verify contents of the dataset post completion.
  * Expected Res : Success
  * Date         : 30th Jan 2013
  */
@@ -13,9 +13,9 @@ create type TweetType as closed {
   id: string,
   username : string,
   location : string,
-  text : string,
+  "text" : string,
   timestamp : string
-}      
+}
 
 create dataset Tweets(TweetType)
 primary key id

@@ -2512,8 +2512,8 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="inverted-index-ngram-contains">
-                <output-dir compare="Text">inverted-index-ngram-contains</output-dir>
+            <compilation-unit name="inverted-index-ngram-contains-substring">
+                <output-dir compare="Text">inverted-index-ngram-contains-substring</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -2537,8 +2537,8 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="inverted-index-ngram-edit-distance-contains">
-                <output-dir compare="Text">inverted-index-ngram-edit-distance-contains</output-dir>
+            <compilation-unit name="inverted-index-ngram-edit-distance-contains-substring">
+                <output-dir compare="Text">inverted-index-ngram-edit-distance-contains-substring</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -2562,8 +2562,8 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="inverted-index-word-contains">
-                <output-dir compare="Text">inverted-index-word-contains</output-dir>
+            <compilation-unit name="inverted-index-word-contains-substring">
+                <output-dir compare="Text">inverted-index-word-contains-substring</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -2662,6 +2662,11 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
+            <compilation-unit name="btree-secondary-index-non-indexonly-plan-01">
+                <output-dir compare="Text">btree-secondary-index-non-indexonly-plan-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
             <compilation-unit name="rtree-secondary-index-indexonly-plan-01">
                 <output-dir compare="Text">rtree-secondary-index-indexonly-plan-01</output-dir>
             </compilation-unit>
@@ -2714,6 +2719,11 @@
         <test-case FilePath="index-selection">
             <compilation-unit name="inverted-index-fulltext-secondary-index-indexonly-plan-02">
                 <output-dir compare="Text">inverted-index-fulltext-secondary-index-indexonly-plan-02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="inverted-index-fulltext-secondary-index-non-indexonly-plan-01">
+                <output-dir compare="Text">inverted-index-fulltext-secondary-index-non-indexonly-plan-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -3137,8 +3147,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="open-index-enforced/index-selection">
-                <compilation-unit name="inverted-index-ngram-contains">
-                    <output-dir compare="Text">inverted-index-ngram-contains</output-dir>
+                <compilation-unit name="inverted-index-ngram-contains-substring">
+                    <output-dir compare="Text">inverted-index-ngram-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="open-index-enforced/index-selection">
@@ -3147,8 +3157,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="open-index-enforced/index-selection">
-                <compilation-unit name="inverted-index-ngram-edit-distance-contains">
-                    <output-dir compare="Text">inverted-index-ngram-edit-distance-contains</output-dir>
+                <compilation-unit name="inverted-index-ngram-edit-distance-contains-substring">
+                    <output-dir compare="Text">inverted-index-ngram-edit-distance-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="open-index-enforced/index-selection">
@@ -3167,8 +3177,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="open-index-enforced/index-selection">
-                <compilation-unit name="inverted-index-word-contains">
-                    <output-dir compare="Text">inverted-index-word-contains</output-dir>
+                <compilation-unit name="inverted-index-word-contains-substring">
+                    <output-dir compare="Text">inverted-index-word-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="open-index-enforced/index-selection">
@@ -3312,8 +3322,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-open-index/index-selection">
-                <compilation-unit name="inverted-index-ngram-contains">
-                    <output-dir compare="Text">inverted-index-ngram-contains</output-dir>
+                <compilation-unit name="inverted-index-ngram-contains-substring">
+                    <output-dir compare="Text">inverted-index-ngram-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-open-index/index-selection">
@@ -3322,8 +3332,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-open-index/index-selection">
-                <compilation-unit name="inverted-index-ngram-edit-distance-contains">
-                    <output-dir compare="Text">inverted-index-ngram-edit-distance-contains</output-dir>
+                <compilation-unit name="inverted-index-ngram-edit-distance-contains-substring">
+                    <output-dir compare="Text">inverted-index-ngram-edit-distance-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-open-index/index-selection">
@@ -3342,8 +3352,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-open-index/index-selection">
-                <compilation-unit name="inverted-index-word-contains">
-                    <output-dir compare="Text">inverted-index-word-contains</output-dir>
+                <compilation-unit name="inverted-index-word-contains-substring">
+                    <output-dir compare="Text">inverted-index-word-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-open-index/index-selection">
@@ -3519,8 +3529,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-index/index-selection">
-                <compilation-unit name="inverted-index-ngram-contains">
-                    <output-dir compare="Text">inverted-index-ngram-contains</output-dir>
+                <compilation-unit name="inverted-index-ngram-contains-substring">
+                    <output-dir compare="Text">inverted-index-ngram-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-index/index-selection">
@@ -3529,8 +3539,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-index/index-selection">
-                <compilation-unit name="inverted-index-ngram-edit-distance-contains">
-                    <output-dir compare="Text">inverted-index-ngram-edit-distance-contains</output-dir>
+                <compilation-unit name="inverted-index-ngram-edit-distance-contains-substring">
+                    <output-dir compare="Text">inverted-index-ngram-edit-distance-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-index/index-selection">
@@ -3569,8 +3579,8 @@
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-index/index-selection">
-                <compilation-unit name="inverted-index-word-contains">
-                    <output-dir compare="Text">inverted-index-word-contains</output-dir>
+                <compilation-unit name="inverted-index-word-contains-substring">
+                    <output-dir compare="Text">inverted-index-word-contains-substring</output-dir>
                 </compilation-unit>
             </test-case>
             <test-case FilePath="nested-index/index-selection">
@@ -4841,8 +4851,8 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="string">
-            <compilation-unit name="contains_01">
-                <output-dir compare="Text">contains_01</output-dir>
+            <compilation-unit name="contains-substring_01">
+                <output-dir compare="Text">contains-substring_01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="string">

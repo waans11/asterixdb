@@ -28,7 +28,7 @@ create type test1.Tweet as open {
   tweetid: int64,
   loc: point,
   time: datetime,
-  text: string
+  "text": string
 }
 
 create dataset test1.t1(testtype) primary key id;

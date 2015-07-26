@@ -47,7 +47,7 @@ public class ContainsDescriptor extends AbstractScalarFunctionDynamicDescriptor 
 
                 DataOutput dout = output.getDataOutput();
 
-                return new AbstractStringContainsEval(dout, args[0], args[1], AsterixBuiltinFunctions.CONTAINS_SUBSTRING_FUNCTION) {
+                return new AbstractStringContainsEval(dout, args[0], args[1], AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
 
                     @Override
                     protected boolean findMatch(byte[] strBytes, byte[] patternBytes) {
@@ -89,7 +89,7 @@ public class ContainsDescriptor extends AbstractScalarFunctionDynamicDescriptor 
 
     @Override
     public FunctionIdentifier getIdentifier() {
-        return AsterixBuiltinFunctions.CONTAINS_SUBSTRING_FUNCTION;
+        return AsterixBuiltinFunctions.CONTAINS_SUBSTRING;
     }
 
 }

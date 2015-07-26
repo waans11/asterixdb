@@ -662,7 +662,7 @@ CreateFeedStatement FeedSpecification() throws ParseException:
   FunctionSignature appliedFunction = null;
   CreateFeedStatement cfs = null;
   Pair<Identifier,Identifier> sourceNameComponents = null;
-  
+
 }
 {
   (
@@ -674,7 +674,7 @@ CreateFeedStatement FeedSpecification() throws ParseException:
       }
      |
      ("primary")? "feed" nameComponents = QualifiedName() ifNotExists = IfNotExists()
-      "using" adapterName = AdapterName() properties = Configuration() (appliedFunction = ApplyFunction())?  
+      "using" adapterName = AdapterName() properties = Configuration() (appliedFunction = ApplyFunction())?
        {
         cfs = new CreatePrimaryFeedStatement(nameComponents,
                                     adapterName, properties, appliedFunction, ifNotExists);
@@ -687,8 +687,8 @@ CreateFeedStatement FeedSpecification() throws ParseException:
 
 CreateFeedPolicyStatement FeedPolicySpecification() throws ParseException:
 {
-  String policyName = null;  
-  String basePolicyName = null; 
+  String policyName = null;
+  String basePolicyName = null;
   String sourcePolicyFile = null;
   String definition = null;
   boolean ifNotExists = false;
@@ -698,18 +698,18 @@ CreateFeedPolicyStatement FeedPolicySpecification() throws ParseException:
 {
   (
     "ingestion" "policy"  policyName = Identifier() ifNotExists = IfNotExists()
-      <FROM> 
-      ("policy" basePolicyName = Identifier() properties = Configuration() ("definition" definition = StringLiteral())?  
+      <FROM>
+      ("policy" basePolicyName = Identifier() properties = Configuration() ("definition" definition = StringLiteral())?
       {
         cfps = new CreateFeedPolicyStatement(policyName,
                                    basePolicyName, properties, definition, ifNotExists);
       }
-     | "path" sourcePolicyFile = Identifier() ("definition" definition = StringLiteral())?  
+     | "path" sourcePolicyFile = Identifier() ("definition" definition = StringLiteral())?
        {
         cfps = new CreateFeedPolicyStatement(policyName, sourcePolicyFile, definition, ifNotExists);
        }
-     ) 
-       
+     )
+
   )
     {
       return cfps;
@@ -1576,8 +1576,6 @@ Expression AndExpr()throws ParseException:
     }
 }
 
-
-
 Expression RelExpr()throws ParseException:
 {
   OperatorExpr op = null;
@@ -1586,7 +1584,7 @@ Expression RelExpr()throws ParseException:
   IExpressionAnnotation annotation = null;
 }
 {
-    operand = AddExpr()
+    operand = FTContainsExpr()
     {
       if (operand instanceof VariableExpr) {
         String hint = getHint(token);
@@ -1597,7 +1595,7 @@ Expression RelExpr()throws ParseException:
     }
 
     (
-      LOOKAHEAD(2)( <LT> | <GT> | <LE> | <GE> | <EQ> | <NE> | <SIMILAR> | "contains text" <LEFTPAREN> )
+      LOOKAHEAD(2)( <LT> | <GT> | <LE> | <GE> | <EQ> | <NE> |<SIMILAR>)
         {
           String mhint = getHint(token);
           if (mhint != null) {
@@ -1613,13 +1611,10 @@ Expression RelExpr()throws ParseException:
           op.setCurrentop(true);
           broadcast = false;
           }
-        if (token.image.equals("("))
-        	op.addOperator("contains");
-        else
-        	op.addOperator(token.image);
+        op.addOperator(token.image);
       }
 
-       operand = AddExpr()
+       operand = FTContainsExpr()
       {
          broadcast = false;
          if (operand instanceof VariableExpr) {
@@ -1630,10 +1625,6 @@ Expression RelExpr()throws ParseException:
          }
          op.addOperand(operand, broadcast);
       }
-
-      (<RIGHTPAREN>)?
-      {
-      }
     )?
 
      {
@@ -1643,6 +1634,66 @@ Expression RelExpr()throws ParseException:
        return op==null? operand: op;
      }
 }
+
+Expression FTContainsExpr()throws ParseException:
+{
+  OperatorExpr op = null;
+  Expression operand = null;
+}
+{
+    operand = AddExpr()
+
+    ( <CONTAINS> <TEXT>
+      {
+        if (op == null) {
+          op = new OperatorExpr();
+        op.addOperand(operand);
+        op.setCurrentop(true);
+        }
+      ((OperatorExpr)op).addOperator("contains");
+    }
+
+    operand = FTSelection()
+    {
+      op.addOperand(operand);
+    }
+    )?
+
+    {
+       return op==null? operand: op;
+     }
+}
+
+Expression FTSelection()throws ParseException:
+{
+  Expression operand = null;
+}
+{
+    <LEFTPAREN> operand = FTWords() <RIGHTPAREN>
+
+    {
+       return operand;
+    }
+}
+
+Expression FTWords()throws ParseException:
+{
+  Expression operand = null;
+  LiteralExpr lit = new LiteralExpr();
+  String str = null;
+}
+{
+    ( str = StringLiteral()  {
+    	lit.setValue(new StringLiteral(str));
+    } | operand = Expression()
+    )
+
+    {
+       return operand==null? lit: operand;
+    }
+}
+
+
 
 Expression AddExpr()throws ParseException:
 {

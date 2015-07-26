@@ -6,9 +6,9 @@ order by $t1.tweetid
 return {
 "tweetid1": $t1.tweetid,
 "count1":$t1.countA,
-"t2info": for $t2 in dataset('TweetMessages') 
+"t2info": for $t2 in dataset('TweetMessages')
           where $t1.countA /* +indexnl */= $t2.countB
-          order by $t2.tweetid 
+          order by $t2.tweetid
           return {"tweetid2": $t2.tweetid,
                   "count2":$t2.countB}
 };

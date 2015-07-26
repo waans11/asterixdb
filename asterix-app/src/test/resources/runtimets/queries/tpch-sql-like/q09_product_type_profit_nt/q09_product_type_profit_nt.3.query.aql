@@ -39,7 +39,7 @@ from $profit in (
         "ps_supplycost": $ps.ps_supplycost
       }
     )
-    where contains($p.p_name, 'green') and $p.p_partkey = $l2.l_partkey
+    where contains-substring($p.p_name, 'green') and $p.p_partkey = $l2.l_partkey
     select {
       "l_extendedprice": $l2.l_extendedprice,
       "l_discount": $l2.l_discount,

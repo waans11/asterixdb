@@ -17,7 +17,7 @@ for $profit in (
           }
         )
         for $l in dataset('LineItem')
-        where $s1.s_suppkey = $l.l_suppkey       
+        where $s1.s_suppkey = $l.l_suppkey
         return  {
           "l_suppkey": $l.l_suppkey,
           "l_extendedprice": $l.l_extendedprice,
@@ -28,7 +28,7 @@ for $profit in (
           "n_name": $s1.n_name
         }
       )
-      where $ps.ps_suppkey = $l1.l_suppkey and $ps.ps_partkey = $l1.l_partkey       
+      where $ps.ps_suppkey = $l1.l_suppkey and $ps.ps_partkey = $l1.l_partkey
       return {
         "l_extendedprice": $l1.l_extendedprice,
         "l_discount": $l1.l_discount,
@@ -39,7 +39,7 @@ for $profit in (
         "ps_supplycost": $ps.ps_supplycost
       }
     )
-    where contains($p.p_name, 'green') and $p.p_partkey = $l2.l_partkey    
+    where contains-substring($p.p_name, 'green') and $p.p_partkey = $l2.l_partkey
     return {
       "l_extendedprice": $l2.l_extendedprice,
       "l_discount": $l2.l_discount,
@@ -50,7 +50,7 @@ for $profit in (
     }
   )
   where $o.o_orderkey = $l3.l_orderkey
-  let $amount := $l3.l_extendedprice * (1 - $l3.l_discount) -  $l3.ps_supplycost * $l3.l_quantity 
+  let $amount := $l3.l_extendedprice * (1 - $l3.l_discount) -  $l3.ps_supplycost * $l3.l_quantity
   let $o_year := get-year($o.o_orderdate)
   return {
     "nation": $l3.n_name,
@@ -61,7 +61,7 @@ for $profit in (
 group by $nation := $profit.nation, $o_year := $profit.o_year with $profit
 order by $nation, $o_year desc
 return {
-  "nation": $nation, 
-  "o_year": $o_year, 
+  "nation": $nation,
+  "o_year": $o_year,
   "sum_profit": sum( for $pr in $profit return $pr.amount )
 }
