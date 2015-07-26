@@ -1,0 +1,9 @@
+use dataverse test;
+
+count(
+for $o in dataset('MyData')
+where $o.title contains text ("database")
+order by $o.id
+return {"pk":$o.id, "sk":$o.title}
+);
+

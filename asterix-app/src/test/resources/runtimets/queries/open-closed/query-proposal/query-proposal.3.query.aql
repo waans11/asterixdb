@@ -9,9 +9,9 @@ use dataverse test;
 
 for $tp1 in (
     for $tweet in dataset('TweetMessages')
-        where some $topic in $tweet.referred-topics satisfies contains($topic, 'verizon')
+        where some $topic in $tweet.referred-topics satisfies contains-substring($topic, 'verizon')
             for $tp in $tweet.referred-topics
-                return 
+                return
                 { "topic": $tp }
 )
 group by $tp2 := $tp1.topic with $tp1

@@ -71,8 +71,6 @@ public class AsterixClusterProperties {
         }
     }
 
-    
-
     private ClusterState state = ClusterState.UNUSABLE;
 
     public synchronized void removeNCConfiguration(String nodeId) {

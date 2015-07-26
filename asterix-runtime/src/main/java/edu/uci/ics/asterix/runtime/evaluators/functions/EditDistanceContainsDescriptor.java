@@ -48,6 +48,6 @@ public class EditDistanceContainsDescriptor extends AbstractScalarFunctionDynami
 
     @Override
     public FunctionIdentifier getIdentifier() {
-        return AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS;
+        return AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING;
     }
 }
