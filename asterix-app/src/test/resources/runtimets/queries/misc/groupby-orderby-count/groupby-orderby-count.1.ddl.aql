@@ -8,7 +8,7 @@ create type Tweet as open {
   tweetid: int64,
   loc: point,
   time: datetime,
-  text: string
+  "text": string
 }
 
 create external dataset TwitterData(Tweet)

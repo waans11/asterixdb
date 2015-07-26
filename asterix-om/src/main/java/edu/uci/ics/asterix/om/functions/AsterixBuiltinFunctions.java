@@ -286,8 +286,8 @@ public class AsterixBuiltinFunctions {
     public final static FunctionIdentifier SUBSTRING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "substring", 3);
     public final static FunctionIdentifier LIKE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "like", 2);
-    public final static FunctionIdentifier CONTAINS_SUBSTRING_FUNCTION = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "contains-substring",
-            2);
+    public final static FunctionIdentifier CONTAINS_SUBSTRING = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "contains-substring", 2);
     public final static FunctionIdentifier STARTS_WITH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "starts-with", 2);
     public final static FunctionIdentifier ENDS_WITH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -428,8 +428,8 @@ public class AsterixBuiltinFunctions {
             FunctionConstants.ASTERIX_NS, "edit-distance-list-is-filterable", 2);
     public final static FunctionIdentifier EDIT_DISTANCE_STRING_IS_FILTERABLE = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "edit-distance-string-is-filterable", 4);
-    public final static FunctionIdentifier EDIT_DISTANCE_CONTAINS = new FunctionIdentifier(
-            FunctionConstants.ASTERIX_NS, "edit-distance-contains", 3);
+    public final static FunctionIdentifier EDIT_DISTANCE_CONTAINS_SUBSTRING = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "edit-distance-contains-substring", 3);
 
     // tokenizers:
     public final static FunctionIdentifier WORD_TOKENS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -753,7 +753,7 @@ public class AsterixBuiltinFunctions {
         addFunction(CIRCLE_CONSTRUCTOR, OptionalACircleTypeComputer.INSTANCE, true);
         addPrivateFunction(CONCAT_NON_NULL, ConcatNonNullTypeComputer.INSTANCE, true);
 
-        addFunction(CONTAINS_SUBSTRING_FUNCTION, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(CONTAINS_SUBSTRING, ABooleanTypeComputer.INSTANCE, true);
         addFunction(COUNT, AInt64TypeComputer.INSTANCE, true);
         addPrivateFunction(COUNTHASHED_GRAM_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE, true);
         addPrivateFunction(COUNTHASHED_WORD_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE, true);
@@ -899,7 +899,7 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(SERIAL_INTERMEDIATE_AVG, NonTaggedLocalAvgTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_SUM, NonTaggedNumericAggTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_LOCAL_SUM, NonTaggedNumericAggTypeComputer.INSTANCE, true);
-        addFunction(EDIT_DISTANCE_CONTAINS, OrderedListOfAnyTypeComputer.INSTANCE, true);
+        addFunction(EDIT_DISTANCE_CONTAINS_SUBSTRING, OrderedListOfAnyTypeComputer.INSTANCE, true);
         addFunction(SIMILARITY_JACCARD, AFloatTypeComputer.INSTANCE, true);
         addFunction(SIMILARITY_JACCARD_CHECK, OrderedListOfAnyTypeComputer.INSTANCE, true);
         addPrivateFunction(SIMILARITY_JACCARD_SORTED, AFloatTypeComputer.INSTANCE, true);
@@ -1390,7 +1390,7 @@ public class AsterixBuiltinFunctions {
         similarityFunctions.add(getAsterixFunctionInfo(SIMILARITY_JACCARD_CHECK));
         similarityFunctions.add(getAsterixFunctionInfo(EDIT_DISTANCE));
         similarityFunctions.add(getAsterixFunctionInfo(EDIT_DISTANCE_CHECK));
-        similarityFunctions.add(getAsterixFunctionInfo(EDIT_DISTANCE_CONTAINS));
+        similarityFunctions.add(getAsterixFunctionInfo(EDIT_DISTANCE_CONTAINS_SUBSTRING));
     }
 
     public static boolean isSimilarityFunction(FunctionIdentifier fi) {

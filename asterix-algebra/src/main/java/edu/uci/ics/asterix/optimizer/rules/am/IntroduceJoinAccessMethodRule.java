@@ -44,7 +44,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
  * This rule optimizes a join with secondary indexes into an indexed nested-loop join.
  * Matches the following operator pattern:
  * (join) <-- (select)? <-- (assign | unnest)+ <-- (datasource scan)
- * <-- (select)? <-- (assign | unnest)+ <-- (datasource scan | unnest-map)
+ * ...... <-- (select)? <-- (assign | unnest)+ <-- (datasource scan | unnest-map)
  * The order of the join inputs does not matter.
  * Replaces the above pattern with the following simplified plan:
  * (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign) <-- (datasource scan | unnest-map)
@@ -214,6 +214,7 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         return false;
     }
 
+    // Check whether (Groupby)? <-- Leftouterjoin
     private boolean isLeftOuterJoin(AbstractLogicalOperator op1) {
         if (op1.getInputs().size() != 1) {
             return false;
