@@ -1,6 +1,6 @@
 /*
  * Description  : Test that left-outer-join may use two available indexes, one for primary index in prob subtree and another for secondary btree index in index subtree.
- * Issue        : 730, 741                 
+ * Issue        : 730, 741
  * Expected Res : Success
  * Date         : 8th May 2014
  */
@@ -16,7 +16,7 @@ create type TwitterUserType as closed {
 	statuses-count: int64,
 	name: string,
 	followers-count: int64
-} 
+}
 
 create type TweetMessageType as open {
         user: TwitterUserType,

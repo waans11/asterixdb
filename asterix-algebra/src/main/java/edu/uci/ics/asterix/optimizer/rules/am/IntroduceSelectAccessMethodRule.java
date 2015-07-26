@@ -21,7 +21,6 @@ import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
-import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -48,18 +47,15 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
  * Primary index lookup pattern:
  * Since no assign is necessary to get the primary key fields (they are already stored fields in the BTree tuples).
  * (select) <-- (datasource scan)
- *
  * Replaces the above patterns with this plan if it is an index-only plan (only using PK and/or secondary key field):
  * OLD:(select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest-map(index search)) <-- (assign)
  * NEW: (union) <-- (select) <-- (assign)+ <-- (b-tree search) <-- (sort) <-- (split) <-- (unnest-map(index search)) <-- (assign)
- *      (union) <--                                                       <-- (split)
+ * (union) <-- <-- (split)
  * In an index-only plan, sort is not required.
- *
  * If an index-only plan is not possible, the original plan will be transformed into this:
- * OLD:(select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest-map(index search)) <-- (assign)
+ * OLD:(select) <-- (assign | unnest)+ <-- (datasource scan)
  * NEW:(select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest-map(index search)) <-- (assign)
  * In this case, the sort is optional, and some access methods implementations may choose not to sort.
- *
  * Note that for some index-based optimizations we do not remove the triggering
  * condition from the select, since the index may only acts as a filter, and the
  * final verification must still be done with the original select condition (where an Index.canProduceFalsePositive = true).
@@ -74,11 +70,12 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
 
     // Operators representing the patterns to be matched:
     // These ops are set in matchesPattern()
-	protected List<Mutable<ILogicalOperator>> afterSelectRefs = null;
+    protected List<Mutable<ILogicalOperator>> afterSelectRefs = null;
     protected Mutable<ILogicalOperator> selectRef = null;
     protected SelectOperator selectOp = null;
     protected AbstractFunctionCallExpression selectCond = null;
     protected final OptimizableOperatorSubTree subTree = new OptimizableOperatorSubTree();
+    protected IOptimizationContext context = null;
 
     // Register access methods.
     protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
@@ -95,6 +92,8 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         setMetadataDeclarations(context);
 
         // Match operator pattern and initialize operator members.
+        // Currently, we can't apply an index-only plan when there are multiple paths.
+        // In this case, we apply the non-index-only plan optimization.
         if (!matchesOperatorPattern(opRef, context)) {
             return false;
         }
@@ -116,81 +115,143 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         // Choose index to be applied.
         Pair<IAccessMethod, Index> chosenIndex = chooseIndex(analyzedAMs);
         if (chosenIndex == null) {
-            context.addToDontApplySet(this, opRef.getValue());
+            //            context.addToDontApplySet(this, opRef.getValue());
             context.addToDontApplySet(this, selectRef.getValue());
             return false;
         }
 
         // Apply plan transformation using chosen index.
         AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
-        boolean res = chosenIndex.first.applySelectPlanTransformation(afterSelectRefs, selectRef, subTree, chosenIndex.second,
-                analysisCtx, context);
+        boolean res = chosenIndex.first.applySelectPlanTransformation(afterSelectRefs, selectRef, subTree,
+                chosenIndex.second, analysisCtx, context);
+
+        //        StringBuilder sb = new StringBuilder();
+        //        LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
+        //        PlanPrettyPrinter.printOperator((AbstractLogicalOperator) opRef.getValue(), sb, pvisitor, 0);
+        //        System.out.println("IntroduceSelectAccessMethod after plan:\n" + sb.toString());
+
         if (res) {
             OperatorPropertiesUtil.typeOpRec(opRef, context);
         }
-        context.addToDontApplySet(this, opRef.getValue());
+        //        context.addToDontApplySet(this, opRef.getValue());
         context.addToDontApplySet(this, selectRef.getValue());
 
         return res;
     }
 
     /**
-     * matches operator's pattern: distribute_result -> (any operators)+  -> select -> assign | unnest? -> datasource_scan
+     * matches operator's pattern: distribute_result -> (any operators)+ -> select -> (assign|unnest)+ -> datasource_scan
      * Checking begins from the root operator in order to keep logical variables that are used above select operators.
      * This way, we can identify whether the given plan is an index-only plan.
      */
     protected boolean matchesOperatorPattern(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
-    	// Check whether this operator is the root, which is distriute_result
+        this.context = context;
+
+        // Check whether this operator is the root, which is distriute_result
         AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
 
         if (context.checkIfInDontApplySet(this, op)) {
             return false;
         }
 
+        // Begin from the root operator - DISTRIBUTE_RESULT or SINK
         if (op.getOperatorTag() != LogicalOperatorTag.DISTRIBUTE_RESULT) {
-        	return false;
+            if (op.getOperatorTag() != LogicalOperatorTag.SINK) {
+                return false;
+            }
         }
 
-        Mutable<ILogicalOperator> descendantRef = op.getInputs().get(0);
-        AbstractLogicalOperator descendantOp = (AbstractLogicalOperator) descendantRef.getValue();
-
-        afterSelectRefs = new ArrayList<Mutable<ILogicalOperator>>();
-        boolean selectFound = false;
-
-        // Add the current op - root
-		afterSelectRefs.add(opRef);
+        //        Mutable<ILogicalOperator> descendantRef = op.getInputs().get(0);
+        //        AbstractLogicalOperator descendantOp = (AbstractLogicalOperator) descendantRef.getValue();
 
         // Store all operators after SELECT operator.
-        // This information will be used to determine whether the given plan is an index-only plan.
+        // This information will be used to determine whether the given plan is an index-only plan or not since
+        // an index-only plan should use PK and/or secondary key field.
 
-    	// First, check that whether a select operator exists and its condition is a function call.
-        while (descendantOp != null) {
-        	if (descendantOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
-        		selectRef = descendantRef;
-        		selectOp = (SelectOperator) descendantOp;
-        		selectFound = true;
-        		break;
-        	} else {
-        		afterSelectRefs.add(descendantRef);
-                if (descendantOp.getInputs().size() < 1) {
-                	// reach the bottom level
-                    break;
-                }
-                descendantRef = descendantOp.getInputs().get(0);
-        		descendantOp = (AbstractLogicalOperator) descendantRef.getValue();
-        	}
+        //        1  procedure DFS(G,v):
+        //            2      label v as discovered
+        //            3      for all edges from v to w in G.adjacentEdges(v) do
+        //            4          if vertex w is not labeled as discovered then
+        //            5              recursively call DFS(G,w)
+
+        //        Mutable<ILogicalOperator> descendantRef = null;
+        //        AbstractLogicalOperator descendantOp = null;
+
+        afterSelectRefs = new ArrayList<Mutable<ILogicalOperator>>();
+        boolean selectOpFound = false;
+
+        // Add the root operator
+        //        afterSelectRefs.add(opRef);
+
+        //        operatorStack.push(opRef);
+
+        selectOpFound = DFS(opRef);
+        //        System.out.println("selectOpFound " + selectOpFound);
+
+        //        while (!operatorStack.isEmpty()) {
+        //            descendantRef = operatorStack.pop();
+        //            descendantOp = (AbstractLogicalOperator) descendantRef.getValue();
+        //
+        //            if (descendantOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
+        //                selectRef = descendantRef;
+        //                selectOp = (SelectOperator) descendantOp;
+        //
+        //                // Check whether this SELECT operator is already processed by this rule.
+        //                // If so, we just continue to traverse the plan tree to find another SELECT operator.
+        //                if (!context.checkIfInDontApplySet(this, selectOp)) {
+        //                    selectOpFound = true;
+        //                    break;
+        //                }
+        //
+        //            } else {
+        //
+        //            }
+        //
+        //            afterSelectRefs.add(descendantRef);
+        //
+        //            for (int i = descendantOp.getInputs().size() - 1; i >= 0; i--) {
+        //                operatorStack.push(descendantOp.getInputs().get(i));
+        //            }
+        //        }
+        //
+        //        // First, check that whether SELECT operator exists.
+        //        while (descendantOp != null) {
+        //            if (descendantOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
+        //                selectRef = descendantRef;
+        //                selectOp = (SelectOperator) descendantOp;
+        //                selectOpFound = true;
+        //                break;
+        //            } else {
+        //                afterSelectRefs.add(descendantRef);
+        //                if (descendantOp.getInputs().size() < 1) {
+        //                    // reach the bottom level
+        //                    break;
+        //                } else if (descendantOp.getInputs().size() > 1) {
+        //                    for (int i = 0; i < descendantOp.getInputs().size(); i++) {
+        //
+        //                    }
+        //
+        //                    // We have two or more paths in the plan. Right now, we can't process this plan as an index-only plan.
+        //                    // Use the old method to adjust index-access method.
+        //                    return false;
+        //                } else {
+        //                    descendantRef = descendantOp.getInputs().get(0);
+        //                    descendantOp = (AbstractLogicalOperator) descendantRef.getValue();
+        //                }
+        //            }
+        //        }
+
+        if (!selectOpFound) {
+            return false;
         }
 
-        if (!selectFound) {
-        	return false;
-        }
-
-        if (context.checkIfInDontApplySet(this, opRef.getValue()) || context.checkIfInDontApplySet(this, selectOp)) {
-        	return false;
+        if (//context.checkIfInDontApplySet(this, opRef.getValue()) ||
+        context.checkIfInDontApplySet(this, selectOp)) {
+            return false;
         }
 
         // Set and analyze select.
-        // Check that the select's condition is a function call.
+        // Check that the SELECT condition is a function call.
         ILogicalExpression condExpr = selectOp.getCondition().getValue();
         if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             return false;
@@ -202,15 +263,73 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         return res && subTree.hasDataSourceScan();
     }
 
+    // Traverse the given plan and check whether SELECT operator exists.
+    // If one is found, maintain the path from the root to SELECT operator if it is not already optimized.
+    protected boolean DFS(Mutable<ILogicalOperator> opRef) {
+        AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
+        boolean selectFound = false;
+
+        // Found SELECT operator
+        if (op.getOperatorTag() == LogicalOperatorTag.SELECT) {
+            selectRef = opRef;
+            selectOp = (SelectOperator) op;
+
+            // already optimized? If not, this operator can be optimized.
+            if (!context.checkIfInDontApplySet(this, selectOp)) {
+                return true;
+            }
+        } else {
+            afterSelectRefs.add(opRef);
+        }
+
+        for (int i = 0; i < op.getInputs().size(); i++) {
+            selectFound = DFS(op.getInputs().get(i));
+            if (selectFound) {
+                return true;
+            }
+        }
+
+        afterSelectRefs.remove(opRef);
+
+        return false;
+    }
+
+    /**
+     * matches operator's pattern: select -> (assign|unnest)+ -> datasource_scan
+     * This method is applied when there are multiple paths in the given plan.
+     */
+    //    protected boolean matchesOperatorPatternInOnePath(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
+    //        // First check that the operator is a select and its condition is a function call.
+    //        AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef.getValue();
+    //        if (context.checkIfInDontApplySet(this, op1)) {
+    //            return false;
+    //        }
+    //        if (op1.getOperatorTag() != LogicalOperatorTag.SELECT) {
+    //            return false;
+    //        }
+    //        // Set and analyze select.
+    //        selectRef = opRef;
+    //        selectOp = (SelectOperator) op1;
+    //        // Check that the select's condition is a function call.
+    //        ILogicalExpression condExpr = selectOp.getCondition().getValue();
+    //        if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+    //            return false;
+    //        }
+    //        selectCond = (AbstractFunctionCallExpression) condExpr;
+    //        boolean res = subTree.initFromSubTree(op1.getInputs().get(0));
+    //        return res && subTree.hasDataSourceScan();
+    //    }
+
     @Override
     public Map<FunctionIdentifier, List<IAccessMethod>> getAccessMethods() {
         return accessMethods;
     }
 
     private void clear() {
-    	afterSelectRefs = null;
+        afterSelectRefs = null;
         selectRef = null;
         selectOp = null;
         selectCond = null;
+        context = null;
     }
 }

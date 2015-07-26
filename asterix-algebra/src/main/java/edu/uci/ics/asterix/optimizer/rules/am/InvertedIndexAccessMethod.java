@@ -26,12 +26,12 @@ import org.apache.commons.lang3.mutable.MutableObject;
 import edu.uci.ics.asterix.algebra.base.LogicalOperatorDeepCopyVisitor;
 import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
+import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Index;
-import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.ANull;
@@ -45,6 +45,7 @@ import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Quadruple;
 import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -64,7 +65,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
@@ -100,7 +100,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
         // contains(substring) function
-        funcIdents.add(AsterixBuiltinFunctions.CONTAINS_SUBSTRING_FUNCTION);
+        funcIdents.add(AsterixBuiltinFunctions.CONTAINS_SUBSTRING);
         // For matching similarity-check functions. For example, similarity-jaccard-check returns a list of two items,
         // and the select condition will get the first list-item and check whether it evaluates to true.
         funcIdents.add(AsterixBuiltinFunctions.GET_ITEM);
@@ -114,7 +114,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     static {
         secondLevelFuncIdents.add(AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK);
         secondLevelFuncIdents.add(AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK);
-        secondLevelFuncIdents.add(AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS);
+        secondLevelFuncIdents.add(AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING);
     }
 
     public static InvertedIndexAccessMethod INSTANCE = new InvertedIndexAccessMethod();
@@ -129,7 +129,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             List<AbstractLogicalOperator> assignsAndUnnests, AccessMethodAnalysisContext analysisCtx) {
 
         boolean matches;
-        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING_FUNCTION) {
+        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
             matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
             if (!matches) {
                 matches = AccessMethodUtils.analyzeFuncExprArgsForTwoVars(funcExpr, analysisCtx);
@@ -287,7 +287,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         if (arg1.getExpressionTag() == LogicalExpressionTag.CONSTANT
                 && arg2.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
             // The arguments of edit-distance-contains() function are asymmetrical, we can only use index if it is on the first argument
-            if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS) {
+            if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING) {
                 return false;
             }
             constArg = arg1;
@@ -336,7 +336,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             }
         }
         if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK
-                || funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS) {
+                || funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING) {
             while (nonConstArg.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                 AbstractFunctionCallExpression nonConstFuncExpr = (AbstractFunctionCallExpression) nonConstArg;
                 if (nonConstFuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.WORD_TOKENS
@@ -430,14 +430,10 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         //      UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceScan, dataset,
         //      recordType, secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex);
 
-        SelectOperator select = (SelectOperator) topOpRef.getValue();
-        Mutable<ILogicalExpression> conditionRef = select.getCondition();
-
         ILogicalOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(afterTopOpRefs, topOpRef,
-                conditionRef, assignBeforeSelectOpRef, dataSourceScan, dataset, recordType, secondaryIndexUnnestOp,
-                context, true, retainInput, retainNull, false, chosenIndex, analysisCtx,
-                outputPrimaryKeysOnlyFromSIdxSearch, false, secondaryKeyFieldUsedInSelectCondition,
-                secondaryKeyFieldUsedAfterSelectOp);
+                assignBeforeSelectOpRef, dataSourceScan, dataset, recordType, secondaryIndexUnnestOp, context, true,
+                retainInput, retainNull, false, chosenIndex, analysisCtx, outputPrimaryKeysOnlyFromSIdxSearch, false,
+                secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp);
 
         return primaryIndexUnnestOp;
     }
@@ -483,42 +479,6 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             assignBeforeSelectOp = assignBeforeSelectOpRef.getValue();
         }
 
-        // logical variables that select operator is using
-        List<LogicalVariable> usedVarsInSelect = new ArrayList<LogicalVariable>();
-
-        // live variables that select operator can access
-        List<LogicalVariable> liveVarsInSelect = new ArrayList<LogicalVariable>();
-
-        // PK, record variable
-        List<LogicalVariable> dataScanPKRecordVars = new ArrayList<LogicalVariable>();
-        List<LogicalVariable> dataScanPKVars = new ArrayList<LogicalVariable>();
-        List<LogicalVariable> dataScanRecordVars = new ArrayList<LogicalVariable>();
-
-        // From now on, check whether the given plan is an index-only plan
-        //        VariableUtilities.getUsedVariables((ILogicalOperator) aboveSelectRef.getValue(), aboveSelectVars);
-        VariableUtilities.getUsedVariables((ILogicalOperator) selectRef.getValue(), usedVarsInSelect);
-        VariableUtilities.getLiveVariables((ILogicalOperator) selectRef.getValue(), liveVarsInSelect);
-
-        // Get PK, record variables
-        dataScanPKRecordVars = subTree.getDataSourceVariables();
-        subTree.getPrimaryKeyVars(dataScanPKVars);
-        dataScanRecordVars.addAll(dataScanPKRecordVars);
-        dataScanRecordVars.removeAll(dataScanPKVars);
-
-        // At this stage, we know that this plan is utilizing an index, however we are not sure
-        // that this plan is an index-only plan that only uses PK and/or a secondary key field.
-        // Thus, we check whether select operator is only using variables from assign or data-source-scan
-        // and the field-name of those variables are only PK or SK.
-
-        // Need to check whether variables from select operator only contain SK and/or PK condition
-        List<IOptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;
-
-        // Fetch the field names of the primary index and chosen index
-        Dataset dataset = subTree.dataset;
-        List<List<String>> PKfieldNames = DatasetUtils.getPartitioningKeys(dataset);
-        List<List<String>> chosenIndexFieldNames = chosenIndex.getKeyFieldNames();
-        List<LogicalVariable> chosenIndexVars = new ArrayList<LogicalVariable>();
-
         // index-only plan possible?
         boolean isIndexOnlyPlanPossible = false;
 
@@ -528,141 +488,40 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // secondary key field usage after the select operator
         boolean secondaryKeyFieldUsedAfterSelectOp = false;
 
-        // #1. Check whether variables in the SELECT operator are from secondary key fields and/or PK fields
-        int selectVarFoundCount = 0;
-        for (IOptimizableFuncExpr matchedFuncExpr : matchedFuncExprs) {
-            // for each select condition,
-            for (LogicalVariable selectVar : usedVarsInSelect) {
-                int varIndex = matchedFuncExpr.findLogicalVar(selectVar);
-                if (varIndex != -1) {
-                    List<String> fieldNameOfSelectVars = matchedFuncExpr.getFieldName(varIndex);
-                    // Is this variable from PK?
-                    int keyPos = PKfieldNames.indexOf(fieldNameOfSelectVars);
-                    if (keyPos < 0) {
-                        // Is this variable from chosen index (SK)?
-                        keyPos = chosenIndexFieldNames.indexOf(fieldNameOfSelectVars);
-                        if (keyPos < 0) {
-                            isIndexOnlyPlanPossible = false;
-                            break;
-                        } else {
-                            if (!chosenIndexVars.contains(selectVar)) {
-                                chosenIndexVars.add(selectVar);
-                                selectVarFoundCount++;
-                            }
-                            isIndexOnlyPlanPossible = true;
-                            secondaryKeyFieldUsedInSelectCondition = true;
-                        }
-                    } else {
-                        if (!chosenIndexVars.contains(selectVar)) {
-                            chosenIndexVars.add(selectVar);
-                            selectVarFoundCount++;
-                        }
-                        isIndexOnlyPlanPossible = true;
-                    }
-                } else {
-                    continue;
-                }
-            }
-            if (!isIndexOnlyPlanPossible) {
-                break;
+        // For R-Tree only: whether a verification is required after the secondary index search
+        boolean verificationAfterSIdxSearchRequired = true;
+
+        Quadruple<Boolean, Boolean, Boolean, Boolean> indexOnlyPlanCheck = new Quadruple<Boolean, Boolean, Boolean, Boolean>(
+                isIndexOnlyPlanPossible, secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
+                verificationAfterSIdxSearchRequired);
+
+        Dataset dataset = subTree.dataset;
+
+        if (dataset.getDatasetType() == DatasetType.INTERNAL) {
+            indexOnlyPlanCheck = AccessMethodUtils.isIndexOnlyPlan(aboveSelectRefs, selectRef, subTree, chosenIndex,
+                    analysisCtx, context);
+
+            if (indexOnlyPlanCheck == null) {
+                isIndexOnlyPlanPossible = false;
+            } else {
+                isIndexOnlyPlanPossible = indexOnlyPlanCheck.first;
+                secondaryKeyFieldUsedInSelectCondition = indexOnlyPlanCheck.second;
+                secondaryKeyFieldUsedAfterSelectOp = indexOnlyPlanCheck.third;
+                verificationAfterSIdxSearchRequired = indexOnlyPlanCheck.fourth;
             }
         }
-        // All variables in the SELECT condition should be found.
-        if (selectVarFoundCount < usedVarsInSelect.size()) {
-            isIndexOnlyPlanPossible = false;
-        }
 
-        // #2. Check whether operators after the SELECT operator only use PK field variables.
-        //     Unlike B+Tree or R-Tree on POINT or RECTANGLE type, we can't use or reconstruct
-        //     secondary key field value from SK since a SK is just part of a field value.
-        //     Therefore, if a secondary key field value is used after SELECT operator, this cannot be
-        //     an index-only select plan. Therefore, we only check whether PK is used after SELECT operator.
-        //     We exclude checking on the variables produced after the SELECT operator.
-        boolean countIsUsedInThePlan = false;
-        List<LogicalVariable> countUsedVars = new ArrayList<LogicalVariable>();
-        List<LogicalVariable> producedVarsAfterSelect = new ArrayList<LogicalVariable>();
-
-        // From now on, check whether the given plan is an index-only plan
-        VariableUtilities.getUsedVariables((ILogicalOperator) selectRef.getValue(), usedVarsInSelect);
-
-        AbstractLogicalOperator aboveSelectRefOp = null;
-        AggregateOperator aggOp = null;
-        ILogicalExpression condExpr = null;
-        List<Mutable<ILogicalExpression>> condExprs = null;
-        AbstractFunctionCallExpression condExprFnCall = null;
-
-        if (isIndexOnlyPlanPossible) {
-            List<LogicalVariable> usedVarsAfterSelect = new ArrayList<LogicalVariable>();
-            // for each operator above SELECT operator
-            for (Mutable<ILogicalOperator> aboveSelectRef : aboveSelectRefs) {
-                usedVarsAfterSelect.clear();
-                producedVarsAfterSelect.clear();
-                VariableUtilities.getUsedVariables((ILogicalOperator) aboveSelectRef.getValue(), usedVarsAfterSelect);
-                VariableUtilities.getProducedVariables((ILogicalOperator) aboveSelectRef.getValue(),
-                        producedVarsAfterSelect);
-                // Check whether COUNT exists since we can substitute record variable into PK variable.
-                aboveSelectRefOp = (AbstractLogicalOperator) aboveSelectRef.getValue();
-                if (aboveSelectRefOp.getOperatorTag() == LogicalOperatorTag.AGGREGATE) {
-                    aggOp = (AggregateOperator) aboveSelectRefOp;
-                    condExprs = aggOp.getExpressions();
-                    for (int i = 0; i < condExprs.size(); i++) {
-                        condExpr = (ILogicalExpression) condExprs.get(i).getValue();
-                        if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                            continue;
-                        } else {
-                            condExprFnCall = (AbstractFunctionCallExpression) condExpr;
-                            if (condExprFnCall.getFunctionIdentifier() != AsterixBuiltinFunctions.COUNT) {
-                                continue;
-                            } else {
-                                // COUNT found. count on record ($$0) can be replaced as PK variable
-                                countIsUsedInThePlan = true;
-                                VariableUtilities.getUsedVariables((ILogicalOperator) aboveSelectRef.getValue(),
-                                        countUsedVars);
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // for each variable that is used in an operator above SELECT operator
-                for (LogicalVariable usedVarAfterSelect : usedVarsAfterSelect) {
-                    // If this operator is using the variables that are created before the SELECT operator
-                    if (liveVarsInSelect.contains(usedVarAfterSelect)) {
-                        // From PK?
-                        if (dataScanPKVars.contains(usedVarAfterSelect)) {
-                            isIndexOnlyPlanPossible = true;
-                        } else if (chosenIndexVars.contains(usedVarAfterSelect)) {
-                            // From SK?
-                            isIndexOnlyPlanPossible = false;
-                            secondaryKeyFieldUsedAfterSelectOp = true;
-                            break;
-                        } else if (dataScanRecordVars.contains(usedVarAfterSelect)) {
-                            // The only case that we allow when a record variable is used is when
-                            // it is used with count either directly or indirectly via record-constructor
-                            if (!countIsUsedInThePlan) {
-                                // We don't need to care about this case since COUNT is not used.
-                                isIndexOnlyPlanPossible = false;
-                                break;
-                            } else if (countUsedVars.contains(usedVarAfterSelect)
-                                    || countUsedVars.containsAll(producedVarsAfterSelect)) {
-                                VariableUtilities.substituteVariables(aboveSelectRefOp, usedVarAfterSelect,
-                                        dataScanPKVars.get(0), context);
-                                isIndexOnlyPlanPossible = true;
-                            }
-                        } else {
-                            isIndexOnlyPlanPossible = false;
-                            break;
-                        }
-                    } else {
-                        // check is not necessary since this variable is generated after the SELECT operator
-                        continue;
-                    }
-                }
-                if (!isIndexOnlyPlanPossible) {
-                    break;
-                }
-            }
-        }
+        //        indexOnlyPlanCheck = AccessMethodUtils.isIndexOnlyPlan(aboveSelectRefs, selectRef, subTree, chosenIndex,
+        //                analysisCtx, context);
+        //
+        //        if (indexOnlyPlanCheck == null) {
+        //            isIndexOnlyPlanPossible = false;
+        //        } else {
+        //            isIndexOnlyPlanPossible = indexOnlyPlanCheck.first;
+        //            secondaryKeyFieldUsedInSelectCondition = indexOnlyPlanCheck.second;
+        //            secondaryKeyFieldUsedAfterSelectOp = indexOnlyPlanCheck.third;
+        //            verificationAfterSIdxSearchRequired = indexOnlyPlanCheck.fourth;
+        //        }
 
         if (isIndexOnlyPlanPossible && !secondaryKeyFieldUsedAfterSelectOp) {
             analysisCtx.setIndexOnlyPlanEnabled(true);
@@ -677,9 +536,6 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         if (indexPlanRootOp == null) {
             return false;
         }
-        // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
-        // Temporary - disable verification
-        //      selectRef.setValue(indexPlanRootOp);
 
         // Generate new select using the new condition.
         if (conditionRef.getValue() != null) {
@@ -718,7 +574,6 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             }
         }
 
-        //        subTree.dataSourceRef.setValue(indexPlanRootOp);
         return true;
     }
 
@@ -749,7 +604,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         IOptimizableFuncExpr optFuncExpr = AccessMethodUtils.chooseFirstOptFuncExpr(chosenIndex, analysisCtx);
         // The arguments of edit-distance-contains() function are asymmetrical, we can only use index
         // if the dataset of index subtree and the dataset of first argument's subtree is the same
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING
                 && optFuncExpr.getOperatorSubTree(0).dataset != null
                 && !optFuncExpr.getOperatorSubTree(0).dataset.getDatasetName().equals(
                         indexSubTree.dataset.getDatasetName())) {
@@ -790,7 +645,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         Mutable<ILogicalOperator> panicJoinRef = null;
         Map<LogicalVariable, LogicalVariable> panicVarMap = null;
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK
-                || optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS) {
+                || optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING) {
             panicJoinRef = new MutableObject<ILogicalOperator>(joinRef.getValue());
             panicVarMap = new HashMap<LogicalVariable, LogicalVariable>();
             Mutable<ILogicalOperator> newProbeRootRef = createPanicNestedLoopJoinPlan(panicJoinRef, indexSubTree,
@@ -1099,7 +954,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private void addFunctionSpecificArgs(IOptimizableFuncExpr optFuncExpr, InvertedIndexJobGenParams jobGenParams) {
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING_FUNCTION) {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
             jobGenParams.setSearchModifierType(SearchModifierType.CONJUNCTIVE);
             jobGenParams.setSimilarityThreshold(new AsterixConstantValue(ANull.NULL));
         }
@@ -1113,7 +968,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             jobGenParams.setSimilarityThreshold(optFuncExpr.getConstantVal(optFuncExpr.getNumConstantVals() - 1));
         }
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK
-                || optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS) {
+                || optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING) {
             if (optFuncExpr.containsPartialField()) {
                 jobGenParams.setSearchModifierType(SearchModifierType.CONJUNCTIVE_EDIT_DISTANCE);
             } else {
@@ -1143,7 +998,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         }
 
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK
-                || optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS) {
+                || optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CONTAINS_SUBSTRING) {
             return isEditDistanceFuncOptimizable(index, optFuncExpr);
         }
 
@@ -1151,7 +1006,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             return isJaccardFuncOptimizable(index, optFuncExpr);
         }
 
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING_FUNCTION) {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
             return isContainsSubstringFuncOptimizable(index, optFuncExpr);
         }
 

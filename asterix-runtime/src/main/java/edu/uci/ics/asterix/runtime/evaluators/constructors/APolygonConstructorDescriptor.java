@@ -74,6 +74,7 @@ public class APolygonConstructorDescriptor extends AbstractScalarFunctionDynamic
                             byte[] serString = outInput.getByteArray();
                             if (serString[0] == SER_STRING_TYPE_TAG) {
                                 String s = new String(serString, 3, outInput.getLength() - 3, "UTF-8");
+                                s = s.replaceAll("\n\t", " ");
                                 String[] points = s.split(" ");
                                 if (points.length <= 2)
                                     throw new AlgebricksException(errorMessage);

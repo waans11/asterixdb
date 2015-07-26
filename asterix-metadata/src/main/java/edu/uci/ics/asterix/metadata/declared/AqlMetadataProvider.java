@@ -836,12 +836,12 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             } else {
                 // External dataset <- use the btree with buddy btree->
                 // Be Careful of Key Start Index ?
-                int[] buddyBreeFields = new int[] { numSecondaryKeys };
+                int[] buddyBTreeFields = new int[] { numSecondaryKeys };
                 ExternalBTreeWithBuddyDataflowHelperFactory indexDataflowHelperFactory = new ExternalBTreeWithBuddyDataflowHelperFactory(
                         compactionInfo.first, compactionInfo.second, new SecondaryIndexOperationTrackerProvider(
                                 dataset.getDatasetId()), AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
                         LSMBTreeWithBuddyIOOperationCallbackFactory.INSTANCE, getStorageProperties()
-                                .getBloomFilterFalsePositiveRate(), buddyBreeFields,
+                                .getBloomFilterFalsePositiveRate(), buddyBTreeFields,
                         ExternalDatasetsRegistry.INSTANCE.getAndLockDatasetVersion(dataset, this), !temp);
                 btreeSearchOp = new ExternalBTreeSearchOperatorDescriptor(jobSpec, outputRecDesc, rtcProvider,
                         rtcProvider, spPc.first, typeTraits, comparatorFactories, bloomFilterKeyFields, lowKeyFields,
