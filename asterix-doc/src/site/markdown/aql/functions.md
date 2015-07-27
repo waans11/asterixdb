@@ -187,10 +187,10 @@ Asterix provides various classes of functions to support operations on numeric, 
         { "codes": [ 72, 101, 108, 108, 111, 32, 65, 83, 84, 69, 82, 73, 88, 33 ], "string": "Hello ASTERIX!" }
 
 
-### contains ###
+### contains-substring ###
  * Syntax:
 
-        contains(string_expression, substring_to_contain)
+        contains-substring(string_expression, substring_to_contain)
 
  * Checks whether the string `string_expression` contains the string `substring_to_contain`
  * Arguments:
@@ -204,7 +204,7 @@ Asterix provides various classes of functions to support operations on numeric, 
         use dataverse TinySocial;
 
         for $i in dataset('FacebookMessages')
-        where contains($i.message, "phone")
+        where contains-substring($i.message, "phone")
         return {"mid": $i.message-id, "message": $i.message}
 
 
@@ -1723,7 +1723,7 @@ edit-distance-contains(expression1, expression2, threshold)
           "dr2" : duration-from-interval($itv2),
           "dr3" : duration-from-interval($itv3),
           "dr4" : duration-from-interval(null) }
-          
+
 * The expected result is:
 
         { "dr1": day-time-duration("P52D"),
@@ -1915,7 +1915,7 @@ parse-date/parse-time/parse-datetime(date_expression,formatting_expression)
 
 * Creates a `date/time/date-time` value by treating `date_expression` with formatting `formatting_expression`
 * Arguments:
-    * `date_expression`: A `string` value representing the `date/time/datetime`. 
+    * `date_expression`: A `string` value representing the `date/time/datetime`.
     * `formatting_expression` A `string` value providing the formatting for `date_expression`.Characters used to create date expression:
        * `h` hours
        * `m` minutes
@@ -2034,7 +2034,7 @@ print-date/print-time/print-datetime(date_expression,formatting_expression)
 
  * Example:
 
-        { "overlap1": get-overlapping-interval(interval-from-time(time("11:23:39"), time("18:27:19")), interval-from-time(time("12:23:39"), time("23:18:00"))), 
+        { "overlap1": get-overlapping-interval(interval-from-time(time("11:23:39"), time("18:27:19")), interval-from-time(time("12:23:39"), time("23:18:00"))),
           "overlap2": get-overlapping-interval(interval-from-time(time("12:23:39"), time("18:27:19")), interval-from-time(time("07:19:39"), time("09:18:00"))),
           "overlap3": get-overlapping-interval(interval-from-date(date("1980-11-30"), date("1999-09-09")), interval-from-date(date("2013-01-01"), date("2014-01-01"))),
           "overlap4": get-overlapping-interval(interval-from-date(date("1980-11-30"), date("2099-09-09")), interval-from-date(date("2013-01-01"), date("2014-01-01"))),
@@ -2043,11 +2043,11 @@ print-date/print-time/print-datetime(date_expression,formatting_expression)
 
  * The expected result is:
 
-        { "overlap1": interval-time("12:23:39.000Z, 18:27:19.000Z"), 
-          "overlap2": null, 
-          "overlap3": null, 
-          "overlap4": interval-date("2013-01-01, 2014-01-01"), 
-          "overlap5": interval-datetime("1989-03-04T12:23:39.000Z, 2000-10-30T18:27:19.000Z"), 
+        { "overlap1": interval-time("12:23:39.000Z, 18:27:19.000Z"),
+          "overlap2": null,
+          "overlap3": null,
+          "overlap4": interval-date("2013-01-01, 2014-01-01"),
+          "overlap5": interval-datetime("1989-03-04T12:23:39.000Z, 2000-10-30T18:27:19.000Z"),
           "overlap6": null }
 
 
@@ -2214,11 +2214,11 @@ See the [Allen's Relations](allens.html).
         return { "timebins": overlap-bins($itv1, time("00:00:00"), day-time-duration("PT30M")),
           "datebins": overlap-bins($itv2, date("1990-01-01"), year-month-duration("P20Y")),
           "datetimebins": overlap-bins($itv3, datetime("1900-01-01T00:00:00.000"), year-month-duration("P100Y")) }
-          
+
    * The expected result is:
 
-        { "timebins": [ interval-time("17:00:00.000Z, 17:30:00.000Z"), interval-time("17:30:00.000Z, 18:00:00.000Z"), interval-time("18:00:00.000Z, 18:30:00.000Z"), interval-time("18:30:00.000Z, 19:00:00.000Z") ], 
-          "datebins": [ interval-date("1970-01-01, 1990-01-01"), interval-date("1990-01-01, 2010-01-01"), interval-date("2010-01-01, 2030-01-01") ], 
+        { "timebins": [ interval-time("17:00:00.000Z, 17:30:00.000Z"), interval-time("17:30:00.000Z, 18:00:00.000Z"), interval-time("18:00:00.000Z, 18:30:00.000Z"), interval-time("18:30:00.000Z, 19:00:00.000Z") ],
+          "datebins": [ interval-date("1970-01-01, 1990-01-01"), interval-date("1990-01-01, 2010-01-01"), interval-date("2010-01-01, 2030-01-01") ],
           "datetimebins": [ interval-datetime("1800-01-01T00:00:00.000Z, 1900-01-01T00:00:00.000Z"), interval-datetime("1900-01-01T00:00:00.000Z, 2000-01-01T00:00:00.000Z"), interval-datetime("2000-01-01T00:00:00.000Z, 2100-01-01T00:00:00.000Z") ] }
 
 
@@ -2238,22 +2238,22 @@ See the [Allen's Relations](allens.html).
 
  * Example:
 
-        let $r1 := {"id": 1, 
-            "project": "AsterixDB", 
-            "address": {"city": "Irvine", "state": "CA"}, 
+        let $r1 := {"id": 1,
+            "project": "AsterixDB",
+            "address": {"city": "Irvine", "state": "CA"},
             "related": ["Hivestrix", "Preglix", "Apache VXQuery"] }
         return get-record-fields($r1)
 
  * The expected result is:
 
-        [ { "field-name": "id", "field-type": "INT64", "is-open": false }, 
-          { "field-name": "project", "field-type": "STRING", "is-open": false }, 
-          { "field-name": "address", "field-type": "RECORD", "is-open": false, "nested": [ 
-            { "field-name": "city", "field-type": "STRING", "is-open": false }, 
-            { "field-name": "state", "field-type": "STRING", "is-open": false } ] }, 
-          { "field-name": "related", "field-type": "ORDEREDLIST", "is-open": false, "list": [ 
-            { "field-type": "STRING" }, 
-            { "field-type": "STRING" }, 
+        [ { "field-name": "id", "field-type": "INT64", "is-open": false },
+          { "field-name": "project", "field-type": "STRING", "is-open": false },
+          { "field-name": "address", "field-type": "RECORD", "is-open": false, "nested": [
+            { "field-name": "city", "field-type": "STRING", "is-open": false },
+            { "field-name": "state", "field-type": "STRING", "is-open": false } ] },
+          { "field-name": "related", "field-type": "ORDEREDLIST", "is-open": false, "list": [
+            { "field-type": "STRING" },
+            { "field-type": "STRING" },
             { "field-type": "STRING" } ] } ]
 
  ]
@@ -2271,9 +2271,9 @@ See the [Allen's Relations](allens.html).
 
  * Example:
 
-        let $r1 := {"id": 1, 
-            "project": "AsterixDB", 
-            "address": {"city": "Irvine", "state": "CA"}, 
+        let $r1 := {"id": 1,
+            "project": "AsterixDB",
+            "address": {"city": "Irvine", "state": "CA"},
             "related": ["Hivestrix", "Preglix", "Apache VXQuery"] }
         return get-record-field-value($r1, "project")
 
@@ -2398,8 +2398,8 @@ See the [Allen's Relations](allens.html).
  * The expected result is:
 
         [ 0
-        , 1 
-        , 2 
+        , 1
+        , 2
         , 3
         ]
 
