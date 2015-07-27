@@ -265,7 +265,7 @@ public class TestsUtils {
 
         String theHandle = IOUtils.toString(resultStream, "UTF-8");
 
-        //take the handle and parse it so results can be retrieved
+        //take the handle and parse it so results can be retrieved 
         InputStream handleResult = getHandleResult(theHandle, fmt);
         return handleResult;
     }
@@ -384,18 +384,13 @@ public class TestsUtils {
 
         List<CompilationUnit> cUnits = testCaseCtx.getTestCase().getCompilationUnit();
         for (CompilationUnit cUnit : cUnits) {
-
-            // Uncomment the following two lines to test only desired test case
-            if (!cUnit.getName().startsWith("load-with-fulltext-index"))
-              continue;
-
-        	LOGGER.info("Starting [TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName() + " ... ");
+            LOGGER.info("Starting [TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName() + " ... ");
             testFileCtxs = testCaseCtx.getTestFiles(cUnit);
             expectedResultFileCtxs = testCaseCtx.getExpectedResultFiles(cUnit);
             for (TestFileContext ctx : testFileCtxs) {
                 testFile = ctx.getFile();
                 statement = TestsUtils.readTestFile(testFile);
-                System.out.println("[TEST] File Seq:" + ctx.getSeqNum());
+                boolean failed = false;
                 try {
                     switch (ctx.getType()) {
                         case "ddl":
@@ -474,7 +469,14 @@ public class TestsUtils {
                                 TestsUtils.executeUpdate(statement);
                             } catch (Exception e) {
                                 //An exception is expected.
+                                failed = true;
+                                e.printStackTrace();
                             }
+                            if (!failed) {
+                                throw new Exception("Test \"" + testFile + "\" FAILED!\n  An exception"
+                                        + "is expected.");
+                            }
+                            System.err.println("...but that was expected.");
                             break;
                         case "script":
                             try {
@@ -495,10 +497,16 @@ public class TestsUtils {
                         case "errddl": // a ddlquery that expects error
                             try {
                                 TestsUtils.executeDDL(statement);
-
                             } catch (Exception e) {
                                 // expected error happens
+                                failed = true;
+                                e.printStackTrace();
                             }
+                            if (!failed) {
+                                throw new Exception("Test \"" + testFile + "\" FAILED!\n  An exception"
+                                        + "is expected.");
+                            }
+                            System.err.println("...but that was expected.");
                             break;
                         default:
                             throw new IllegalArgumentException("No statements of type " + ctx.getType());
@@ -511,9 +519,9 @@ public class TestsUtils {
                         System.err.println("...Unexpected!");
                         throw new Exception("Test \"" + testFile + "\" FAILED!", e);
                     } else {
-                        System.err.println("...but that was expected.");
                         LOGGER.info("[TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName()
                                 + " failed as expected: " + e.getMessage());
+                        System.err.println("...but that was expected.");
                     }
                 }
             }
