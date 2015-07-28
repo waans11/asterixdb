@@ -537,6 +537,42 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         }
     }
 
+    /**
+     * Find the field name of each variable in the sub-tree.
+     */
+    protected void fillFieldNamesInTheSubTree(OptimizableOperatorSubTree subTree) throws AlgebricksException {
+        for (int assignOrUnnestIndex = 0; assignOrUnnestIndex < subTree.assignsAndUnnests.size(); assignOrUnnestIndex++) {
+            AbstractLogicalOperator op = subTree.assignsAndUnnests.get(assignOrUnnestIndex);
+            if (op.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
+                AssignOperator assignOp = (AssignOperator) op;
+                List<LogicalVariable> varList = assignOp.getVariables();
+                for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
+                    LogicalVariable var = varList.get(varIndex);
+                    // funcVarIndex is not required. Thus, we set it to -1.
+                    // optFuncExpr and parentFuncExpr are not required, too. Thus, we set them to null.
+                    List<String> fieldName = getFieldNameFromSubTree(null, subTree, assignOrUnnestIndex, varIndex,
+                            subTree.recordType, -1, null);
+                    if (fieldName != null) {
+                        subTree.fieldNames.put(var, fieldName);
+                    }
+                }
+            } else {
+                UnnestOperator unnestOp = (UnnestOperator) op;
+                LogicalVariable var = unnestOp.getVariable();
+                List<String> fieldName = null;
+                if (subTree.dataSourceType != DataSourceType.COLLECTION_SCAN) {
+                    // funcVarIndex is not required. Thus, we set it to -1.
+                    // optFuncExpr and parentFuncExpr are not required, too. Thus, we set them to null.
+                    fieldName = getFieldNameFromSubTree(null, subTree, assignOrUnnestIndex, 0, subTree.recordType, -1,
+                            null);
+                    if (fieldName != null) {
+                        subTree.fieldNames.put(var, fieldName);
+                    }
+                }
+            }
+        }
+    }
+
     private void setTypeTag(IOptimizationContext context, OptimizableOperatorSubTree subTree,
             IOptimizableFuncExpr optFuncExpr, int funcVarIndex) throws AlgebricksException {
         // Set the typeTag if the type is not null
@@ -619,7 +655,9 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             isByName = true;
         }
         if (isFieldAccess) {
-            optFuncExpr.setLogicalExpr(funcVarIndex, parentFuncExpr);
+            if (optFuncExpr != null) {
+                optFuncExpr.setLogicalExpr(funcVarIndex, parentFuncExpr);
+            }
             int[] assignAndExpressionIndexes = null;
 
             //go forward through nested assigns until you find the relevant one
@@ -672,7 +710,9 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                         throw new AlgebricksException(e);
                     }
                 }
-                optFuncExpr.setSourceVar(funcVarIndex, ((AssignOperator) op).getVariables().get(assignVarIndex));
+                if (optFuncExpr != null) {
+                    optFuncExpr.setSourceVar(funcVarIndex, ((AssignOperator) op).getVariables().get(assignVarIndex));
+                }
                 //add fieldName to the nested fieldName, return
                 if (nestedAccessFieldName != null) {
                     for (int i = 0; i < nestedAccessFieldName.size(); i++) {
@@ -684,7 +724,9 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                 return (parentFieldNames);
             }
 
-            optFuncExpr.setSourceVar(funcVarIndex, ((AssignOperator) op).getVariables().get(assignVarIndex));
+            if (optFuncExpr != null) {
+                optFuncExpr.setSourceVar(funcVarIndex, ((AssignOperator) op).getVariables().get(assignVarIndex));
+            }
             //no nested assign, we are at the lowest level.
             if (isByName) {
                 if (nestedAccessFieldName != null) {
@@ -709,8 +751,10 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             return null;
         }
         // We use a part of the field in edit distance computation
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
-            optFuncExpr.setPartialField(true);
+        if (optFuncExpr != null) {
+            if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+                optFuncExpr.setPartialField(true);
+            }
         }
         // We expect the function's argument to be a variable, otherwise we
         // cannot apply an index.
@@ -729,7 +773,9 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                 for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
                     LogicalVariable var = varList.get(varIndex);
                     if (var.equals(curVar)) {
-                        optFuncExpr.setSourceVar(funcVarIndex, var);
+                        if (optFuncExpr != null) {
+                            optFuncExpr.setSourceVar(funcVarIndex, var);
+                        }
                         return getFieldNameFromSubTree(optFuncExpr, subTree, assignOrUnnestIndex, varIndex, recordType,
                                 funcVarIndex, childFuncExpr);
                     }

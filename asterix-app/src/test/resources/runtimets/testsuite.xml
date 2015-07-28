@@ -2641,6 +2641,21 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
+            <compilation-unit name="btree-secondary-composite-index-indexonly-plan-01">
+                <output-dir compare="Text">btree-secondary-composite-index-indexonly-plan-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="btree-secondary-composite-index-indexonly-plan-02">
+                <output-dir compare="Text">btree-secondary-composite-index-indexonly-plan-02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="btree-secondary-composite-index-indexonly-plan-03">
+                <output-dir compare="Text">btree-secondary-composite-index-indexonly-plan-03</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
             <compilation-unit name="rtree-secondary-index-indexonly-plan-01">
                 <output-dir compare="Text">rtree-secondary-index-indexonly-plan-01</output-dir>
             </compilation-unit>
