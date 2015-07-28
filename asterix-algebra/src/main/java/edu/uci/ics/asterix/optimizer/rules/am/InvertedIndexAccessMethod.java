@@ -433,7 +433,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         ILogicalOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(afterTopOpRefs, topOpRef,
                 assignBeforeSelectOpRef, dataSourceScan, dataset, recordType, secondaryIndexUnnestOp, context, true,
                 retainInput, retainNull, false, chosenIndex, analysisCtx, outputPrimaryKeysOnlyFromSIdxSearch, false,
-                secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp);
+                secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree);
 
         return primaryIndexUnnestOp;
     }

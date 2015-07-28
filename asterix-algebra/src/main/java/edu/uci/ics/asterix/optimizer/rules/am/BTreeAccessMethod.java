@@ -592,7 +592,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                     aboveTopOpRefs, opRef, assignBeforeTheOpRef, dataSourceOp, dataset, recordType,
                     secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex, analysisCtx,
                     outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
-                    secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp);
+                    secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree);
 
             // Replace the datasource scan with the new plan rooted at
             // Get dataSourceRef operator - unnest-map (PK, record)

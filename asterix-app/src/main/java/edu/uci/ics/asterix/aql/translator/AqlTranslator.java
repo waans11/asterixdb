@@ -188,7 +188,7 @@ import edu.uci.ics.hyracks.api.dataset.ResultSetId;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.api.job.JobId;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
-import edu.uci.ics.hyracks.api.util.ExperimentProfiler;
+import edu.uci.ics.hyracks.api.util.ExecutionTimeProfiler;
 import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
 import edu.uci.ics.hyracks.api.util.StopWatch;
 import edu.uci.ics.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
@@ -229,7 +229,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
         this.sessionConfig = conf;
         declaredFunctions = getDeclaredFunctions(aqlStatements);
         // For Experiment Profiler
-        if (ExperimentProfiler.PROFILE_MODE) {
+        if (ExecutionTimeProfiler.PROFILE_MODE) {
             profilerSW = new StopWatch();
         }
     }
