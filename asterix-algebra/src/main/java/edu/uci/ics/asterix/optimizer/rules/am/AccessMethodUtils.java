@@ -542,6 +542,7 @@ public class AccessMethodUtils {
         boolean verificationAfterSIdxSearchRequired = true;
 
         // logical variables that select operator is using
+        List<LogicalVariable> usedVarsInSelectTemp = new ArrayList<LogicalVariable>();
         List<LogicalVariable> usedVarsInSelect = new ArrayList<LogicalVariable>();
 
         // live variables that select operator can access
@@ -553,7 +554,17 @@ public class AccessMethodUtils {
         List<LogicalVariable> dataScanRecordVars = new ArrayList<LogicalVariable>();
 
         // From now on, check whether the given plan is an index-only plan
-        VariableUtilities.getUsedVariables((ILogicalOperator) selectRef.getValue(), usedVarsInSelect);
+        VariableUtilities.getUsedVariables((ILogicalOperator) selectRef.getValue(), usedVarsInSelectTemp);
+
+        // Remove the duplicated variables used in the SELECT operator
+        for (int i = 0; i < usedVarsInSelectTemp.size(); i++) {
+            if (!usedVarsInSelect.contains(usedVarsInSelectTemp.get(i))) {
+                usedVarsInSelect.add(usedVarsInSelectTemp.get(i));
+            }
+        }
+        usedVarsInSelectTemp.clear();
+
+        // Get the live variables in the SELECT operator
         VariableUtilities.getLiveVariables((ILogicalOperator) selectRef.getValue(), liveVarsInSelect);
 
         // Get PK, record variables
@@ -710,6 +721,11 @@ public class AccessMethodUtils {
                                 if (chosenIndexFieldNames.contains(subTree.fieldNames.get(usedVarAfterSelect))) {
                                     isIndexOnlyPlanPossible = true;
                                     secondaryKeyFieldUsedAfterSelectOp = true;
+                                } else {
+                                    // Non-PK or non-secondary key field is used after SELECT operator.
+                                    // This is not an index-only plan.
+                                    isIndexOnlyPlanPossible = false;
+                                    break;
                                 }
                             } else if (dataScanRecordVars.contains(usedVarAfterSelect)) {
                                 // The only case that we allow when a record variable is used is when
