@@ -1,0 +1,5 @@
+use dataverse test;
+
+for $o in dataset('MyData')
+where $o.docid < 3 and $o.val1 >= 3
+return {"pk":$o.id, "sk":$o.docid, "sk2":$o.val1}
