@@ -15,6 +15,7 @@
 package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
@@ -65,6 +66,8 @@ public class OptimizableOperatorSubTree {
     // Dataset and type metadata. Set in setDatasetAndTypeMetadata().
     public Dataset dataset = null;
     public ARecordType recordType = null;
+    // Contains the field names for all assign operations in this sub-tree
+    public HashMap<LogicalVariable, List<String>> fieldNames = new HashMap<LogicalVariable, List<String>>();
 
     /**
      * Initialize assign, unnest and datasource information
@@ -208,6 +211,7 @@ public class OptimizableOperatorSubTree {
         dataSourceType = DataSourceType.NO_DATASOURCE;
         dataset = null;
         recordType = null;
+        fieldNames.clear();
     }
 
     public void getPrimaryKeyVars(List<LogicalVariable> target) throws AlgebricksException {

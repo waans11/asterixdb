@@ -31,7 +31,7 @@ import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
-import edu.uci.ics.hyracks.api.util.ExperimentProfiler;
+import edu.uci.ics.hyracks.api.util.ExecutionTimeProfiler;
 import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
 
 public class AsterixJavaClient {

@@ -122,6 +122,10 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
 
         // Apply plan transformation using chosen index.
         AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
+
+        // Find the field name of each variable in the sub-tree - required for checking index-only plan.
+        fillFieldNamesInTheSubTree(subTree);
+
         boolean res = chosenIndex.first.applySelectPlanTransformation(afterSelectRefs, selectRef, subTree,
                 chosenIndex.second, analysisCtx, context);
 

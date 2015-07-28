@@ -704,6 +704,13 @@ public class AccessMethodUtils {
                                     secondaryKeyFieldUsedAfterSelectOp = true;
                                     break;
                                 }
+                            } else if (subTree.fieldNames.containsKey(usedVarAfterSelect)) {
+                                // If ASSIGNs or UNNESTs before SELECT operator contains the given variable and
+                                // the given variable is a secondary key field (this happens when we have a composite secondary index)
+                                if (chosenIndexFieldNames.contains(subTree.fieldNames.get(usedVarAfterSelect))) {
+                                    isIndexOnlyPlanPossible = true;
+                                    secondaryKeyFieldUsedAfterSelectOp = true;
+                                }
                             } else if (dataScanRecordVars.contains(usedVarAfterSelect)) {
                                 // The only case that we allow when a record variable is used is when
                                 // it is used with count either directly or indirectly via record-constructor
@@ -831,8 +838,8 @@ public class AccessMethodUtils {
             IOptimizationContext context, boolean sortPrimaryKeys, boolean retainInput, boolean retainNull,
             boolean requiresBroadcast, Index secondaryIndex, AccessMethodAnalysisContext analysisCtx,
             boolean outputPrimaryKeysOnlyFromSIdxSearch, boolean verificationAfterSIdxSearchRequired,
-            boolean secondaryKeyFieldUsedInSelectCondition, boolean secondaryKeyFieldUsedAfterSelectOp)
-            throws AlgebricksException {
+            boolean secondaryKeyFieldUsedInSelectCondition, boolean secondaryKeyFieldUsedAfterSelectOp,
+            OptimizableOperatorSubTree subTree) throws AlgebricksException {
 
         // If the chosen secondary index cannot generate false positive results,
         // and this is an index-only plan (using PK and/or secondary field after SELECT operator),
@@ -862,6 +869,8 @@ public class AccessMethodUtils {
         // Fetch SK variable from secondary-index search
         List<LogicalVariable> secondaryKeyVars = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(dataset,
                 recordType, inputOp, secondaryIndex, 1, outputPrimaryKeysOnlyFromSIdxSearch);
+
+        List<List<String>> chosenIndexFieldNames = secondaryIndex.getKeyFieldNames();
 
         // If the secondary key field is used after SELECT operator, then we need to keep secondary keys.
         // However, in case of R tree, the result of R-tree index search is an MBR.
@@ -926,6 +935,8 @@ public class AccessMethodUtils {
         List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(dataset, recordType,
                 inputOp, secondaryIndex, 0, outputPrimaryKeysOnlyFromSIdxSearch);
 
+        List<List<String>> PKfieldNames = DatasetUtils.getPartitioningKeys(dataset);
+
         // Variables and types coming out of the primary-index search.
         List<LogicalVariable> primaryIndexUnnestVars = new ArrayList<LogicalVariable>();
         List<Object> primaryIndexOutputTypes = new ArrayList<Object>();
@@ -940,11 +951,18 @@ public class AccessMethodUtils {
         // If this plan is an index-only plan, add a SPLIT operator to propagate <SK, PK> pair from
         // the secondary-index search to the two paths
         List<LogicalVariable> varsUsedInTopOp = null;
+        List<LogicalVariable> varsUsedInAssignUnnestBeforeTopOp = null;
         if (isIndexOnlyPlanEnabled) {
             // If there is an assign operator before SELECT operator, we need to propagate
             // this variable to the UNION operator too.
+
+            // variables used in ASSIGN before SELECT operator
+            varsUsedInAssignUnnestBeforeTopOp = new ArrayList<LogicalVariable>();
+
             if (assignBeforeTopOpRef != null) {
                 assignBeforeTopOp = (AssignOperator) assignBeforeTopOpRef.getValue();
+                VariableUtilities.getProducedVariables((ILogicalOperator) assignBeforeTopOp,
+                        varsUsedInAssignUnnestBeforeTopOp);
             }
 
             // variable map that will be used as input to UNION operator: <left, right, output>
@@ -973,7 +991,6 @@ public class AccessMethodUtils {
             }
 
             // Is the used variables after SELECT operator from the primary index?
-            int pIndexPKIdx = 0;
             boolean varAlreadyAdded = false;
             for (Iterator<LogicalVariable> iterator = varsUsedAfterTopOp.iterator(); iterator.hasNext();) {
                 LogicalVariable tVar = iterator.next();
@@ -988,9 +1005,9 @@ public class AccessMethodUtils {
                     }
                 }
                 if (primaryIndexUnnestVars.contains(tVar) && !varAlreadyAdded) {
+                    int pIndexPKIdx = primaryIndexUnnestVars.indexOf(tVar);
                     unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar, primaryKeyVars
                             .get(pIndexPKIdx), tVar));
-                    pIndexPKIdx++;
                     iterator.remove();
                     varsUsedInTopOp.remove(tVar);
                 }
@@ -1001,7 +1018,6 @@ public class AccessMethodUtils {
             // the secondary key field is used after SELECT operator
 
             // Is the used variables after SELECT operator from the given secondary index?
-            int sIndexIdx = 0;
             varAlreadyAdded = false;
             for (Iterator<LogicalVariable> iterator = varsUsedAfterTopOp.iterator(); iterator.hasNext();) {
                 LogicalVariable tVar = iterator.next();
@@ -1016,6 +1032,8 @@ public class AccessMethodUtils {
                 }
                 if (varsUsedInTopOp.contains(tVar)) {
                     if (idxType != IndexType.RTREE) {
+                        int sIndexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames.get(tVar));
+
                         unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar,
                                 secondaryKeyVars.get(sIndexIdx), tVar));
                     } else {
@@ -1024,13 +1042,18 @@ public class AccessMethodUtils {
                         }
                         // if the given index is R-Tree, we need to use the re-constructed secondary key from
                         // the r-tree search
+                        int sIndexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames.get(tVar));
+
                         unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar,
                                 restoredSecondaryKeyFieldVars.get(sIndexIdx), tVar));
                         fetchedSecondaryKeyFieldVarsFromPIdxLookUp.add(tVar);
                     }
-                    sIndexIdx++;
                     iterator.remove();
                     varsUsedInTopOp.remove(tVar);
+                } else if (varsUsedInAssignUnnestBeforeTopOp.contains(tVar)) {
+                    int sIndexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames.get(tVar));
+                    unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar,
+                            secondaryKeyVars.get(sIndexIdx), tVar));
                 }
             }
 

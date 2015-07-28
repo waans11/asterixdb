@@ -339,7 +339,7 @@ public class RTreeAccessMethod implements IAccessMethod {
                     .createPrimaryIndexUnnestMap(afterTopRefs, topRef, assignBeforeTopRef, dataSourceOp, dataset,
                             recordType, secondaryIndexUnnestOp, context, true, retainInput, false, false, chosenIndex,
                             analysisCtx, outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
-                            secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp);
+                            secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree);
 
             if (isIndexOnlyPlanEnabled) {
                 // Right now, the order of opertors is: union -> select -> assign -> unnest-map
