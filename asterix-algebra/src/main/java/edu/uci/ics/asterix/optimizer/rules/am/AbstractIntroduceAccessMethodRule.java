@@ -538,7 +538,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     }
 
     /**
-     * Find the field name of each variable in the sub-tree.
+     * Find the field name of each variable in the ASSIGN or UNNEST operators of the sub-tree.
      */
     protected void fillFieldNamesInTheSubTree(OptimizableOperatorSubTree subTree) throws AlgebricksException {
         for (int assignOrUnnestIndex = 0; assignOrUnnestIndex < subTree.assignsAndUnnests.size(); assignOrUnnestIndex++) {
