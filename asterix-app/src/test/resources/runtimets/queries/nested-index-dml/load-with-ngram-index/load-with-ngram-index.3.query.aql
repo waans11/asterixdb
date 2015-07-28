@@ -2,7 +2,7 @@
 use dataverse TinySocial;
 
 for $c in dataset('TweetMessages')
-where contains($c.user.name, "Nathan")
+where contains-substring($c.user.name, "Nathan")
 order by $c.tweetid
 return $c
 

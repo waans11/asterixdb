@@ -190,7 +190,7 @@ import edu.uci.ics.hyracks.api.job.JobId;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.api.util.ExecutionTimeProfiler;
 import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
-import edu.uci.ics.hyracks.api.util.StopWatch;
+import edu.uci.ics.hyracks.api.util.ExecutionTimeStopWatch;
 import edu.uci.ics.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
@@ -222,7 +222,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
     private final List<FunctionDecl> declaredFunctions;
 
     // For Experiment Profiler
-    private StopWatch profilerSW;
+    private ExecutionTimeStopWatch profilerSW;
 
     public AqlTranslator(List<Statement> aqlStatements, SessionConfig conf) throws MetadataException, AsterixException {
         this.aqlStatements = aqlStatements;
@@ -230,7 +230,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
         declaredFunctions = getDeclaredFunctions(aqlStatements);
         // For Experiment Profiler
         if (ExecutionTimeProfiler.PROFILE_MODE) {
-            profilerSW = new StopWatch();
+            profilerSW = new ExecutionTimeStopWatch();
         }
     }
 

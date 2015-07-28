@@ -710,6 +710,11 @@ public class AccessMethodUtils {
                                 if (chosenIndexFieldNames.contains(subTree.fieldNames.get(usedVarAfterSelect))) {
                                     isIndexOnlyPlanPossible = true;
                                     secondaryKeyFieldUsedAfterSelectOp = true;
+                                } else {
+                                    // Non-PK or non-secondary key field is used after SELECT operator.
+                                    // This is not an index-only plan.
+                                    isIndexOnlyPlanPossible = false;
+                                    break;
                                 }
                             } else if (dataScanRecordVars.contains(usedVarAfterSelect)) {
                                 // The only case that we allow when a record variable is used is when

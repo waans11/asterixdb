@@ -61,12 +61,18 @@ public class PrimaryIndexRecordSearchOperationCallback extends AbstractOperation
     @Override
     // We need to decide whether this method should reverse the effect of proceed() or reconcile()
     // or just keep this as no-op
-    public void cancel(ITupleReference tuple) throws HyracksDataException {
-    	//no op - lock will be released in CommitOp
+    public void cancelReconcile(ITupleReference tuple) throws HyracksDataException {
+        //no op - lock will be released in CommitOp
+    }
+
+    @Override
+    public void cancelProceed(ITupleReference tuple) throws HyracksDataException {
+        //no op - lock will be released in CommitOp
     }
 
     @Override
     public void complete(ITupleReference tuple) throws HyracksDataException {
-    	//no op - lock will be released in CommitOp
+        //no op - lock will be released in CommitOp
     }
+
 }
