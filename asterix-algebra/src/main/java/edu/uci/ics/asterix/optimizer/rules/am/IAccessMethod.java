@@ -20,6 +20,7 @@ import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
@@ -38,7 +39,7 @@ public interface IAccessMethod {
      * @return A list of function identifiers that are optimizable by this
      *         access method.
      */
-    public List<FunctionIdentifier> getOptimizableFunctions();
+    public List<Pair<FunctionIdentifier, Boolean>> getOptimizableFunctions();
 
     /**
      * Analyzes the arguments of a given optimizable funcExpr to see if this
@@ -74,9 +75,8 @@ public interface IAccessMethod {
      * Applies the plan transformation to use chosenIndex to optimize a selection query.
      */
     public boolean applySelectPlanTransformation(List<Mutable<ILogicalOperator>> aboveSelectRefs,
-    		Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
-            Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
-            IOptimizationContext context) throws AlgebricksException;
+            Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree, Index chosenIndex,
+            AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException;
 
     /**
      * Applies the plan transformation to use chosenIndex to optimize a join query.

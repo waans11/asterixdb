@@ -1,0 +1,19 @@
+use dataverse test;
+
+/*
+for $fbu in dataset FacebookUsers
+where
+      (some $e in $fbu.employment
+      satisfies is-null($e.end_date)) and
+      $fbu.user_since >=
+ datetime('2007-01-04T01:57:15') and
+      $fbu.user_since <
+ datetime('2007-01-04T02:02:15') return {
+"uname": $fbu.name,
+"emp": $fbu.employment
+}
+*/
+
+for $msg in dataset FacebookMessages
+where $msg.author_id < 1000
+return $msg.message_id;

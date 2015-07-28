@@ -41,7 +41,12 @@ public class SecondaryIndexSearchOperationCallback extends AbstractOperationCall
     }
 
     @Override
-    public void cancel(ITupleReference tuple) throws HyracksDataException {
+    public void cancelReconcile(ITupleReference tuple) throws HyracksDataException {
+        // Do nothing.
+    }
+
+    @Override
+    public void cancelProceed(ITupleReference tuple) throws HyracksDataException {
         // Do nothing.
     }
 

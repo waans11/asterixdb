@@ -75,19 +75,23 @@ public class BTreeAccessMethod implements IAccessMethod {
     }
 
     // TODO: There is some redundancy here, since these are listed in AlgebricksBuiltinFunctions as well.
-    private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
+    //
+    // Second boolean value means that this function can produce false positive results.
+    // That is, an index-search alone cannot replace SELECT condition and
+    // SELECT condition needs to be applied after the index-search to get the correct results.
+    private static List<Pair<FunctionIdentifier, Boolean>> funcIdents = new ArrayList<Pair<FunctionIdentifier, Boolean>>();
     static {
-        funcIdents.add(AlgebricksBuiltinFunctions.EQ);
-        funcIdents.add(AlgebricksBuiltinFunctions.LE);
-        funcIdents.add(AlgebricksBuiltinFunctions.GE);
-        funcIdents.add(AlgebricksBuiltinFunctions.LT);
-        funcIdents.add(AlgebricksBuiltinFunctions.GT);
+        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AlgebricksBuiltinFunctions.EQ, true));
+        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AlgebricksBuiltinFunctions.LE, true));
+        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AlgebricksBuiltinFunctions.GE, true));
+        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AlgebricksBuiltinFunctions.LT, true));
+        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AlgebricksBuiltinFunctions.GT, true));
     }
 
     public static BTreeAccessMethod INSTANCE = new BTreeAccessMethod();
 
     @Override
-    public List<FunctionIdentifier> getOptimizableFunctions() {
+    public List<Pair<FunctionIdentifier, Boolean>> getOptimizableFunctions() {
         return funcIdents;
     }
 
@@ -117,6 +121,8 @@ public class BTreeAccessMethod implements IAccessMethod {
             AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
         SelectOperator select = (SelectOperator) selectRef.getValue();
         Mutable<ILogicalExpression> conditionRef = select.getCondition();
+        AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) conditionRef.getValue();
+        FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();
 
         // Check whether assign (unnest) operator exists before the select operator
         Mutable<ILogicalOperator> assignBeforeSelectOpRef = (subTree.assignsAndUnnestsRefs.isEmpty()) ? null
@@ -138,13 +144,37 @@ public class BTreeAccessMethod implements IAccessMethod {
         // For R-Tree only: whether a verification is required after the secondary index search
         boolean verificationAfterSIdxSearchRequired = true;
 
+        // Can the chosen method generate any false positive results?
+        // Currently, for the B+ Tree index, there cannot be any false positive results.
+        boolean noFalsePositiveResultsFromSIdxSearch = true;
+        for (Mutable<ILogicalExpression> arg : funcExpr.getArguments()) {
+            ILogicalExpression argExpr = arg.getValue();
+            if (argExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                continue;
+            }
+            AbstractFunctionCallExpression argFuncExpr = (AbstractFunctionCallExpression) argExpr;
+            FunctionIdentifier argFuncIdent = argFuncExpr.getFunctionIdentifier();
+            for (int i = 0; i < funcIdents.size(); i++) {
+                if (argFuncIdent == funcIdents.get(i).first) {
+                    noFalsePositiveResultsFromSIdxSearch = funcIdents.get(i).second;
+                    if (!noFalsePositiveResultsFromSIdxSearch) {
+                        break;
+                    }
+                }
+            }
+            if (!noFalsePositiveResultsFromSIdxSearch) {
+                break;
+            }
+        }
+
         Quadruple<Boolean, Boolean, Boolean, Boolean> indexOnlyPlanCheck = new Quadruple<Boolean, Boolean, Boolean, Boolean>(
                 isIndexOnlyPlanPossible, secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
                 verificationAfterSIdxSearchRequired);
 
         Dataset dataset = subTree.dataset;
 
-        if (dataset.getDatasetType() == DatasetType.INTERNAL) {
+        // If there can be any false positive results, an index-only plan is not possible
+        if (dataset.getDatasetType() == DatasetType.INTERNAL && noFalsePositiveResultsFromSIdxSearch) {
             indexOnlyPlanCheck = AccessMethodUtils.isIndexOnlyPlan(aboveSelectRefs, selectRef, subTree, chosenIndex,
                     analysisCtx, context);
 
@@ -171,7 +201,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(aboveSelectRefs, selectRef, conditionRef,
                 assignBeforeSelectOpRef, subTree, null, chosenIndex, analysisCtx, false, false, false, context,
                 verificationAfterSIdxSearchRequired, secondaryKeyFieldUsedInSelectCondition,
-                secondaryKeyFieldUsedAfterSelectOp);
+                secondaryKeyFieldUsedAfterSelectOp, noFalsePositiveResultsFromSIdxSearch);
         if (primaryIndexUnnestOp == null) {
             return false;
         }
@@ -189,9 +219,22 @@ public class BTreeAccessMethod implements IAccessMethod {
                     dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
                     dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
                     subTree.dataSourceRef.setValue(dataSourceRefOp);
-                    // Replace the current path
+                    // Replace the current operator with the newly created operator
+                    selectRef.setValue(primaryIndexUnnestOp);
+                } else if (noFalsePositiveResultsFromSIdxSearch) {
+                    // If there are no false positives, still there can be
+                    // Right now, the order of operators is: union <- select <- split <- assign <- unnest-map (primary index look-up) <- [A]
+                    //                                       [A] <- stream_project <- stable_sort <- unnest-map (secondary index look-up) <- ...
+                    ILogicalOperator dataSourceRefOp = (ILogicalOperator) primaryIndexUnnestOp.getInputs().get(0)
+                            .getValue(); // select
+                    dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // split
+                    dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
+                    dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
+                    subTree.dataSourceRef.setValue(dataSourceRefOp);
+                    // Replace the current operator with the newly created operator
                     selectRef.setValue(primaryIndexUnnestOp);
                 } else {
+                    // Index-only optimization and reducing the number of SELECT optimization are not possible.
                     // Right now, the order of operators is: select <- assign <- unnest-map (primary index look-up)
                     select.getInputs().clear();
                     subTree.dataSourceRef.setValue(primaryIndexUnnestOp);
@@ -204,6 +247,17 @@ public class BTreeAccessMethod implements IAccessMethod {
                             .getValue(); // select
                     dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
                     subTree.dataSourceRef.setValue(dataSourceRefOp);
+                    selectRef.setValue(primaryIndexUnnestOp);
+                } else if (noFalsePositiveResultsFromSIdxSearch) {
+                    // If there are no false positives, still there can be an optimization - reducing the number of SELECT operations
+                    // Right now, the order of operators is: union <- select <- split <- unnest-map (primary index look-up) <- [A]
+                    //                                       [A] <- stream_project <- stable_sort <- unnest-map (secondary index look-up) <- ...
+                    ILogicalOperator dataSourceRefOp = (ILogicalOperator) primaryIndexUnnestOp.getInputs().get(0)
+                            .getValue(); // select
+                    dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // split
+                    dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
+                    subTree.dataSourceRef.setValue(dataSourceRefOp);
+                    // Replace the current operator with the newly created operator
                     selectRef.setValue(primaryIndexUnnestOp);
                 } else {
                     select.getInputs().clear();
@@ -258,7 +312,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(null, joinRef, conditionRef, null,
                 indexSubTree, probeSubTree, chosenIndex, analysisCtx, true, isLeftOuterJoin, true, context, false,
-                false, false);
+                false, false, false);
         if (primaryIndexUnnestOp == null) {
             return false;
         }
@@ -284,7 +338,16 @@ public class BTreeAccessMethod implements IAccessMethod {
     }
 
     /**
-     * Create a secondary index lookup -> sort -> primary index look up from a select plan
+     * Create a secondary index lookup optimization.
+     * Case A) index-only select plan:
+     * ......... union <- select <- assign? <- unnest-map (primary index look-up) <- split <- unnest-map (secondary index look-up) <- assign? <- datasource-scan
+     * ............... <- ....................................................... <- split
+     * Case B) reducing the number of select plan:
+     * ......... union <- select <- split <- assign? <- unnest-map (primary index look-up) <- stable_sort <- unnest-map (secondary index look-up) <- assign? <- datasource-scan
+     * ............... <- ...... <- split
+     * Case C) only secondary look-up optimization
+     * select <- assign? <- unnest-map (primary index look-up) <- stable_sort <- unnest-map (secondary index look-up) <- assign? <- datasource-scan
+     * <-
      */
     private ILogicalOperator createSecondaryToPrimaryPlan(List<Mutable<ILogicalOperator>> aboveTopOpRefs,
             Mutable<ILogicalOperator> opRef, Mutable<ILogicalExpression> conditionRef,
@@ -292,7 +355,8 @@ public class BTreeAccessMethod implements IAccessMethod {
             OptimizableOperatorSubTree probeSubTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
             boolean retainInput, boolean retainNull, boolean requiresBroadcast, IOptimizationContext context,
             boolean verificationAfterSIdxSearchRequired, boolean secondaryKeyFieldUsedInSelectCondition,
-            boolean secondaryKeyFieldUsedAfterSelectOp) throws AlgebricksException {
+            boolean secondaryKeyFieldUsedAfterSelectOp, boolean noFalsePositiveResultsFromSIdxSearch)
+            throws AlgebricksException {
 
         Dataset dataset = indexSubTree.dataset;
         ARecordType recordType = indexSubTree.recordType;
@@ -548,7 +612,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         BTreeJobGenParams jobGenParams = new BTreeJobGenParams(chosenIndex.getIndexName(), IndexType.BTREE,
                 dataset.getDataverseName(), dataset.getDatasetName(), retainInput, retainNull, requiresBroadcast,
-                isIndexOnlyPlanEnabled);
+                isIndexOnlyPlanEnabled || noFalsePositiveResultsFromSIdxSearch);
         jobGenParams.setLowKeyInclusive(lowKeyInclusive[0]);
         jobGenParams.setHighKeyInclusive(highKeyInclusive[0]);
         jobGenParams.setIsEqCondition(isEqCondition);
@@ -573,7 +637,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         boolean outputPrimaryKeysOnlyFromSIdxSearch = false;
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
                 chosenIndex, inputOp, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput,
-                isIndexOnlyPlanEnabled);
+                isIndexOnlyPlanEnabled, noFalsePositiveResultsFromSIdxSearch);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         UnnestMapOperator primaryIndexUnnestOp = null;
@@ -588,11 +652,22 @@ public class BTreeAccessMethod implements IAccessMethod {
             indexSubTree.dataSourceRef.setValue(externalDataAccessOp);
             return externalDataAccessOp;
         } else if (!isPrimaryIndex) {
-            tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
-                    aboveTopOpRefs, opRef, assignBeforeTheOpRef, dataSourceOp, dataset, recordType,
-                    secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex, analysisCtx,
-                    outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
-                    secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree);
+
+            if (noFalsePositiveResultsFromSIdxSearch && !isIndexOnlyPlanEnabled) {
+                tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
+                        aboveTopOpRefs, opRef, assignBeforeTheOpRef, dataSourceOp, dataset, recordType,
+                        secondaryIndexUnnestOp, context, true, true, retainNull, false, chosenIndex, analysisCtx,
+                        outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
+                        secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
+                        noFalsePositiveResultsFromSIdxSearch);
+            } else {
+                tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
+                        aboveTopOpRefs, opRef, assignBeforeTheOpRef, dataSourceOp, dataset, recordType,
+                        secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex,
+                        analysisCtx, outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
+                        secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
+                        noFalsePositiveResultsFromSIdxSearch);
+            }
 
             // Replace the datasource scan with the new plan rooted at
             // Get dataSourceRef operator - unnest-map (PK, record)
@@ -605,6 +680,13 @@ public class BTreeAccessMethod implements IAccessMethod {
 
                 //                indexSubTree.dataSourceRef.setValue(tmpPrimaryIndexUnnestOp);
                 indexSubTree.dataSourceRef.setValue(dataSourceRefOp);
+            } else if (noFalsePositiveResultsFromSIdxSearch) {
+                // Right now, the order of opertors is: union -> select -> split -> assign -> unnest-map
+                AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) tmpPrimaryIndexUnnestOp.getInputs()
+                        .get(0).getValue(); // select
+                dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // split
+                dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
+                dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
             } else {
                 indexSubTree.dataSourceRef.setValue(tmpPrimaryIndexUnnestOp);
             }

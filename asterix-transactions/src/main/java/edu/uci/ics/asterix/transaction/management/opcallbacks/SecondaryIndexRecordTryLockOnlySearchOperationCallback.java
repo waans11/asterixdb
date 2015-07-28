@@ -27,13 +27,13 @@ import edu.uci.ics.hyracks.storage.am.common.api.ISearchOperationCallback;
 /**
  * Assumes LSM-BTrees as primary indexes. Implements try/locking and unlocking on primary keys.
  * This Callback method tries to get a lock. If it fails, do nothing since its purpose is attempt to get a lock and get the result of it.
- * This operation callback is used on index-only plan
+ * This operation callback is used in an index-only plan
  */
 public class SecondaryIndexRecordTryLockOnlySearchOperationCallback extends AbstractOperationCallback implements
         ISearchOperationCallback {
 
-    public SecondaryIndexRecordTryLockOnlySearchOperationCallback(int datasetId, int[] entityIdFields, ILockManager lockManager,
-            ITransactionContext txnCtx) {
+    public SecondaryIndexRecordTryLockOnlySearchOperationCallback(int datasetId, int[] entityIdFields,
+            ILockManager lockManager, ITransactionContext txnCtx) {
         super(datasetId, entityIdFields, txnCtx, lockManager);
     }
 
@@ -53,7 +53,12 @@ public class SecondaryIndexRecordTryLockOnlySearchOperationCallback extends Abst
     }
 
     @Override
-    public void cancel(ITupleReference tuple) throws HyracksDataException {
+    public void cancelReconcile(ITupleReference tuple) throws HyracksDataException {
+        // no op
+    }
+
+    @Override
+    public void cancelProceed(ITupleReference tuple) throws HyracksDataException {
         // no op
     }
 
@@ -61,4 +66,5 @@ public class SecondaryIndexRecordTryLockOnlySearchOperationCallback extends Abst
     public void complete(ITupleReference tuple) throws HyracksDataException {
         //no op
     }
+
 }

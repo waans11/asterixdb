@@ -1,0 +1,7 @@
+use dataverse test;
+
+let $area:=create-rectangle(point("0.0,0.0"), point("4.0,4.0"))
+for $o in dataset('MyData')
+where spatial-intersect($o.point, $area)
+order by $o.id
+return {"id":$o.id, "point":$o.docid}

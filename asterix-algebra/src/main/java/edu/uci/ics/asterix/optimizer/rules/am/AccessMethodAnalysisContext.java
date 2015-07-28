@@ -52,6 +52,9 @@ public class AccessMethodAnalysisContext {
     // For a secondary index, if we use only PK and secondary key field in a plan, it is an index-only plan.
     private boolean indexOnlySelectPlanEnabled = false;
 
+    // For a secondary index, does the combination of the index and access-method can generate the false positive results?
+    private boolean canProduceFalsePositive = false;
+
     public void addIndexExpr(Dataset dataset, Index index, Integer exprIndex, Integer varIndex) {
         List<Pair<Integer, Integer>> exprs = indexExprsAndVars.get(index);
         if (exprs == null) {
@@ -83,10 +86,19 @@ public class AccessMethodAnalysisContext {
     }
 
     public void setIndexOnlyPlanEnabled(boolean enabled) {
-    	this.indexOnlySelectPlanEnabled = enabled;
+        this.indexOnlySelectPlanEnabled = enabled;
     }
 
     public boolean isIndexOnlyPlanEnabled() {
-    	return this.indexOnlySelectPlanEnabled;
+        return this.indexOnlySelectPlanEnabled;
     }
+
+    public void setCanProduceFalsePositive(boolean canProduceFalsePositive) {
+        this.canProduceFalsePositive = canProduceFalsePositive;
+    }
+
+    public boolean canProduceFalsePositive() {
+        return this.canProduceFalsePositive;
+    }
+
 }

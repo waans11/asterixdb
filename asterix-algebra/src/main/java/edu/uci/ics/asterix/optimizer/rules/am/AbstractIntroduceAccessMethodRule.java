@@ -72,12 +72,12 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
 
     protected static void registerAccessMethod(IAccessMethod accessMethod,
             Map<FunctionIdentifier, List<IAccessMethod>> accessMethods) {
-        List<FunctionIdentifier> funcs = accessMethod.getOptimizableFunctions();
-        for (FunctionIdentifier funcIdent : funcs) {
+        List<Pair<FunctionIdentifier, Boolean>> funcs = accessMethod.getOptimizableFunctions();
+        for (Pair<FunctionIdentifier, Boolean> funcIdent : funcs) {
             List<IAccessMethod> l = accessMethods.get(funcIdent);
             if (l == null) {
                 l = new ArrayList<IAccessMethod>();
-                accessMethods.put(funcIdent, l);
+                accessMethods.put(funcIdent.first, l);
             }
             l.add(accessMethod);
         }
@@ -538,7 +538,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     }
 
     /**
-     * Find the field name of each variable in the sub-tree.
+     * Find the field name of each variable in the ASSIGN or UNNEST operators of the sub-tree.
      */
     protected void fillFieldNamesInTheSubTree(OptimizableOperatorSubTree subTree) throws AlgebricksException {
         for (int assignOrUnnestIndex = 0; assignOrUnnestIndex < subTree.assignsAndUnnests.size(); assignOrUnnestIndex++) {
