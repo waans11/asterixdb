@@ -20,68 +20,67 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.asterix.algebra.operators.physical.ExternalDataLookupPOperator;
+import org.apache.asterix.aql.util.FunctionUtils;
+import org.apache.asterix.common.config.DatasetConfig.DatasetType;
+import org.apache.asterix.common.config.DatasetConfig.IndexType;
+import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.metadata.declared.AqlSourceId;
+import org.apache.asterix.metadata.entities.Dataset;
+import org.apache.asterix.metadata.entities.Index;
+import org.apache.asterix.metadata.external.IndexingConstants;
+import org.apache.asterix.metadata.utils.DatasetUtils;
+import org.apache.asterix.om.base.ABoolean;
+import org.apache.asterix.om.base.AInt32;
+import org.apache.asterix.om.base.AString;
+import org.apache.asterix.om.base.IAObject;
+import org.apache.asterix.om.constants.AsterixConstantValue;
+import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
+import org.apache.asterix.om.types.ARecordType;
+import org.apache.asterix.om.types.ATypeTag;
+import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.om.types.IAType;
+import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
+import org.apache.asterix.om.types.hierachy.ATypeHierarchy.mathFunctionType;
+import org.apache.asterix.om.util.NonTaggedFormatUtil;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
-
-import edu.uci.ics.asterix.algebra.operators.physical.ExternalDataLookupPOperator;
-import edu.uci.ics.asterix.aql.util.FunctionUtils;
-import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
-import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
-import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
-import edu.uci.ics.asterix.metadata.entities.Dataset;
-import edu.uci.ics.asterix.metadata.entities.Index;
-import edu.uci.ics.asterix.metadata.external.IndexingConstants;
-import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
-import edu.uci.ics.asterix.om.base.ABoolean;
-import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.AString;
-import edu.uci.ics.asterix.om.base.IAObject;
-import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
-import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
-import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.ATypeTag;
-import edu.uci.ics.asterix.om.types.BuiltinType;
-import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
-import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy.mathFunctionType;
-import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
-import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.common.utils.Quadruple;
-import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractDataSourceOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
-import edu.uci.ics.hyracks.algebricks.core.algebra.plan.ALogicalPlanImpl;
-import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorManipulationUtil;
-import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.common.utils.Quintuple;
+import org.apache.hyracks.algebricks.common.utils.Triple;
+import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
+import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
+import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
+import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
+import org.apache.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
+import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
+import org.apache.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractDataSourceOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
+import org.apache.hyracks.algebricks.core.algebra.plan.ALogicalPlanImpl;
+import org.apache.hyracks.algebricks.core.algebra.util.OperatorManipulationUtil;
+import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
 /**
  * Static helper functions for rewriting plans using indexes.
@@ -516,8 +515,9 @@ public class AccessMethodUtils {
      * 2. secondaryKeyFieldUsedInSelectCondition?
      * 3. secondaryKeyFieldUsedAfterSelectOp?
      * 4. verificationAfterSIdxSearchRequired?
+     * 5. noFalsePositiveResultsFromSIdxSearch?
      */
-    public static Quadruple<Boolean, Boolean, Boolean, Boolean> isIndexOnlyPlan(
+    public static Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean> isIndexOnlyPlan(
             List<Mutable<ILogicalOperator>> aboveSelectRefs, Mutable<ILogicalOperator> selectRef,
             OptimizableOperatorSubTree subTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
             IOptimizationContext context) throws AlgebricksException {
@@ -540,6 +540,9 @@ public class AccessMethodUtils {
 
         // For R-Tree only: whether a verification is required after the secondary index search
         boolean verificationAfterSIdxSearchRequired = true;
+
+        // Does this secondary index search generate any false positive results?
+        boolean noFalsePositiveResultsFromSIdxSearch = false;
 
         // logical variables that select operator is using
         List<LogicalVariable> usedVarsInSelectTemp = new ArrayList<LogicalVariable>();
@@ -634,6 +637,16 @@ public class AccessMethodUtils {
         // All variables in the SELECT condition should be found.
         if (selectVarFoundCount < usedVarsInSelect.size()) {
             isIndexOnlyPlanPossible = false;
+        }
+
+        if (isIndexOnlyPlanPossible) {
+            noFalsePositiveResultsFromSIdxSearch = true;
+        }
+
+        // For the composite index, we don't support "reducing the number of SELECT operations" optimization since
+        // a secondary index search generates false positive results.
+        if (chosenIndex.getKeyFieldNames().size() > 1 && chosenIndexVars.size() > 1) {
+            noFalsePositiveResultsFromSIdxSearch = false;
         }
 
         // #2. Check whether operators after the SELECT operator only use PK or secondary field variables.
@@ -806,9 +819,9 @@ public class AccessMethodUtils {
             }
         }
 
-        return new Quadruple<Boolean, Boolean, Boolean, Boolean>(isIndexOnlyPlanPossible,
+        return new Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean>(isIndexOnlyPlanPossible,
                 secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
-                verificationAfterSIdxSearchRequired);
+                verificationAfterSIdxSearchRequired, noFalsePositiveResultsFromSIdxSearch);
     }
 
     /**
@@ -850,7 +863,7 @@ public class AccessMethodUtils {
      * Create an unnest-map operator that does a primary index lookup
      */
     public static ILogicalOperator createPrimaryIndexUnnestMap(List<Mutable<ILogicalOperator>> afterTopOpRefs,
-            Mutable<ILogicalOperator> topOpRef, Mutable<ILogicalOperator> assignBeforeTopOpRef,
+            Mutable<ILogicalOperator> topOpRef, List<Mutable<ILogicalOperator>> assignBeforeTopOpRefs,
             AbstractDataSourceOperator dataSourceOp, Dataset dataset, ARecordType recordType, ILogicalOperator inputOp,
             IOptimizationContext context, boolean sortPrimaryKeys, boolean retainInput, boolean retainNull,
             boolean requiresBroadcast, Index secondaryIndex, AccessMethodAnalysisContext analysisCtx,
@@ -859,52 +872,62 @@ public class AccessMethodUtils {
             OptimizableOperatorSubTree subTree, boolean noFalsePositiveResultsFromSIdxSearch)
             throws AlgebricksException {
 
-        // If this is an index-only plan (using PK and/or secondary field after SELECT operator) and/or
+        // If this is an index-only plan (only using PK and/or secondary field(s) after SELECT operator) and/or
         // the combination of the SELECT condition and the chosen secondary index do not generate false positive results,
         // we can apply tryLock() on PK optimization since a result from these indexes
-        // doesn't have to be verified by a primary index-lookup.
-        // Case A) index-only plan
-        // left path: if a tryLock() on PK fails:
-        //             secondary index-search -> conditional split -> primary index-search -> verification (select) -> union ->
-        // right path: secondary index-search -> conditional split -> union -> ...
+        // doesn't have to be verified by a primary index-lookup. (i.e. we can guarantee the correctness of the result.)
         //
-        // Case B) Reducing the number of select plan
-        // left path: if a tryLock() on PK fails:
-        //             secondary index-search -> primary index-search -> split -> verification (select) -> union ->
-        // right path: secondary index-search -> primary index-search -> split -> ...                   -> union ->
-        // The following information is required only when tryLock() on PK optimization is possible.
-        AbstractLogicalOperator afterTopOp = null;
-        SelectOperator topOp = null;
-        AssignOperator assignBeforeTopOp = null;
+        // Case A) index-only plan
+        // left path (a tryLock() on the PK fail path):
+        // right path(a tryLock() on the PK success path):
+        //        (left)    secondary index-search -> split --+--> primary index-search -> select (verification) --+--> UNION -> ...
+        //                                                    |                                                    |
+        //        (right)                                     +-->              assign? -> select?               --+
+        //
+        // Case B) reducing the number of SELECT operations plan
+        // left path (a tryLock() on the PK fail path):
+        // right path(a tryLock() on the PK success path):
+        //        (left)    secondary index-search -> primary index-search -> split --+--> select (verification) --+--> UNION -> ...
+        //                                                                            |                            |
+        //        (right)                                                             +----------------------------+
+
+        // Initialize the information required for tryLock() on PK optimization.
+        SelectOperator selectOp = null;
+        ILogicalOperator lastAssignBeforeTopOp = null;
         UnionAllOperator unionAllOp = null;
         SelectOperator newSelectOp = null;
-        SelectOperator newSelectOp2 = null;
-        AssignOperator newAssignOp = null;
-        AssignOperator newAssignOp2 = null;
+        SelectOperator newSelectOpInRightPath = null;
         SplitOperator splitOp = null;
         List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> unionVarMap = null;
         List<LogicalVariable> conditionalSplitVars = null;
         boolean isIndexOnlyPlanEnabled = analysisCtx.isIndexOnlyPlanEnabled();
         List<LogicalVariable> fetchedSecondaryKeyFieldVarsFromPIdxLookUp = null;
-        List<LogicalVariable> varsUsedInSelect = null;
         List<LogicalVariable> varsLiveInSelect = null;
 
-        IndexType idxType = secondaryIndex.getIndexType();
+        // Fetch SK variable(s) from the secondary-index search operator
+        List<LogicalVariable> secondaryKeyVarsFromSIdxSearch = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(
+                dataset, recordType, inputOp, secondaryIndex, 1, outputPrimaryKeysOnlyFromSIdxSearch);
 
-        // Fetch SK variable from secondary-index search
-        List<LogicalVariable> secondaryKeyVars = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(dataset,
-                recordType, inputOp, secondaryIndex, 1, outputPrimaryKeysOnlyFromSIdxSearch);
+        // Fetch PK variable(s) from the secondary-index search operator
+        List<LogicalVariable> primaryKeyVarsFromSIdxSearch = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(
+                dataset, recordType, inputOp, secondaryIndex, 0, outputPrimaryKeysOnlyFromSIdxSearch);
 
         List<List<String>> chosenIndexFieldNames = secondaryIndex.getKeyFieldNames();
 
-        // If the secondary key field is used after SELECT operator, then we need to keep secondary keys.
-        // However, in case of R tree, the result of R-tree index search is an MBR.
+        List<List<String>> primaryKeyFieldNames = DatasetUtils.getPartitioningKeys(dataset);
+
+        IndexType idxType = secondaryIndex.getIndexType();
+
+        // If the secondary key field is used after SELECT operator (e.g., returning the field), then we need to keep secondary keys.
+        // However, in case of R-tree index, the result of an R-tree index search is an MBR.
         // So, we need to reconstruct original values from the result.
-        AssignOperator assignSecondaryKeyFieldOp = null;
+        AssignOperator assignRestoredSecondaryKeyFieldOp = null;
         List<LogicalVariable> restoredSecondaryKeyFieldVars = null;
         ArrayList<Mutable<ILogicalExpression>> restoredSecondaryKeyFieldExprs = null;
         IAType spatialType = null;
 
+        // R-Tree only:
+        // construct an additional ASSIGN to restore the original secondary key field(s) from the results of the secondary index search
         if (isIndexOnlyPlanEnabled && (secondaryKeyFieldUsedAfterSelectOp || verificationAfterSIdxSearchRequired)
                 && idxType == IndexType.RTREE) {
             IOptimizableFuncExpr optFuncExpr = AccessMethodUtils.chooseFirstOptFuncExpr(secondaryIndex, analysisCtx);
@@ -922,49 +945,44 @@ public class AccessMethodUtils {
             restoredSecondaryKeyFieldVars = new ArrayList<LogicalVariable>();
 
             if (spatialType == BuiltinType.APOINT) {
-                // generate APoint values
-                AbstractFunctionCallExpression createPoint = new ScalarFunctionCallExpression(
+                // Reconstruct a POINT value
+                AbstractFunctionCallExpression createPointExpr = new ScalarFunctionCallExpression(
                         FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_POINT));
                 List<Mutable<ILogicalExpression>> expressions = new ArrayList<Mutable<ILogicalExpression>>();
-                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(secondaryKeyVars
-                        .get(0))));
-                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(secondaryKeyVars
-                        .get(1))));
-                createPoint.getArguments().addAll(expressions);
+                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
+                        secondaryKeyVarsFromSIdxSearch.get(0))));
+                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
+                        secondaryKeyVarsFromSIdxSearch.get(1))));
+                createPointExpr.getArguments().addAll(expressions);
                 restoredSecondaryKeyFieldVars.add(context.newVar());
-                restoredSecondaryKeyFieldExprs.add(new MutableObject<ILogicalExpression>(createPoint));
-                assignSecondaryKeyFieldOp = new AssignOperator(restoredSecondaryKeyFieldVars,
+                restoredSecondaryKeyFieldExprs.add(new MutableObject<ILogicalExpression>(createPointExpr));
+                assignRestoredSecondaryKeyFieldOp = new AssignOperator(restoredSecondaryKeyFieldVars,
                         restoredSecondaryKeyFieldExprs);
             } else if (spatialType == BuiltinType.ARECTANGLE) {
-                // generate ARectangle values
-                AbstractFunctionCallExpression createRectangle = new ScalarFunctionCallExpression(
+                // Reconstruct a RECTANGLE value
+                AbstractFunctionCallExpression createRectangleExpr = new ScalarFunctionCallExpression(
                         FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_RECTANGLE));
                 List<Mutable<ILogicalExpression>> expressions = new ArrayList<Mutable<ILogicalExpression>>();
-                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(secondaryKeyVars
-                        .get(0))));
-                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(secondaryKeyVars
-                        .get(1))));
-                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(secondaryKeyVars
-                        .get(2))));
-                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(secondaryKeyVars
-                        .get(3))));
-                createRectangle.getArguments().addAll(expressions);
+                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
+                        secondaryKeyVarsFromSIdxSearch.get(0))));
+                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
+                        secondaryKeyVarsFromSIdxSearch.get(1))));
+                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
+                        secondaryKeyVarsFromSIdxSearch.get(2))));
+                expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
+                        secondaryKeyVarsFromSIdxSearch.get(3))));
+                createRectangleExpr.getArguments().addAll(expressions);
                 restoredSecondaryKeyFieldVars.add(context.newVar());
-                restoredSecondaryKeyFieldExprs.add(new MutableObject<ILogicalExpression>(createRectangle));
-                assignSecondaryKeyFieldOp = new AssignOperator(restoredSecondaryKeyFieldVars,
+                restoredSecondaryKeyFieldExprs.add(new MutableObject<ILogicalExpression>(createRectangleExpr));
+                assignRestoredSecondaryKeyFieldOp = new AssignOperator(restoredSecondaryKeyFieldVars,
                         restoredSecondaryKeyFieldExprs);
             }
         }
 
-        // Fetch PK variable from secondary-index search
-        List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(dataset, recordType,
-                inputOp, secondaryIndex, 0, outputPrimaryKeysOnlyFromSIdxSearch);
-
-        List<List<String>> PKfieldNames = DatasetUtils.getPartitioningKeys(dataset);
-
         // Variables and types coming out of the primary-index search.
         List<LogicalVariable> primaryIndexUnnestVars = new ArrayList<LogicalVariable>();
         List<Object> primaryIndexOutputTypes = new ArrayList<Object>();
+
         // Append output variables/types generated by the primary-index search (not forwarded from input).
         primaryIndexUnnestVars.addAll(dataSourceOp.getVariables());
         try {
@@ -975,18 +993,42 @@ public class AccessMethodUtils {
 
         // If this plan is an index-only plan, add a SPLIT operator to propagate <SK, PK> pair from
         // the secondary-index search to the two paths
-        List<LogicalVariable> varsUsedInTopOp = null;
+
+        // variables used in SELECT operator
+        List<LogicalVariable> varsUsedInTopOp = new ArrayList<LogicalVariable>();
+        List<LogicalVariable> uniqueVarsUsedInTopOp = new ArrayList<LogicalVariable>();
         List<LogicalVariable> varsUsedInAssignUnnestBeforeTopOp = null;
+
+        // Get used variables from the SELECT operators
+        VariableUtilities.getUsedVariables((ILogicalOperator) topOpRef.getValue(), varsUsedInTopOp);
+
+        for (LogicalVariable v : varsUsedInTopOp) {
+            if (!uniqueVarsUsedInTopOp.contains(v)) {
+                uniqueVarsUsedInTopOp.add(v);
+            }
+        }
+
+        int uniqueVarsUsedInTopOpSize = uniqueVarsUsedInTopOp.size();
 
         // variables used in ASSIGN before SELECT operator
         varsUsedInAssignUnnestBeforeTopOp = new ArrayList<LogicalVariable>();
+        List<LogicalVariable> varsUsedInAssignUnnestBeforeTopOpTmp = new ArrayList<LogicalVariable>();
 
-        // If there is an assign operator before SELECT operator, we need to propagate
-        // this variable to the UNION operator too.
-        if (assignBeforeTopOpRef != null) {
-            assignBeforeTopOp = (AssignOperator) assignBeforeTopOpRef.getValue();
-            VariableUtilities.getProducedVariables((ILogicalOperator) assignBeforeTopOp,
-                    varsUsedInAssignUnnestBeforeTopOp);
+        // If there are assign operators before SELECT operator, we need to propagate
+        // these variables to the UNION operator, too.
+        if (assignBeforeTopOpRefs != null) {
+            for (int i = 0; i < assignBeforeTopOpRefs.size(); i++) {
+                if (assignBeforeTopOpRefs.get(i) != null) {
+                    varsUsedInAssignUnnestBeforeTopOpTmp.clear();
+                    lastAssignBeforeTopOp = assignBeforeTopOpRefs.get(i).getValue();
+                    VariableUtilities.getProducedVariables(lastAssignBeforeTopOp, varsUsedInAssignUnnestBeforeTopOpTmp);
+                    for (int j = 0; j < varsUsedInAssignUnnestBeforeTopOpTmp.size(); j++) {
+                        if (!varsUsedInAssignUnnestBeforeTopOp.contains(varsUsedInAssignUnnestBeforeTopOpTmp.get(j))) {
+                            varsUsedInAssignUnnestBeforeTopOp.add(varsUsedInAssignUnnestBeforeTopOpTmp.get(j));
+                        }
+                    }
+                }
+            }
         }
 
         // variables used after SELECT operator
@@ -994,31 +1036,29 @@ public class AccessMethodUtils {
         List<LogicalVariable> tmpVars = new ArrayList<LogicalVariable>();
 
         // Generate the list of variables that are used after the SELECT operator
-        for (Mutable<ILogicalOperator> afterTopOpRef : afterTopOpRefs) {
-            tmpVars.clear();
-            VariableUtilities.getUsedVariables((ILogicalOperator) afterTopOpRef.getValue(), tmpVars);
-            for (LogicalVariable tmpVar : tmpVars) {
-                if (!varsUsedAfterTopOp.contains(tmpVar)) {
-                    varsUsedAfterTopOp.add(tmpVar);
+        if (afterTopOpRefs != null) {
+            for (Mutable<ILogicalOperator> afterTopOpRef : afterTopOpRefs) {
+                tmpVars.clear();
+                VariableUtilities.getUsedVariables((ILogicalOperator) afterTopOpRef.getValue(), tmpVars);
+                for (LogicalVariable tmpVar : tmpVars) {
+                    if (!varsUsedAfterTopOp.contains(tmpVar)) {
+                        varsUsedAfterTopOp.add(tmpVar);
+                    }
                 }
             }
         }
 
+        // Construct the path from the secondary index search to the SPLIT operator.
         if (isIndexOnlyPlanEnabled) {
             // variable map that will be used as input to UNION operator: <left, right, output>
             // In our case, left: tryLock fail path, right: tryLock success path
             unionVarMap = new ArrayList<Triple<LogicalVariable, LogicalVariable, LogicalVariable>>();
 
-            // variables used in SELECT operator
-            varsUsedInTopOp = new ArrayList<LogicalVariable>();
-
-            // Get used variables from the SELECT operators
-            VariableUtilities.getUsedVariables((ILogicalOperator) topOpRef.getValue(), varsUsedInTopOp);
-
-            // Is the used variables after SELECT operator from the primary index?
+            // Is the used variables after SELECT operator from the primary index? Then, create the mapping between two paths.
             boolean varAlreadyAdded = false;
             for (Iterator<LogicalVariable> iterator = varsUsedAfterTopOp.iterator(); iterator.hasNext();) {
                 LogicalVariable tVar = iterator.next();
+                varAlreadyAdded = false;
 
                 // Check whether this variable is already added to the union variable map
                 for (Iterator<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> it = unionVarMap.iterator(); it
@@ -1031,21 +1071,18 @@ public class AccessMethodUtils {
                 }
                 if (primaryIndexUnnestVars.contains(tVar) && !varAlreadyAdded) {
                     int pIndexPKIdx = primaryIndexUnnestVars.indexOf(tVar);
-                    unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar, primaryKeyVars
-                            .get(pIndexPKIdx), tVar));
+                    unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar,
+                            primaryKeyVarsFromSIdxSearch.get(pIndexPKIdx), tVar));
                     iterator.remove();
                     varsUsedInTopOp.remove(tVar);
                 }
+
             }
 
-            // [R-Tree specific]
-            // we need this variable in case of R-Tree index if we need an additional verification, or
-            // the secondary key field is used after SELECT operator
-
             // Is the used variables after SELECT operator from the given secondary index?
-            varAlreadyAdded = false;
             for (Iterator<LogicalVariable> iterator = varsUsedAfterTopOp.iterator(); iterator.hasNext();) {
                 LogicalVariable tVar = iterator.next();
+                varAlreadyAdded = false;
                 // Check whether this variable is already added to the union variable map
                 for (Iterator<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> it = unionVarMap.iterator(); it
                         .hasNext();) {
@@ -1055,18 +1092,22 @@ public class AccessMethodUtils {
                         break;
                     }
                 }
+
                 if (varsUsedInTopOp.contains(tVar)) {
                     if (idxType != IndexType.RTREE) {
                         int sIndexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames.get(tVar));
 
                         unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar,
-                                secondaryKeyVars.get(sIndexIdx), tVar));
+                                secondaryKeyVarsFromSIdxSearch.get(sIndexIdx), tVar));
                     } else {
+                        // R-Tree only:
+                        // we need this variable in case of R-Tree index if we need an additional verification, or
+                        // the secondary key field is used after SELECT operator
                         if (fetchedSecondaryKeyFieldVarsFromPIdxLookUp == null) {
                             fetchedSecondaryKeyFieldVarsFromPIdxLookUp = new ArrayList<LogicalVariable>();
                         }
                         // if the given index is R-Tree, we need to use the re-constructed secondary key from
-                        // the r-tree search
+                        // the R-Tree search
                         int sIndexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames.get(tVar));
 
                         unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar,
@@ -1078,14 +1119,15 @@ public class AccessMethodUtils {
                 } else if (varsUsedInAssignUnnestBeforeTopOp.contains(tVar)) {
                     int sIndexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames.get(tVar));
                     unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(tVar,
-                            secondaryKeyVars.get(sIndexIdx), tVar));
+                            secondaryKeyVarsFromSIdxSearch.get(sIndexIdx), tVar));
                 }
             }
 
-            // Fetch Conditional Split variable from secondary-index search
+            // Fetch Conditional Split variable from the secondary-index search
             conditionalSplitVars = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(dataset, recordType, inputOp,
                     secondaryIndex, 2, outputPrimaryKeysOnlyFromSIdxSearch);
 
+            // secondary index search -> SPLIT operator
             splitOp = new SplitOperator(2, conditionalSplitVars.get(0));
             splitOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
             splitOp.setExecutionMode(ExecutionMode.PARTITIONED);
@@ -1094,19 +1136,19 @@ public class AccessMethodUtils {
 
         // Optionally add a sort on the primary-index keys before searching the primary index.
         // If tryLock() optimization is possible, this ORDER (sort) operator is not necessary by our design choice.
-        OrderOperator order = null;
+        OrderOperator orderOp = null;
         if (sortPrimaryKeys && !isIndexOnlyPlanEnabled) {
-            order = new OrderOperator();
-            for (LogicalVariable pkVar : primaryKeyVars) {
+            orderOp = new OrderOperator();
+            for (LogicalVariable pkVar : primaryKeyVarsFromSIdxSearch) {
                 Mutable<ILogicalExpression> vRef = new MutableObject<ILogicalExpression>(
                         new VariableReferenceExpression(pkVar));
-                order.getOrderExpressions().add(
+                orderOp.getOrderExpressions().add(
                         new Pair<IOrder, Mutable<ILogicalExpression>>(OrderOperator.ASC_ORDER, vRef));
             }
             // The secondary-index search feeds into the sort.
-            order.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
-            order.setExecutionMode(ExecutionMode.LOCAL);
-            context.computeAndSetTypeEnvironmentForOperator(order);
+            orderOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
+            orderOp.setExecutionMode(ExecutionMode.LOCAL);
+            context.computeAndSetTypeEnvironmentForOperator(orderOp);
         }
 
         // Create the primary index lookup operator
@@ -1117,12 +1159,12 @@ public class AccessMethodUtils {
         // Set low/high inclusive to true for a point lookup.
         jobGenParams.setLowKeyInclusive(true);
         jobGenParams.setHighKeyInclusive(true);
-        jobGenParams.setLowKeyVarList(primaryKeyVars, 0, primaryKeyVars.size());
-        jobGenParams.setHighKeyVarList(primaryKeyVars, 0, primaryKeyVars.size());
+        jobGenParams.setLowKeyVarList(primaryKeyVarsFromSIdxSearch, 0, primaryKeyVarsFromSIdxSearch.size());
+        jobGenParams.setHighKeyVarList(primaryKeyVarsFromSIdxSearch, 0, primaryKeyVarsFromSIdxSearch.size());
         jobGenParams.setIsEqCondition(true);
         jobGenParams.writeToFuncArgs(primaryIndexFuncArgs);
 
-        // Primary index search is expressed as an unnest over an index-search function.
+        // Primary index search is expressed as an unnest-map over an index-search function.
         IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         AbstractFunctionCallExpression primaryIndexSearchFunc = new ScalarFunctionCallExpression(primaryIndexSearch,
                 primaryIndexFuncArgs);
@@ -1132,13 +1174,13 @@ public class AccessMethodUtils {
         UnnestMapOperator primaryIndexUnnestOp = new UnnestMapOperator(primaryIndexUnnestVars,
                 new MutableObject<ILogicalExpression>(primaryIndexSearchFunc), primaryIndexOutputTypes, retainInput);
 
-        // Fed by the order operator or the secondaryIndexUnnestOp.
-        // In case of an index-only plan, SPLIT operator will be fed into the primary index lookup
+        // Fed by the ORDER operator or the secondaryIndexUnnestOp.
+        // In case of an index-only plan, SPLIT operator will be fed into the primary index lookup.
         if (sortPrimaryKeys && !isIndexOnlyPlanEnabled) {
-            primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(order));
+            primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(orderOp));
         } else {
             if (isIndexOnlyPlanEnabled) {
-                // If index-only plan is possible, the splitOp provides PK into this primary-index search
+                // If index-only plan is possible, the SPLIT operator provides the PKs into this primary-index search
                 primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(splitOp));
             } else {
                 primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
@@ -1147,187 +1189,170 @@ public class AccessMethodUtils {
         primaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
         context.computeAndSetTypeEnvironmentForOperator(primaryIndexUnnestOp);
 
+        //subTree.dataSourceRef.setValue(primaryIndexUnnestOp);
+
         // Generate UnionOperator to merge the left and right paths
         if (isIndexOnlyPlanEnabled) {
             // Copy the original SELECT operator and put it after the primary index lookup
-            topOp = (SelectOperator) topOpRef.getValue();
+            selectOp = (SelectOperator) topOpRef.getValue();
 
-            newSelectOp = new SelectOperator(topOp.getCondition(), topOp.getRetainNull(),
-                    topOp.getNullPlaceholderVariable());
+            newSelectOp = new SelectOperator(selectOp.getCondition(), selectOp.getRetainNull(),
+                    selectOp.getNullPlaceholderVariable());
 
-            // If there is an ASSIGN operator before SELECT operator, we need to put this before SELECT operator,
+            // If there are ASSIGN operators before SELECT operator, we need to put this before the SELECT operator,
             // and after the primary index lookup.
-            if (assignBeforeTopOp != null) {
-                newAssignOp = new AssignOperator(assignBeforeTopOp.getVariables(), assignBeforeTopOp.getExpressions());
-                newAssignOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
-                newAssignOp.setExecutionMode(assignBeforeTopOp.getExecutionMode());
-                context.computeAndSetTypeEnvironmentForOperator(newAssignOp);
-                newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(newAssignOp));
+            if (assignBeforeTopOpRefs != null) {
+                // Make the primary unnest-map as the child of the last ASSIGN in the path.
+                lastAssignBeforeTopOp = assignBeforeTopOpRefs.get(assignBeforeTopOpRefs.size() - 1).getValue();
+                lastAssignBeforeTopOp.getInputs().clear();
+                lastAssignBeforeTopOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
+
+                // Make the first ASSIGN as the child of the SELECT oeprator.
+                context.computeAndSetTypeEnvironmentForOperator(lastAssignBeforeTopOp);
+                newSelectOp.getInputs().add(
+                        new MutableObject<ILogicalOperator>(assignBeforeTopOpRefs.get(0).getValue()));
             } else {
                 newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
             }
 
-            newSelectOp.setExecutionMode(topOp.getExecutionMode());
+            newSelectOp.setExecutionMode(selectOp.getExecutionMode());
             context.computeAndSetTypeEnvironmentForOperator(newSelectOp);
 
-            ILogicalOperator rightTopOp = splitOp;
+            ILogicalOperator currentTopOpInRightPath = splitOp;
 
             // For an R-Tree index, if there is an operator that is using the secondary key field value,
             // we need to reconstruct that field value from the result of R-Tree search.
             // This is done by adding the assign operator that we have made in the beginning of this method
             if (idxType == IndexType.RTREE
                     && (secondaryKeyFieldUsedAfterSelectOp || verificationAfterSIdxSearchRequired)) {
-                assignSecondaryKeyFieldOp.getInputs().add(new MutableObject<ILogicalOperator>(splitOp));
-                assignSecondaryKeyFieldOp.setExecutionMode(assignBeforeTopOp.getExecutionMode());
-                context.computeAndSetTypeEnvironmentForOperator(assignSecondaryKeyFieldOp);
-                rightTopOp = assignSecondaryKeyFieldOp;
+                assignRestoredSecondaryKeyFieldOp.getInputs().add(new MutableObject<ILogicalOperator>(splitOp));
+                assignRestoredSecondaryKeyFieldOp.setExecutionMode(lastAssignBeforeTopOp.getExecutionMode());
+                context.computeAndSetTypeEnvironmentForOperator(assignRestoredSecondaryKeyFieldOp);
+                currentTopOpInRightPath = assignRestoredSecondaryKeyFieldOp;
             }
 
             // For an R-Tree index, if the given query shape is not RECTANGLE or POINT,
             // we need to add the original SELECT operator to filter out the false positive results.
             // (e.g., spatial-intersect($o.pointfield, create-circle(create-point(30.0,70.0), 5.0)) )
-            if (idxType == IndexType.RTREE && verificationAfterSIdxSearchRequired) {
-                newSelectOp2 = (SelectOperator) OperatorManipulationUtil.deepCopy(topOp);
-                //                        new SelectOperator( .topOp.getCondition(), topOp.getRetainNull(),
-                //                        topOp.getNullPlaceholderVariable());
-                newSelectOp2.getInputs().clear();
-                newSelectOp2.getInputs().add(new MutableObject<ILogicalOperator>(assignSecondaryKeyFieldOp));
+            //
+            // Also, for a B-Tree composite index, we need to apply SELECT operators in the right path
+            // to remove any false positive results from the secondary composite index search.
+            if ((idxType == IndexType.RTREE && verificationAfterSIdxSearchRequired)
+                    || (idxType == IndexType.BTREE && secondaryIndex.getKeyFieldNames().size() > 1
+                            && uniqueVarsUsedInTopOpSize > 1 && !noFalsePositiveResultsFromSIdxSearch)) {
 
-                ILogicalExpression condExpr = newSelectOp2.getCondition().getValue();
+                // We create a new SELECT operator by deep-copying the original SELECT operator
+                // since we need to change the variable reference in the SELECT operator.
+                newSelectOpInRightPath = (SelectOperator) OperatorManipulationUtil.deepCopy(selectOp);
+                newSelectOpInRightPath.getInputs().clear();
+                newSelectOpInRightPath.getInputs().add(new MutableObject<ILogicalOperator>(currentTopOpInRightPath));
+
+                ILogicalExpression condExpr = newSelectOpInRightPath.getCondition().getValue();
                 if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
                     return null;
                 } else {
                     AbstractFunctionCallExpression condExprFnCall = (AbstractFunctionCallExpression) condExpr;
-                    // If this list is null, then secondary key field is not used after SELECT operator.
-                    // However, we need to put the secondary key field anyway
-                    if (fetchedSecondaryKeyFieldVarsFromPIdxLookUp != null) {
-                        for (int i = 0; i < fetchedSecondaryKeyFieldVarsFromPIdxLookUp.size(); i++) {
-                            condExprFnCall.substituteVar(fetchedSecondaryKeyFieldVarsFromPIdxLookUp.get(i),
-                                    restoredSecondaryKeyFieldVars.get(i));
+                    // B-Tree case: replace a secondary key variable after the primary index-lookup with
+                    //              the one from the secondary index-lookup.
+                    if (idxType == IndexType.BTREE) {
+                        for (int i = 0; i < uniqueVarsUsedInTopOp.size(); i++) {
+                            int sIndexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames.get(uniqueVarsUsedInTopOp
+                                    .get(i)));
+
+                            condExprFnCall.substituteVar(uniqueVarsUsedInTopOp.get(i),
+                                    secondaryKeyVarsFromSIdxSearch.get(sIndexIdx));
                         }
                     } else {
-                        for (int i = 0; i < varsUsedInTopOp.size(); i++) {
-                            condExprFnCall.substituteVar(varsUsedInTopOp.get(i), restoredSecondaryKeyFieldVars.get(i));
+                        // R-Tree case
+                        // If this list is null, then secondary key field is not used after SELECT operator.
+                        // However, we need to put the secondary key field since it is used in SELECT operator.
+                        if (fetchedSecondaryKeyFieldVarsFromPIdxLookUp != null) {
+                            for (int i = 0; i < fetchedSecondaryKeyFieldVarsFromPIdxLookUp.size(); i++) {
+                                condExprFnCall.substituteVar(fetchedSecondaryKeyFieldVarsFromPIdxLookUp.get(i),
+                                        restoredSecondaryKeyFieldVars.get(i));
+                            }
+                        } else {
+                            for (int i = 0; i < uniqueVarsUsedInTopOp.size(); i++) {
+                                condExprFnCall.substituteVar(uniqueVarsUsedInTopOp.get(i),
+                                        restoredSecondaryKeyFieldVars.get(i));
+                            }
                         }
                     }
                 }
-                newSelectOp2.setExecutionMode(topOp.getExecutionMode());
-                context.computeAndSetTypeEnvironmentForOperator(newSelectOp2);
-                rightTopOp = newSelectOp2;
+                newSelectOpInRightPath.setExecutionMode(selectOp.getExecutionMode());
+                context.computeAndSetTypeEnvironmentForOperator(newSelectOpInRightPath);
+                currentTopOpInRightPath = newSelectOpInRightPath;
             }
 
+            /// UNION operator
             unionAllOp = new UnionAllOperator(unionVarMap);
             unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(newSelectOp));
-            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(rightTopOp));
+            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(currentTopOpInRightPath));
             context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
 
+            // Index-only plan is constructed. Return this operator to the caller.
             return unionAllOp;
 
         } else if (noFalsePositiveResultsFromSIdxSearch) {
-            // Yet, reducing the number of SELECT operations is possible even there is no index plan for the given query.
+            // Yet, reducing the number of SELECT operations optimization is possible even there is no index-only plan for the given query.
+            // At this moment, an unnest-map (primary index look-up) is the top operator.
 
             // Copy the original SELECT operator and put it after the primary index lookup
-            topOp = (SelectOperator) topOpRef.getValue();
+            selectOp = (SelectOperator) topOpRef.getValue();
 
-            newSelectOp = new SelectOperator(topOp.getCondition(), topOp.getRetainNull(),
-                    topOp.getNullPlaceholderVariable());
+            newSelectOp = new SelectOperator(selectOp.getCondition(), selectOp.getRetainNull(),
+                    selectOp.getNullPlaceholderVariable());
 
             // Fetch the conditional split variable from a secondary-index search
             conditionalSplitVars = AccessMethodUtils.getKeyVarsFromSecondaryUnnestMap(dataset, recordType, inputOp,
                     secondaryIndex, 2, outputPrimaryKeysOnlyFromSIdxSearch);
 
+            // Add SPLIT operator
             splitOp = new SplitOperator(2, conditionalSplitVars.get(0));
             splitOp.setExecutionMode(ExecutionMode.PARTITIONED);
 
             varsLiveInSelect = new ArrayList<LogicalVariable>();
-            VariableUtilities.getUsedVariables((ILogicalOperator) newSelectOp, varsLiveInSelect);
+            VariableUtilities.getLiveVariables((ILogicalOperator) selectOp, varsLiveInSelect);
 
-            boolean varsOnlyUsedInSelectFound = false;
+            // If there are ASSIGN operators before SELECT operator, we need to put this before SPLIT operator
+            // and after the primary index lookup.
+            if (assignBeforeTopOpRefs != null) {
+                // Make the primary unnest-map as the child of the last ASSIGN in the path.
+                lastAssignBeforeTopOp = assignBeforeTopOpRefs.get(assignBeforeTopOpRefs.size() - 1).getValue();
+                lastAssignBeforeTopOp.getInputs().clear();
+                lastAssignBeforeTopOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
 
-            // If there is an ASSIGN operator before SELECT operator, we need to put this before SPLIT operator
-            if (assignBeforeTopOp != null) {
-                //                newAssignOp = new AssignOperator(assignBeforeTopOp.getVariables(), assignBeforeTopOp.getExpressions());
-                //                newAssignOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
-                //                newAssignOp.setExecutionMode(assignBeforeTopOp.getExecutionMode());
+                for (int i = assignBeforeTopOpRefs.size() - 1; i >= 0; i--) {
+                    if (assignBeforeTopOpRefs.get(i) != null) {
+                        context.computeAndSetTypeEnvironmentForOperator(assignBeforeTopOpRefs.get(i).getValue());
+                    }
+                }
 
-                // ASSIGN operator that will be used before the SELECT in the left path (tryLock fail path)
-                newAssignOp = (AssignOperator) OperatorManipulationUtil.deepCopy(assignBeforeTopOp);
-                newAssignOp.getInputs().clear();
-                newAssignOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
-
-                //                newAssignOp2 = (AssignOperator) OperatorManipulationUtil.deepCopy(newAssignOp);
-                //                newAssignOp2.getInputs().clear();
-
-                // Remove the variables that are only used in the SELECT operator from the ASSIGN, which is
-                // placed before the SPLIT operator. These variables will be placed in the new ASSIGN before the SELECT operator.
-                //                Iterator<LogicalVariable> varIter = varsUsedAfterTopOp.iterator();
-
-                //                Iterator<Mutable<ILogicalExpression>> exprIter = newAssignOp.getExpressions().iterator();
-                //                Iterator<Mutable<ILogicalExpression>> exprIter2 = newAssignOp2.getExpressions().iterator();
-                //
-                //                Iterator<LogicalVariable> varIter = newAssignOp.getVariables().iterator();
-                //                Iterator<LogicalVariable> varIter2 = newAssignOp2.getVariables().iterator();
-                //
-                //                while (varIter.hasNext()) {
-                //                    LogicalVariable v = varIter.next();
-                //                    exprIter.next();
-                //                    exprIter2.next();
-                //                    varIter2.next();
-                //                    if (!varsUsedAfterTopOp.contains(v)) {
-                //                        // If the variable is only used in the SELECT operator,
-                //                        // then it needs to be removed from the ASSIGN before the SPLIT operator.
-                //                        exprIter.remove();
-                //                        varIter.remove();
-                //                        varsOnlyUsedInSelectFound = true;
-                //                    } else {
-                //                        exprIter2.remove();
-                //                        varIter2.remove();
-                //                    }
-                //                }
-
-                context.computeAndSetTypeEnvironmentForOperator(newAssignOp);
-                splitOp.getInputs().add(new MutableObject<ILogicalOperator>(newAssignOp));
-
-                //                if (varsOnlyUsedInSelectFound) {
-                //                    newAssignOp2.getInputs().clear();
-                //                    newAssignOp2.getInputs().add(new MutableObject<ILogicalOperator>(splitOp));
-                //                }
+                // Make the first ASSIGN as the child of the SELECT oeprator.
+                splitOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeTopOpRefs.get(0).getValue()));
             } else {
                 splitOp.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
             }
 
             context.computeAndSetTypeEnvironmentForOperator(splitOp);
+
             newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(splitOp));
-
-            //            if (varsOnlyUsedInSelectFound) {
-            //                context.computeAndSetTypeEnvironmentForOperator(newAssignOp2);
-            //                newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(newAssignOp2));
-            //            } else {
-            //                newSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(splitOp));
-            //            }
-
-            newSelectOp.setExecutionMode(topOp.getExecutionMode());
+            newSelectOp.setExecutionMode(selectOp.getExecutionMode());
             context.computeAndSetTypeEnvironmentForOperator(newSelectOp);
 
             // In order to create the UNION operator after the SELECT operator,
-            // we just pick one of the variables live in the SELECT operator and used after SELECT oeprator.
-            // That's because the right path (tryLock success path) does not do anything: doesn't generate any new variables.
-            // However, we need to provide a list of variables to the UNION operator.
-
-            // Temporary: it turns that passing an empty list is OK. Let's see.
+            // we pick all variables that are live in the SELECT operator and are being used after SELECT operator.
+            // This is required since UnionAllOperator is not propagating all input variables.
             unionVarMap = new ArrayList<Triple<LogicalVariable, LogicalVariable, LogicalVariable>>();
 
-            //            Iterator<LogicalVariable> varIter = varsUsedAfterTopOp.iterator();
-            //            while (varIter.hasNext()) {
-            //                LogicalVariable v = varIter.next();
-            //                if (varsLiveInSelect.contains(v)) {
-            //                    unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v, v, v));
-            //                    break;
-            //                }
-            //            }
-
-            //            unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(
-            //                    primaryIndexUnnestVars.get(0), primaryIndexUnnestVars.get(0), primaryIndexUnnestVars.get(0)));
+            // Adding the variables that are not only live in SELECT, but also used after the SELECT operator.
+            Iterator<LogicalVariable> varIter = varsUsedAfterTopOp.iterator();
+            while (varIter.hasNext()) {
+                LogicalVariable v = varIter.next();
+                if (varsLiveInSelect.contains(v)) {
+                    unionVarMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v, v, v));
+                }
+            }
 
             unionAllOp = new UnionAllOperator(unionVarMap);
             unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(newSelectOp));
@@ -1335,11 +1360,10 @@ public class AccessMethodUtils {
             context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
 
             return unionAllOp;
-
         } else {
+            // No index-only plan, no reducing number of SELECT operations optimization possible.
             return primaryIndexUnnestOp;
         }
-
     }
 
     public static ScalarFunctionCallExpression findLOJIsNullFuncInGroupBy(GroupByOperator lojGroupbyOp)

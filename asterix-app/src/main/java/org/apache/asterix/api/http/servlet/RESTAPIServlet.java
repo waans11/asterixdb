@@ -30,24 +30,24 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.io.IOUtils;
 import org.json.JSONObject;
 
-import edu.uci.ics.asterix.api.common.SessionConfig;
-import edu.uci.ics.asterix.api.common.SessionConfig.OutputFormat;
-import edu.uci.ics.asterix.aql.base.Statement;
-import edu.uci.ics.asterix.aql.base.Statement.Kind;
-import edu.uci.ics.asterix.aql.parser.AQLParser;
-import edu.uci.ics.asterix.aql.parser.ParseException;
-import edu.uci.ics.asterix.aql.parser.TokenMgrError;
-import edu.uci.ics.asterix.aql.translator.AqlTranslator;
-import edu.uci.ics.asterix.common.config.GlobalConfig;
-import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.metadata.MetadataManager;
-import edu.uci.ics.asterix.result.ResultReader;
-import edu.uci.ics.asterix.result.ResultUtils;
-import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
-import edu.uci.ics.hyracks.api.dataset.IHyracksDataset;
-import edu.uci.ics.hyracks.api.util.ExecutionTimeProfiler;
-import edu.uci.ics.hyracks.api.util.OperatorExecutionTimeProfiler;
-import edu.uci.ics.hyracks.client.dataset.HyracksDataset;
+import org.apache.asterix.api.common.SessionConfig;
+import org.apache.asterix.api.common.SessionConfig.OutputFormat;
+import org.apache.asterix.aql.base.Statement;
+import org.apache.asterix.aql.base.Statement.Kind;
+import org.apache.asterix.aql.parser.AQLParser;
+import org.apache.asterix.aql.parser.ParseException;
+import org.apache.asterix.aql.parser.TokenMgrError;
+import org.apache.asterix.aql.translator.AqlTranslator;
+import org.apache.asterix.common.config.GlobalConfig;
+import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.metadata.MetadataManager;
+import org.apache.asterix.result.ResultReader;
+import org.apache.asterix.result.ResultUtils;
+import org.apache.hyracks.api.client.IHyracksClientConnection;
+import org.apache.hyracks.api.dataset.IHyracksDataset;
+import org.apache.hyracks.api.util.ExecutionTimeProfiler;
+import org.apache.hyracks.api.util.OperatorExecutionTimeProfiler;
+import org.apache.hyracks.client.dataset.HyracksDataset;
 
 abstract class RESTAPIServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
@@ -170,7 +170,7 @@ abstract class RESTAPIServlet extends HttpServlet {
 //            }
 
 
-        } catch (ParseException | TokenMgrError | edu.uci.ics.asterix.aqlplus.parser.TokenMgrError pe) {
+        } catch (ParseException | TokenMgrError | org.apache.asterix.aqlplus.parser.TokenMgrError pe) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, pe.getMessage(), pe);
             String errorMessage = ResultUtils.buildParseExceptionMessage(pe, query);
             JSONObject errorResp = ResultUtils.getErrorResponse(2, errorMessage, "", "");

@@ -17,53 +17,53 @@ package org.apache.asterix.optimizer.rules.am;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.asterix.aql.util.FunctionUtils;
+import org.apache.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
+import org.apache.asterix.common.config.DatasetConfig.DatasetType;
+import org.apache.asterix.common.config.DatasetConfig.IndexType;
+import org.apache.asterix.metadata.entities.Dataset;
+import org.apache.asterix.metadata.entities.Index;
+import org.apache.asterix.om.base.AInt32;
+import org.apache.asterix.om.constants.AsterixConstantValue;
+import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
+import org.apache.asterix.om.types.ARecordType;
+import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.om.types.IAType;
+import org.apache.asterix.om.util.NonTaggedFormatUtil;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
-
-import edu.uci.ics.asterix.aql.util.FunctionUtils;
-import edu.uci.ics.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
-import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
-import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
-import edu.uci.ics.asterix.metadata.entities.Dataset;
-import edu.uci.ics.asterix.metadata.entities.Index;
-import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
-import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
-import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.BuiltinType;
-import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
-import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.common.utils.Quadruple;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractDataSourceOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.common.utils.Quintuple;
+import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
+import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
+import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractDataSourceOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 
 /**
  * Class for helping rewrite rules to choose and apply RTree indexes.
  */
 public class RTreeAccessMethod implements IAccessMethod {
 
-    // Second boolean value means that this function can produce false positive results.
-    // That is, index-search alone cannot replace SELECT condition and
+    // The second boolean value means that this function can produce false positive results.
+    // That is, an index-search alone cannot replace SELECT condition and
     // SELECT condition needs to be applied afterwards to get the correct results.
     // In R-Tree case, depends on the parameters of the SPATIAL_INTERSECT function, it may/may not produce false positive results.
-    // Thus, we need to have one more step to check whether the SPATIAL_INTERSECT generates the false positive or not.
+    // Thus, we need to have one more step to check whether the SPATIAL_INTERSECT generates false positive results or not.
     private static List<Pair<FunctionIdentifier, Boolean>> funcIdents = new ArrayList<Pair<FunctionIdentifier, Boolean>>();
     static {
         funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AsterixBuiltinFunctions.SPATIAL_INTERSECT, false));
@@ -102,7 +102,7 @@ public class RTreeAccessMethod implements IAccessMethod {
             AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
         SelectOperator select = (SelectOperator) selectRef.getValue();
         Mutable<ILogicalExpression> conditionRef = select.getCondition();
-        AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) conditionRef;
+        AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) conditionRef.getValue();
         FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();
 
         ARecordType recordType = subTree.recordType;
@@ -172,15 +172,15 @@ public class RTreeAccessMethod implements IAccessMethod {
             noFalsePositiveResultsFromSIdxSearch = true;
         }
 
-        Quadruple<Boolean, Boolean, Boolean, Boolean> indexOnlyPlanCheck = new Quadruple<Boolean, Boolean, Boolean, Boolean>(
+        Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean> indexOnlyPlanCheck = new Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean>(
                 isIndexOnlyPlanPossible, secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
-                verificationAfterSIdxSearchRequired);
+                verificationAfterSIdxSearchRequired, noFalsePositiveResultsFromSIdxSearch);
 
         Dataset dataset = subTree.dataset;
 
         // Is this plan an index-only plan?
-        if (isIndexOnlyPlanPossible && noFalsePositiveResultsFromSIdxSearch) {
-            if (dataset.getDatasetType() == DatasetType.INTERNAL && noFalsePositiveResultsFromSIdxSearch) {
+        if (isIndexOnlyPlanPossible) {
+            if (dataset.getDatasetType() == DatasetType.INTERNAL) {
                 indexOnlyPlanCheck = AccessMethodUtils.isIndexOnlyPlan(aboveSelectRefs, selectRef, subTree,
                         chosenIndex, analysisCtx, context);
 
@@ -191,10 +191,12 @@ public class RTreeAccessMethod implements IAccessMethod {
                     secondaryKeyFieldUsedInSelectCondition = indexOnlyPlanCheck.second;
                     secondaryKeyFieldUsedAfterSelectOp = indexOnlyPlanCheck.third;
                     verificationAfterSIdxSearchRequired = indexOnlyPlanCheck.fourth;
+                    noFalsePositiveResultsFromSIdxSearch = indexOnlyPlanCheck.fifth;
                 }
             } else {
                 // For a index on an external dataset can't be optimized for the index-only plan.
                 isIndexOnlyPlanPossible = false;
+                noFalsePositiveResultsFromSIdxSearch = false;
             }
         }
 
@@ -204,20 +206,33 @@ public class RTreeAccessMethod implements IAccessMethod {
             analysisCtx.setIndexOnlyPlanEnabled(false);
         }
 
+        // R-Tree specific: if the verification after a SIdx search is required, then
+        // there are false positives from a secondary index search.
+        if (verificationAfterSIdxSearchRequired) {
+            noFalsePositiveResultsFromSIdxSearch = false;
+        }
+
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(aboveSelectRefs, selectRef,
-                assignBeforeSelectOpRef, subTree, null, chosenIndex, optFuncExpr, analysisCtx, false, false, false,
-                context, isIndexOnlyPlanPossible, verificationAfterSIdxSearchRequired,
+                subTree.assignsAndUnnestsRefs, subTree, null, chosenIndex, optFuncExpr, analysisCtx, false, false,
+                false, context, isIndexOnlyPlanPossible, verificationAfterSIdxSearchRequired,
                 secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
                 noFalsePositiveResultsFromSIdxSearch);
         if (primaryIndexUnnestOp == null) {
             return false;
         }
-        // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
 
-        if (!isIndexOnlyPlanPossible) {
+        // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
+        if ((!isIndexOnlyPlanPossible && !noFalsePositiveResultsFromSIdxSearch)
+                || dataset.getDatasetType() == DatasetType.EXTERNAL) {
             subTree.dataSourceRef.setValue(primaryIndexUnnestOp);
         } else {
-            selectRef.setValue(primaryIndexUnnestOp);
+            // If an index-only plan or reducing the number of SELECT operators were applied, the topmost operator returned
+            // is UNIONALL operator.
+            if (primaryIndexUnnestOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
+                selectRef.setValue(primaryIndexUnnestOp);
+            } else {
+                subTree.dataSourceRef.setValue(primaryIndexUnnestOp);
+            }
         }
         return true;
     }
@@ -280,7 +295,7 @@ public class RTreeAccessMethod implements IAccessMethod {
     }
 
     private ILogicalOperator createSecondaryToPrimaryPlan(List<Mutable<ILogicalOperator>> afterTopRefs,
-            Mutable<ILogicalOperator> topRef, Mutable<ILogicalOperator> assignBeforeTopRef,
+            Mutable<ILogicalOperator> topRef, List<Mutable<ILogicalOperator>> assignBeforeTopRefs,
             OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, Index chosenIndex,
             IOptimizableFuncExpr optFuncExpr, AccessMethodAnalysisContext analysisCtx, boolean retainInput,
             boolean retainNull, boolean requiresBroadcast, IOptimizationContext context,
@@ -307,7 +322,7 @@ public class RTreeAccessMethod implements IAccessMethod {
         AbstractDataSourceOperator dataSourceOp = (AbstractDataSourceOperator) indexSubTree.dataSourceRef.getValue();
         RTreeJobGenParams jobGenParams = new RTreeJobGenParams(chosenIndex.getIndexName(), IndexType.RTREE,
                 dataset.getDataverseName(), dataset.getDatasetName(), retainInput, retainNull, requiresBroadcast,
-                isIndexOnlyPlanEnabled);
+                isIndexOnlyPlanEnabled || noFalsePositiveResultsFromSIdxSearch);
         // A spatial object is serialized in the constant of the func expr we are optimizing.
         // The R-Tree expects as input an MBR represented with 1 field per dimension.
         // Here we generate vars and funcs for extracting MBR fields from the constant into fields of a tuple (as the R-Tree expects them).
@@ -367,24 +382,61 @@ public class RTreeAccessMethod implements IAccessMethod {
         } else {
             //            UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceOp,
             //                    dataset, recordType, secondaryIndexUnnestOp, context, true, retainInput, false, false, chosenIndex);
+            ILogicalOperator primaryIndexUnnestOp;
 
-            ILogicalOperator primaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils
-                    .createPrimaryIndexUnnestMap(afterTopRefs, topRef, assignBeforeTopRef, dataSourceOp, dataset,
-                            recordType, secondaryIndexUnnestOp, context, true, retainInput, false, false, chosenIndex,
-                            analysisCtx, outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
-                            secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
-                            noFalsePositiveResultsFromSIdxSearch);
+            // If only reducing the number of SELECT optimization is possible,
+            // then we need to keep the input to the primary index look-up since there is a variable that keeps
+            // the result of tryLock on a PK during a secondary index search. The SPLIT operator needs to see this variable.
+            if (noFalsePositiveResultsFromSIdxSearch && !isIndexOnlyPlanEnabled) {
+                primaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
+                        afterTopRefs, topRef, assignBeforeTopRefs, dataSourceOp, dataset, recordType,
+                        secondaryIndexUnnestOp, context, true, true, false, false, chosenIndex, analysisCtx,
+                        outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
+                        secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
+                        noFalsePositiveResultsFromSIdxSearch);
+            } else {
+                primaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
+                        afterTopRefs, topRef, assignBeforeTopRefs, dataSourceOp, dataset, recordType,
+                        secondaryIndexUnnestOp, context, true, retainInput, false, false, chosenIndex, analysisCtx,
+                        outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
+                        secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
+                        noFalsePositiveResultsFromSIdxSearch);
+            }
 
             if (isIndexOnlyPlanEnabled) {
                 // Right now, the order of opertors is: union -> select -> assign -> unnest-map
                 AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) primaryIndexUnnestOp.getInputs()
                         .get(0).getValue(); // select
-                dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
+                if (indexSubTree.assignsAndUnnests != null) {
+                    for (int i = 0; i < indexSubTree.assignsAndUnnests.size(); i++) {
+                        dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
+                    }
+                }
+                // dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
                 dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
 
                 indexSubTree.dataSourceRef.setValue(dataSourceRefOp);
-            } else {
-                indexSubTree.dataSourceRef.setValue(primaryIndexUnnestOp);
+            } else if (noFalsePositiveResultsFromSIdxSearch) {
+                // For this case, we still have an optimization that can reduce the number of SELECT operations.
+                if (primaryIndexUnnestOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
+                    // Right now, the order of opertors is: union -> select -> split -> assign? -> unnest-map
+                    AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) primaryIndexUnnestOp
+                            .getInputs().get(0).getValue(); // select
+                    dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // split
+
+                    if (indexSubTree.assignsAndUnnests != null) {
+                        for (int i = 0; i < indexSubTree.assignsAndUnnests.size(); i++) {
+                            dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
+                        }
+                    }
+                    dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
+
+                    indexSubTree.dataSourceRef.setValue(dataSourceRefOp);
+
+                } else {
+                    // No optimization is possible - then the top operator is unnest-map.
+                    indexSubTree.dataSourceRef.setValue(primaryIndexUnnestOp);
+                }
             }
 
             return primaryIndexUnnestOp;
