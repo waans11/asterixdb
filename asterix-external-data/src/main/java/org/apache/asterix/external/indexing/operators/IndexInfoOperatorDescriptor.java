@@ -130,4 +130,9 @@ public class IndexInfoOperatorDescriptor implements IIndexOperatorDescriptor {
         return null;
     }
 
+    @Override
+    public long getLimitNumberOfResult() {
+        return -1;
+    }
+
 }

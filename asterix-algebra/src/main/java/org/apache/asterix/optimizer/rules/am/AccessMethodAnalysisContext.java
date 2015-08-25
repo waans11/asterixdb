@@ -19,13 +19,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
+import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 
 /**
  * Context for analyzing the applicability of a single access method.
@@ -52,8 +53,11 @@ public class AccessMethodAnalysisContext {
     // For a secondary index, if we use only PK and secondary key field in a plan, it is an index-only plan.
     private boolean indexOnlySelectPlanEnabled = false;
 
-    // For a secondary index, does the combination of the index and access-method can generate the false positive results?
-    private boolean canProduceFalsePositive = false;
+    // For this access method, we push down the LIMIT from an ancestor operator (-1: no limit)
+    // That is, an index-search just generates this number of results.
+    private long limitNumberOfResult = -1;
+
+    List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions = null;
 
     public void addIndexExpr(Dataset dataset, Index index, Integer exprIndex, Integer varIndex) {
         List<Pair<Integer, Integer>> exprs = indexExprsAndVars.get(index);
@@ -93,12 +97,20 @@ public class AccessMethodAnalysisContext {
         return this.indexOnlySelectPlanEnabled;
     }
 
-    public void setCanProduceFalsePositive(boolean canProduceFalsePositive) {
-        this.canProduceFalsePositive = canProduceFalsePositive;
+    public void setLimitNumberOfResult(long limitNumberOfResult) {
+        this.limitNumberOfResult = limitNumberOfResult;
     }
 
-    public boolean canProduceFalsePositive() {
-        return this.canProduceFalsePositive;
+    public long getLimitNumberOfResult() {
+        return this.limitNumberOfResult;
+    }
+
+    public void setOrderByExpressions(List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions) {
+        this.orderByExpressions = orderByExpressions;
+    }
+
+    public List<Pair<IOrder, Mutable<ILogicalExpression>>> getOrderByExpressions() {
+        return this.orderByExpressions;
     }
 
 }

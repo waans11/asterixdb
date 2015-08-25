@@ -1,0 +1,11 @@
+use dataverse test;
+
+for $tu in dataset TwitterUsers
+for $tm in dataset TweetMessages
+for $r in dataset results
+    where
+       $r.vertexid /*+ indexnl */ = $tm.tweetid
+       and
+       $tm.user  /*+ indexnl */ = $tu.screen-name
+    order by $tm.tweetid
+	return $tm.tweetid;

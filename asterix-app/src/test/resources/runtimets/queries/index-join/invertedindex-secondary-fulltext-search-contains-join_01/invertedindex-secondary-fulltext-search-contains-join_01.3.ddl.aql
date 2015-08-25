@@ -1,0 +1,5 @@
+use dataverse test;
+
+create index dblp_authors_index on DBLP(authors) type fulltext;
+create index csx_authors_index on CSX(authors) type fulltext;
+

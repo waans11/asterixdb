@@ -21,8 +21,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.dataflow.data.common.AqlExpressionTypeComputer;
 import org.apache.asterix.metadata.api.IMetadataEntity;
@@ -40,6 +38,7 @@ import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
 import org.apache.asterix.optimizer.rules.am.OptimizableOperatorSubTree.DataSourceType;
+import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -120,6 +119,72 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                 amIt.remove();
             }
         }
+    }
+
+    /**
+     * Removes the index candidates from the outer (left) relation if it is possible.
+     *
+     * @param analyzedAMs
+     * @throws AlgebricksException
+     */
+    protected boolean removeIndexCandidatesFromOuterRelation(
+            Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs, List<String> innerDatasets)
+            throws AlgebricksException {
+        boolean removed = false;
+        Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
+        while (amIt.hasNext()) {
+            Map.Entry<IAccessMethod, AccessMethodAnalysisContext> entry = amIt.next();
+            AccessMethodAnalysisContext amCtx = entry.getValue();
+            Iterator<Map.Entry<Index, List<Pair<Integer, Integer>>>> indexIt = amCtx.indexExprsAndVars.entrySet()
+                    .iterator();
+
+            // Check whether we can choose the indexes from the inner relations (removing indexes from the outer relations)
+            int totalIndexCount = 0;
+            int removedIndexCountFromTheOuterBranch = 0;
+
+            while (indexIt.hasNext()) {
+                Map.Entry<Index, List<Pair<Integer, Integer>>> indexEntry = indexIt.next();
+
+                Index chosenIndex = indexEntry.getKey();
+                boolean indexFoundInInnerRelation = false;
+                //Remove possibly chosen indexes from left Tree (outer branch)
+                for (int i = 0; i < innerDatasets.size(); i++) {
+                    if (chosenIndex.getDatasetName().equals(innerDatasets.get(i))) {
+                        indexFoundInInnerRelation = true;
+                        break;
+                    }
+                }
+
+                if (!indexFoundInInnerRelation) {
+                    removedIndexCountFromTheOuterBranch++;
+                }
+                totalIndexCount++;
+            }
+
+            if (removedIndexCountFromTheOuterBranch < totalIndexCount) {
+                indexIt = amCtx.indexExprsAndVars.entrySet().iterator();
+                while (indexIt.hasNext()) {
+                    Map.Entry<Index, List<Pair<Integer, Integer>>> indexEntry = indexIt.next();
+
+                    Index chosenIndex = indexEntry.getKey();
+                    //Remove possibly chosen indexes from left Tree (outer branch)
+                    boolean indexFoundInInnerRelation = false;
+                    //Remove possibly chosen indexes from left Tree (outer branch)
+                    for (int i = 0; i < innerDatasets.size(); i++) {
+                        if (chosenIndex.getDatasetName().equals(innerDatasets.get(i))) {
+                            indexFoundInInnerRelation = true;
+                            break;
+                        }
+                    }
+
+                    if (!indexFoundInInnerRelation) {
+                        indexIt.remove();
+                        removed = true;
+                    }
+                }
+            }
+        }
+        return removed;
     }
 
     /**
@@ -514,30 +579,63 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             // Try to match variables from optFuncExpr to datasourcescan if not
             // already matched in assigns.
             List<LogicalVariable> dsVarList = subTree.getDataSourceVariables();
-            for (int varIndex = 0; varIndex < dsVarList.size(); varIndex++) {
-                LogicalVariable var = dsVarList.get(varIndex);
-                int funcVarIndex = optFuncExpr.findLogicalVar(var);
-                // No matching var in optFuncExpr.
-                if (funcVarIndex == -1) {
-                    continue;
+
+            matchVarsFromOptFuncExprToDataSourceScan(optFuncExpr, optFuncExprIndex, datasetIndexes, dsVarList, subTree,
+                    analysisCtx, context, false);
+
+            // If there is one more datasource in the subtree, we need to scan that datasource, too.
+            List<LogicalVariable> additionalDsVarList = null;
+
+            if (subTree.hasIxJoinOuterAdditionalDataSource()) {
+                additionalDsVarList = new ArrayList<LogicalVariable>();
+                for (int i = 0; i < subTree.ixJoinOuterAdditionalDataSourceRefs.size(); i++) {
+                    additionalDsVarList.addAll(subTree.getIxJoinOuterAdditionalDataSourceVariables(i));
                 }
-                // The variable value is one of the partitioning fields.
-                List<String> fieldName = DatasetUtils.getPartitioningKeys(subTree.dataset).get(varIndex);
-                IAType fieldType = (IAType) context.getOutputTypeEnvironment(subTree.dataSourceRef.getValue())
-                        .getVarType(var);
-                // Set the fieldName in the corresponding matched function
-                // expression, and remember matching subtree.
-                optFuncExpr.setFieldName(funcVarIndex, fieldName);
-                optFuncExpr.setOptimizableSubTree(funcVarIndex, subTree);
-                optFuncExpr.setSourceVar(funcVarIndex, var);
-                optFuncExpr.setLogicalExpr(funcVarIndex, new VariableReferenceExpression(var));
-                setTypeTag(context, subTree, optFuncExpr, funcVarIndex);
-                if (subTree.hasDataSourceScan()) {
-                    fillIndexExprs(datasetIndexes, fieldName, fieldType, optFuncExpr, optFuncExprIndex, funcVarIndex,
-                            subTree, analysisCtx);
-                }
+
+                matchVarsFromOptFuncExprToDataSourceScan(optFuncExpr, optFuncExprIndex, datasetIndexes,
+                        additionalDsVarList, subTree, analysisCtx, context, true);
+
             }
+
             optFuncExprIndex++;
+        }
+    }
+
+    private void matchVarsFromOptFuncExprToDataSourceScan(IOptimizableFuncExpr optFuncExpr, int optFuncExprIndex,
+            List<Index> datasetIndexes, List<LogicalVariable> dsVarList, OptimizableOperatorSubTree subTree,
+            AccessMethodAnalysisContext analysisCtx, IOptimizationContext context, boolean fromAdditionalDataSource)
+            throws AlgebricksException {
+        for (int varIndex = 0; varIndex < dsVarList.size(); varIndex++) {
+            LogicalVariable var = dsVarList.get(varIndex);
+            int funcVarIndex = optFuncExpr.findLogicalVar(var);
+            // No matching var in optFuncExpr.
+            if (funcVarIndex == -1) {
+                continue;
+            }
+            // The variable value is one of the partitioning fields.
+            List<String> fieldName = null;
+            IAType fieldType = null;
+
+            if (!fromAdditionalDataSource) {
+                fieldName = DatasetUtils.getPartitioningKeys(subTree.dataset).get(varIndex);
+                fieldType = (IAType) context.getOutputTypeEnvironment(subTree.dataSourceRef.getValue()).getVarType(var);
+            } else {
+                fieldName = DatasetUtils.getPartitioningKeys(subTree.ixJoinOuterAdditionalDatasets.get(varIndex)).get(
+                        varIndex);
+                fieldType = (IAType) context.getOutputTypeEnvironment(
+                        subTree.ixJoinOuterAdditionalDataSourceRefs.get(varIndex).getValue()).getVarType(var);
+            }
+            // Set the fieldName in the corresponding matched function
+            // expression, and remember matching subtree.
+            optFuncExpr.setFieldName(funcVarIndex, fieldName);
+            optFuncExpr.setOptimizableSubTree(funcVarIndex, subTree);
+            optFuncExpr.setSourceVar(funcVarIndex, var);
+            optFuncExpr.setLogicalExpr(funcVarIndex, new VariableReferenceExpression(var));
+            setTypeTag(context, subTree, optFuncExpr, funcVarIndex);
+            if (subTree.hasDataSourceScan()) {
+                fillIndexExprs(datasetIndexes, fieldName, fieldType, optFuncExpr, optFuncExprIndex, funcVarIndex,
+                        subTree, analysisCtx);
+            }
         }
     }
 
@@ -602,7 +700,9 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         if (op.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
             AssignOperator assignOp = (AssignOperator) op;
             expr = (AbstractLogicalExpression) assignOp.getExpressions().get(assignVarIndex).getValue();
-            childFuncExpr = (AbstractFunctionCallExpression) expr;
+            if (expr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+                childFuncExpr = (AbstractFunctionCallExpression) expr;
+            }
         } else {
             UnnestOperator unnestOp = (UnnestOperator) op;
             expr = (AbstractLogicalExpression) unnestOp.getExpressionRef().getValue();

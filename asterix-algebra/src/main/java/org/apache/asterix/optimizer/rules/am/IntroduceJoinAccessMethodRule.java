@@ -14,15 +14,14 @@
  */
 package org.apache.asterix.optimizer.rules.am;
 
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;
 import org.apache.asterix.metadata.entities.Index;
+import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -38,6 +37,8 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterJoinOperator;
+import org.apache.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
+import org.apache.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
 /**
@@ -45,7 +46,9 @@ import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
  * Matches the following operator pattern:
  * (join) <-- (select)? <-- (assign | unnest)+ <-- (datasource scan)
  * ...... <-- (select)? <-- (assign | unnest)+ <-- (datasource scan | unnest-map)
- * The order of the join inputs does not matter.
+ * The order of the join inputs matters (left-outer relation, right-inner relation).
+ * This rule tries to utilize an index on the inner relation first.
+ * If that's not possible, it tries to use an index on the outer relation.
  * Replaces the above pattern with the following simplified plan:
  * (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign) <-- (datasource scan | unnest-map)
  * The sort is optional, and some access methods may choose not to sort.
@@ -70,12 +73,14 @@ import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethodRule {
 
     protected Mutable<ILogicalOperator> joinRef = null;
-    protected AbstractBinaryJoinOperator join = null;
+    protected AbstractBinaryJoinOperator joinOp = null;
     protected AbstractFunctionCallExpression joinCond = null;
     protected final OptimizableOperatorSubTree leftSubTree = new OptimizableOperatorSubTree();
     protected final OptimizableOperatorSubTree rightSubTree = new OptimizableOperatorSubTree();
     protected boolean isLeftOuterJoin = false;
     protected boolean hasGroupBy = true;
+    protected IOptimizationContext context = null;
+    protected List<Mutable<ILogicalOperator>> afterJoinRefs = null;
 
     // Register access methods.
     protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
@@ -90,128 +95,43 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
             throws AlgebricksException {
         clear();
         setMetadataDeclarations(context);
+        this.context = context;
 
-        // Match operator pattern and initialize optimizable sub trees.
-        if (!matchesOperatorPattern(opRef, context)) {
-            return false;
-        }
-        // Analyze condition on those optimizable subtrees that have a datasource scan.
-        Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
-        boolean matchInLeftSubTree = false;
-        boolean matchInRightSubTree = false;
-        if (leftSubTree.hasDataSource()) {
-            matchInLeftSubTree = analyzeCondition(joinCond, leftSubTree.assignsAndUnnests, analyzedAMs);
-        }
-        if (rightSubTree.hasDataSource()) {
-            matchInRightSubTree = analyzeCondition(joinCond, rightSubTree.assignsAndUnnests, analyzedAMs);
-        }
-        if (!matchInLeftSubTree && !matchInRightSubTree) {
+        // Check whether this operator is the root, which is DISTRIBUTE_RESULT
+        AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
+
+        if (context.checkIfInDontApplySet(this, op)) {
             return false;
         }
 
-        // Set dataset and type metadata.
-        AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
-        boolean checkLeftSubTreeMetadata = false;
-        boolean checkRightSubTreeMetadata = false;
-        if (matchInLeftSubTree) {
-            checkLeftSubTreeMetadata = leftSubTree.setDatasetAndTypeMetadata(metadataProvider);
-        }
-        if (matchInRightSubTree) {
-            checkRightSubTreeMetadata = rightSubTree.setDatasetAndTypeMetadata(metadataProvider);
-        }
-        if (!checkLeftSubTreeMetadata && !checkRightSubTreeMetadata) {
-            return false;
-        }
-        if (checkLeftSubTreeMetadata) {
-            fillSubTreeIndexExprs(leftSubTree, analyzedAMs, context);
-        }
-        if (checkRightSubTreeMetadata) {
-            fillSubTreeIndexExprs(rightSubTree, analyzedAMs, context);
-        }
-        pruneIndexCandidates(analyzedAMs);
-
-        //Remove possibly chosen indexes from left Tree
-        if (isLeftOuterJoin) {
-            Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
-            // Check applicability of indexes by access method type.
-            while (amIt.hasNext()) {
-                Map.Entry<IAccessMethod, AccessMethodAnalysisContext> entry = amIt.next();
-                AccessMethodAnalysisContext amCtx = entry.getValue();
-                Iterator<Map.Entry<Index, List<Pair<Integer, Integer>>>> indexIt = amCtx.indexExprsAndVars.entrySet()
-                        .iterator();
-                while (indexIt.hasNext()) {
-                    Map.Entry<Index, List<Pair<Integer, Integer>>> indexEntry = indexIt.next();
-
-                    Index chosenIndex = indexEntry.getKey();
-                    if (!chosenIndex.getDatasetName().equals(rightSubTree.dataset.getDatasetName())) {
-                        indexIt.remove();
-                    }
-                }
+        // Begin from the root operator - DISTRIBUTE_RESULT or SINK
+        if (op.getOperatorTag() != LogicalOperatorTag.DISTRIBUTE_RESULT) {
+            if (op.getOperatorTag() != LogicalOperatorTag.SINK) {
+                return false;
             }
         }
 
-        // Choose index to be applied.
-        Pair<IAccessMethod, Index> chosenIndex = chooseIndex(analyzedAMs);
-        if (chosenIndex == null) {
-            context.addToDontApplySet(this, join);
+        afterJoinRefs = new ArrayList<Mutable<ILogicalOperator>>();
+        boolean planTransformed = false;
+
+        // Recursively check the plan whether the desired pattern exists in it. If so, try to optimize the plan.
+        planTransformed = checkAndApplyTheRule(opRef);
+
+        if (joinOp != null) {
+            context.addToDontApplySet(this, joinOp);
+        }
+
+        if (!planTransformed) {
             return false;
-        }
-
-        // Apply plan transformation using chosen index.
-        AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
-
-        //For LOJ with GroupBy, prepare objects to reset LOJ nullPlaceHolderVariable in GroupByOp
-        if (isLeftOuterJoin && hasGroupBy) {
-            analysisCtx.setLOJGroupbyOpRef(opRef);
-            ScalarFunctionCallExpression isNullFuncExpr = AccessMethodUtils
-                    .findLOJIsNullFuncInGroupBy((GroupByOperator) opRef.getValue());
-            analysisCtx.setLOJIsNullFuncInGroupBy(isNullFuncExpr);
-        }
-        boolean res = chosenIndex.first.applyJoinPlanTransformation(joinRef, leftSubTree, rightSubTree,
-                chosenIndex.second, analysisCtx, context, isLeftOuterJoin, hasGroupBy);
-        if (res) {
+        } else {
+            StringBuilder sb = new StringBuilder();
+            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
+            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) opRef.getValue(), sb, pvisitor, 0);
+            System.out.println("\n" + sb.toString());
             OperatorPropertiesUtil.typeOpRec(opRef, context);
         }
-        context.addToDontApplySet(this, join);
-        return res;
-    }
 
-    protected boolean matchesOperatorPattern(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
-        // First check that the operator is a join and its condition is a function call.
-        AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef.getValue();
-        if (context.checkIfInDontApplySet(this, op1)) {
-            return false;
-        }
-
-        boolean isInnerJoin = isInnerJoin(op1);
-        isLeftOuterJoin = isLeftOuterJoin(op1);
-
-        if (!isInnerJoin && !isLeftOuterJoin) {
-            return false;
-        }
-
-        // Set and analyze select.
-        if (isInnerJoin) {
-            joinRef = opRef;
-            join = (InnerJoinOperator) op1;
-        } else {
-            joinRef = op1.getInputs().get(0);
-            join = (LeftOuterJoinOperator) joinRef.getValue();
-        }
-
-        // Check that the select's condition is a function call.
-        ILogicalExpression condExpr = join.getCondition().getValue();
-        if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-            return false;
-        }
-        joinCond = (AbstractFunctionCallExpression) condExpr;
-        leftSubTree.initFromSubTree(join.getInputs().get(0));
-        rightSubTree.initFromSubTree(join.getInputs().get(1));
-        // One of the subtrees must have a datasource scan.
-        if (leftSubTree.hasDataSourceScan() || rightSubTree.hasDataSourceScan()) {
-            return true;
-        }
-        return false;
+        return planTransformed;
     }
 
     // Check whether (Groupby)? <-- Leftouterjoin
@@ -240,8 +160,187 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
 
     private void clear() {
         joinRef = null;
-        join = null;
+        joinOp = null;
         joinCond = null;
         isLeftOuterJoin = false;
+        context = null;
+        afterJoinRefs = null;
     }
+
+    // Recursively traverse the given plan and check whether JOIN operator exists.
+    // If one is found, maintain the path from the root to JOIN operator if it is not already optimized.
+    protected boolean checkAndApplyTheRule(Mutable<ILogicalOperator> opRef) throws AlgebricksException {
+        AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
+        boolean joinFoundAndOptimizationApplied = false;
+
+        // Check the operator pattern to see whether it is JOIN or not.
+        boolean isInnerJoin = isInnerJoin(op);
+        isLeftOuterJoin = isLeftOuterJoin(op);
+
+        Mutable<ILogicalOperator> joinRefFromThisOp = null;
+        AbstractBinaryJoinOperator joinOpFromThisOp = null;
+
+        if (isInnerJoin) {
+            joinRef = opRef;
+            joinOp = (InnerJoinOperator) op;
+            joinRefFromThisOp = opRef;
+            joinOpFromThisOp = (InnerJoinOperator) op;
+        } else if (isLeftOuterJoin) {
+            joinRef = op.getInputs().get(0);
+            joinOp = (LeftOuterJoinOperator) joinRef.getValue();
+            joinRefFromThisOp = op.getInputs().get(0);
+            joinOpFromThisOp = (LeftOuterJoinOperator) joinRefFromThisOp.getValue();
+        } else {
+            afterJoinRefs.add(opRef);
+        }
+
+        // Recursively check the plan and try to optimize it.
+        // We first check the children of the given operator to make sure an earlier join in the path is optimized first.
+        for (int i = 0; i < op.getInputs().size(); i++) {
+            joinFoundAndOptimizationApplied = checkAndApplyTheRule(op.getInputs().get(i));
+            if (joinFoundAndOptimizationApplied) {
+                return true;
+            }
+        }
+
+        // For JOIN case, try to transform the given plan.
+        if (isInnerJoin || isLeftOuterJoin) {
+
+            // Restore the join operator from this operator since it might be set to null
+            // if there are other join operators in the earlier path.
+            joinRef = joinRefFromThisOp;
+            joinOp = joinOpFromThisOp;
+
+            // Already checked? If not, this operator can be optimized.
+            if (!context.checkIfInDontApplySet(this, joinOp)) {
+                Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
+
+                // Check the condition of JOIN operator is a function call and initialize operator members.
+                if (checkJoinOperatorCondition()) {
+
+                    // Analyze condition on those optimizable subtrees that have a datasource scan.
+                    boolean matchInLeftSubTree = false;
+                    boolean matchInRightSubTree = false;
+                    if (leftSubTree.hasDataSource()) {
+                        matchInLeftSubTree = analyzeCondition(joinCond, leftSubTree.assignsAndUnnests, analyzedAMs);
+                    }
+                    if (rightSubTree.hasDataSource()) {
+                        matchInRightSubTree = analyzeCondition(joinCond, rightSubTree.assignsAndUnnests, analyzedAMs);
+                    }
+
+                    if (matchInLeftSubTree || matchInRightSubTree) {
+                        // Set dataset and type metadata.
+                        AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
+                        boolean checkLeftSubTreeMetadata = false;
+                        boolean checkRightSubTreeMetadata = false;
+                        if (matchInLeftSubTree) {
+                            checkLeftSubTreeMetadata = leftSubTree.setDatasetAndTypeMetadata(metadataProvider);
+                        }
+                        if (matchInRightSubTree) {
+                            checkRightSubTreeMetadata = rightSubTree.setDatasetAndTypeMetadata(metadataProvider);
+                        }
+
+                        if (checkLeftSubTreeMetadata || checkRightSubTreeMetadata) {
+                            // Map variables to the applicable indexes.
+                            if (checkLeftSubTreeMetadata) {
+                                fillSubTreeIndexExprs(leftSubTree, analyzedAMs, context);
+                            }
+                            if (checkRightSubTreeMetadata) {
+                                fillSubTreeIndexExprs(rightSubTree, analyzedAMs, context);
+                            }
+
+                            // Prune the access methods if there is no applicable index for them.
+                            pruneIndexCandidates(analyzedAMs);
+
+                            // Prioritize the order of index that will be applied. If the right subtree (inner branch) has indexes,
+                            // those indexes will be used.
+                            List<String> innerDatasets = new ArrayList<String>();
+                            if (rightSubTree.dataset != null) {
+                                innerDatasets.add(rightSubTree.dataset.getDatasetName());
+                            }
+                            if (rightSubTree.ixJoinOuterAdditionalDatasets != null) {
+                                for (int i = 0; i < rightSubTree.ixJoinOuterAdditionalDatasets.size(); i++) {
+                                    if (rightSubTree.ixJoinOuterAdditionalDatasets.get(i) != null) {
+                                        innerDatasets.add(rightSubTree.ixJoinOuterAdditionalDatasets.get(i)
+                                                .getDatasetName());
+                                    }
+                                }
+                            }
+                            removeIndexCandidatesFromOuterRelation(analyzedAMs, innerDatasets);
+
+                            // For the case of left-outer-join, we have to use indexes from the inner branch.
+                            // For the inner-join, we try to use the indexes from the inner branch first.
+                            // If no index is available, then we use the indexes from the outer branch.
+                            Pair<IAccessMethod, Index> chosenIndex = chooseIndex(analyzedAMs);
+                            if (chosenIndex != null) {
+
+                                // Find the field name of each variable in the sub-tree - required when checking index-only plan.
+                                if (checkLeftSubTreeMetadata) {
+                                    fillFieldNamesInTheSubTree(leftSubTree);
+                                }
+                                if (checkRightSubTreeMetadata) {
+                                    fillFieldNamesInTheSubTree(rightSubTree);
+                                }
+
+                                // Apply plan transformation using chosen index.
+                                AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
+
+                                //For LOJ with GroupBy, prepare objects to reset LOJ nullPlaceHolderVariable in GroupByOp
+                                if (isLeftOuterJoin && hasGroupBy) {
+                                    analysisCtx.setLOJGroupbyOpRef(opRef);
+                                    ScalarFunctionCallExpression isNullFuncExpr = AccessMethodUtils
+                                            .findLOJIsNullFuncInGroupBy((GroupByOperator) opRef.getValue());
+                                    analysisCtx.setLOJIsNullFuncInGroupBy(isNullFuncExpr);
+                                }
+
+                                boolean res = chosenIndex.first.applyJoinPlanTransformation(afterJoinRefs, joinRef,
+                                        leftSubTree, rightSubTree, chosenIndex.second, analysisCtx, context,
+                                        isLeftOuterJoin, hasGroupBy);
+
+                                // If the plan transformation is successful, we don't need to traverse the plan any more,
+                                // since if there are more JOIN operators, the next trigger on this plan will find them.
+                                if (res) {
+                                    return res;
+                                }
+                            } else {
+                                context.addToDontApplySet(this, joinOp);
+                            }
+
+                        }
+
+                    }
+                }
+
+            }
+
+            joinRef = null;
+            joinOp = null;
+            afterJoinRefs.add(opRef);
+        }
+
+        // Clean the path above JOIN operator by removing the current operator
+        afterJoinRefs.remove(opRef);
+
+        return false;
+    }
+
+    /**
+     * After the pattern is matched, check the condition and initialize the data sources from the both sub trees.
+     */
+    protected boolean checkJoinOperatorCondition() {
+        // Check that the join's condition is a function call.
+        ILogicalExpression condExpr = joinOp.getCondition().getValue();
+        if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            return false;
+        }
+        joinCond = (AbstractFunctionCallExpression) condExpr;
+        leftSubTree.initFromSubTree(joinOp.getInputs().get(0));
+        rightSubTree.initFromSubTree(joinOp.getInputs().get(1));
+        // One of the subtrees must have a datasource scan.
+        if (leftSubTree.hasDataSourceScan() || rightSubTree.hasDataSourceScan()) {
+            return true;
+        }
+        return false;
+    }
+
 }

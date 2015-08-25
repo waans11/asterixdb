@@ -1,0 +1,7 @@
+use dataverse test;
+
+for $a in dataset('MyData1')
+for $b in dataset('MyData2')
+where spatial-intersect($a.point, $b.point)
+order by $a.id, $b.id
+return {"aid": $a.id, "bid": $b.id, "apoint": $a.point, "bpoint": $b.point}

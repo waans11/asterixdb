@@ -16,12 +16,11 @@ package org.apache.asterix.optimizer.rules.am;
 
 import java.util.List;
 
-import org.apache.commons.lang3.mutable.Mutable;
-import org.apache.commons.lang3.mutable.MutableObject;
-
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.om.base.AInt32;
 import org.apache.asterix.om.constants.AsterixConstantValue;
+import org.apache.commons.lang3.mutable.Mutable;
+import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
@@ -43,20 +42,29 @@ public class AccessMethodJobGenParams {
     // In index-only plan, for a secondary index-search, we need to let the index know
     // that it needs to generate a variable that keeps the result of tryLock on PKs that are found.
     protected boolean splitValueForIndexOnlyPlanRequired;
+    // If used, this access method should only generate this number of results and stop further searching. -1: no limit.
+    protected long limitNumberOfResult;
 
-    private final int NUM_PARAMS = 8;
+    private final int NUM_PARAMS = 9;
 
     public AccessMethodJobGenParams() {
     }
 
     public AccessMethodJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
             boolean retainInput, boolean retainNull, boolean requiresBroadcast) {
-        this(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast, false);
+        this(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast, false, -1);
     }
 
     public AccessMethodJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
             boolean retainInput, boolean retainNull, boolean requiresBroadcast,
             boolean splitValueForIndexOnlyPlanRequired) {
+        this(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast,
+                splitValueForIndexOnlyPlanRequired, -1);
+    }
+
+    public AccessMethodJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
+            boolean retainInput, boolean retainNull, boolean requiresBroadcast,
+            boolean splitValueForIndexOnlyPlanRequired, long limitNumberOfResult) {
         this.indexName = indexName;
         this.indexType = indexType;
         this.dataverseName = dataverseName;
@@ -66,6 +74,7 @@ public class AccessMethodJobGenParams {
         this.requiresBroadcast = requiresBroadcast;
         this.isPrimaryIndex = datasetName.equals(indexName);
         this.splitValueForIndexOnlyPlanRequired = splitValueForIndexOnlyPlanRequired;
+        this.limitNumberOfResult = limitNumberOfResult;
     }
 
     public void writeToFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
@@ -78,6 +87,7 @@ public class AccessMethodJobGenParams {
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(requiresBroadcast)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils
                 .createBooleanConstant(splitValueForIndexOnlyPlanRequired)));
+        funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt64Constant(limitNumberOfResult)));
     }
 
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
@@ -90,6 +100,7 @@ public class AccessMethodJobGenParams {
         requiresBroadcast = AccessMethodUtils.getBooleanConstant(funcArgs.get(6));
         isPrimaryIndex = datasetName.equals(indexName);
         splitValueForIndexOnlyPlanRequired = AccessMethodUtils.getBooleanConstant(funcArgs.get(7));
+        limitNumberOfResult = AccessMethodUtils.getInt64Constant(funcArgs.get(8));
     }
 
     public String getIndexName() {
@@ -122,6 +133,10 @@ public class AccessMethodJobGenParams {
 
     public boolean getIsIndexOnlyPlanEnabled() {
         return splitValueForIndexOnlyPlanRequired;
+    }
+
+    public long getLimitNumberOfResult() {
+        return limitNumberOfResult;
     }
 
     protected void writeVarList(List<LogicalVariable> varList, List<Mutable<ILogicalExpression>> funcArgs) {

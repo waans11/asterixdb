@@ -2475,6 +2475,11 @@
     </test-group> -->
     <test-group name="index-join">
         <test-case FilePath="index-join">
+            <compilation-unit name="btree-index-nested-loop-join">
+                <output-dir compare="Text">btree-index-nested-loop-join</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
             <compilation-unit name="btree-primary-equi-join">
                 <output-dir compare="Text">btree-primary-equi-join</output-dir>
             </compilation-unit>
@@ -2485,8 +2490,53 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-join">
-            <compilation-unit name="rtree-spatial-intersect-point">
-                <output-dir compare="Text">rtree-spatial-intersect-point</output-dir>
+            <compilation-unit name="btree-secondary-equi-join_01">
+                <output-dir compare="Text">btree-secondary-equi-join_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-equi-join_02">
+                <output-dir compare="Text">btree-secondary-equi-join_02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-equi-join_03">
+                <output-dir compare="Text">btree-secondary-equi-join_03</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-equi-join_04">
+                <output-dir compare="Text">btree-secondary-equi-join_04</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="rtree-spatial-intersect-point_01">
+                <output-dir compare="Text">rtree-spatial-intersect-point_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="rtree-spatial-intersect-point_02">
+                <output-dir compare="Text">rtree-spatial-intersect-point_02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="rtree-spatial-intersect-point_03">
+                <output-dir compare="Text">rtree-spatial-intersect-point_03</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="rtree-spatial-intersect-point_04">
+                <output-dir compare="Text">rtree-spatial-intersect-point_04</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="rtree-spatial-intersect-point_05">
+                <output-dir compare="Text">rtree-spatial-intersect-point_05</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="invertedindex-secondary-fulltext-search-contains-join_01">
+                <output-dir compare="Text">invertedindex-secondary-fulltext-search-contains-join_01</output-dir>
             </compilation-unit>
         </test-case>
     </test-group>
@@ -2622,11 +2672,6 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="tinysocial-indexonly-plan-01">
-                <output-dir compare="Text">tinysocial-indexonly-plan-01</output-dir>
-            </compilation-unit>
-        </test-case>
-        <test-case FilePath="index-selection">
             <compilation-unit name="btree-secondary-index-indexonly-plan-01">
                 <output-dir compare="Text">btree-secondary-index-indexonly-plan-01</output-dir>
             </compilation-unit>
@@ -2667,8 +2712,18 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
+            <compilation-unit name="btree-secondary-index-indexonly-plan-limit-orderby-01">
+                <output-dir compare="Text">btree-secondary-index-indexonly-plan-limit-orderby-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
             <compilation-unit name="btree-secondary-index-non-indexonly-plan-01">
                 <output-dir compare="Text">btree-secondary-index-non-indexonly-plan-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="btree-secondary-index-non-indexonly-plan-limit-orderby-01">
+                <output-dir compare="Text">btree-secondary-index-non-indexonly-plan-limit-orderby-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -2733,7 +2788,7 @@
         </test-case>
         <test-case FilePath="index-selection">
             <compilation-unit name="rtree-secondary-index-non-indexonly-plan-01">
-                <output-dir compare="Text">rtree-secondary-index-inon-ndexonly-plan-01</output-dir>
+                <output-dir compare="Text">rtree-secondary-index-non-indexonly-plan-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -2744,6 +2799,11 @@
         <test-case FilePath="index-selection">
             <compilation-unit name="inverted-index-fulltext-secondary-index-indexonly-plan-02">
                 <output-dir compare="Text">inverted-index-fulltext-secondary-index-indexonly-plan-02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="inverted-index-fulltext-secondary-index-indexonly-plan-03">
+                <output-dir compare="Text">inverted-index-fulltext-secondary-index-indexonly-plan-03</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">

@@ -17,10 +17,9 @@ package org.apache.asterix.optimizer.rules.am;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
-
-import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
@@ -44,12 +43,21 @@ public class BTreeJobGenParams extends AccessMethodJobGenParams {
 
     public BTreeJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
             boolean retainInput, boolean retainNull, boolean requiresBroadcast) {
-        super(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast, false);
+        super(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast, false, -1);
     }
 
     public BTreeJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
-            boolean retainInput, boolean retainNull, boolean requiresBroadcast, boolean splitValueForIndexOnlyPlanRequired) {
-        super(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast, splitValueForIndexOnlyPlanRequired);
+            boolean retainInput, boolean retainNull, boolean requiresBroadcast,
+            boolean splitValueForIndexOnlyPlanRequired) {
+        super(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast,
+                splitValueForIndexOnlyPlanRequired, -1);
+    }
+
+    public BTreeJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
+            boolean retainInput, boolean retainNull, boolean requiresBroadcast,
+            boolean splitValueForIndexOnlyPlanRequired, long limitNumberOfResult) {
+        super(indexName, indexType, dataverseName, datasetName, retainInput, retainNull, requiresBroadcast,
+                splitValueForIndexOnlyPlanRequired, limitNumberOfResult);
     }
 
     public void setLowKeyVarList(List<LogicalVariable> keyVarList, int startIndex, int numKeys) {

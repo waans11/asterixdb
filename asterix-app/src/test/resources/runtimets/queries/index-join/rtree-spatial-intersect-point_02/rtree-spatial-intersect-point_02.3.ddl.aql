@@ -1,0 +1,4 @@
+use dataverse test;
+
+create index rtree_index on MyData2(point) type rtree;
+
