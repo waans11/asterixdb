@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.uci.ics.asterix.aql.translator;
+package org.apache.asterix.aql.translator;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -3024,7 +3024,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
         AlgebricksMetaOperatorDescriptor emptySource = new AlgebricksMetaOperatorDescriptor(spec, 0, 1,
                 new IPushRuntimeFactory[] { new EmptyTupleSourceRuntimeFactory() }, rDescs);
 
-        edu.uci.ics.asterix.common.transactions.JobId jobId = JobIdFactory.generateJobId();
+        org.apache.asterix.common.transactions.JobId jobId = JobIdFactory.generateJobId();
         Dataset dataset = MetadataManager.INSTANCE.getDataset(mdTxnCtx, dataverseName, datasetName);
         FlushDatasetOperatorDescriptor flushOperator = new FlushDatasetOperatorDescriptor(spec, jobId,
                 dataset.getDatasetId());

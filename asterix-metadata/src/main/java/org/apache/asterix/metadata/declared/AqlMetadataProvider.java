@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package edu.uci.ics.asterix.metadata.declared;
+package org.apache.asterix.metadata.declared;
 
 import java.io.File;
 import java.io.IOException;
@@ -2297,18 +2297,18 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 
     private static Map<String, String> initializeAdapterFactoryMapping() {
         Map<String, String> adapterFactoryMapping = new HashMap<String, String>();
-        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter",
-                "edu.uci.ics.asterix.external.adapter.factory.NCFileSystemAdapterFactory");
-        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.HDFSAdapter",
-                "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory");
-        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.PullBasedTwitterAdapter",
-                "edu.uci.ics.asterix.external.dataset.adapter.PullBasedTwitterAdapterFactory");
-        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.RSSFeedAdapter",
-                "edu.uci.ics.asterix.external.dataset.adapter..RSSFeedAdapterFactory");
-        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.CNNFeedAdapter",
-                "edu.uci.ics.asterix.external.dataset.adapter.CNNFeedAdapterFactory");
-        adapterFactoryMapping.put("edu.uci.ics.asterix.tools.external.data.RateControlledFileSystemBasedAdapter",
-                "edu.uci.ics.asterix.tools.external.data.RateControlledFileSystemBasedAdapterFactory");
+        adapterFactoryMapping.put("org.apache.asterix.external.dataset.adapter.NCFileSystemAdapter",
+                "org.apache.asterix.external.adapter.factory.NCFileSystemAdapterFactory");
+        adapterFactoryMapping.put("org.apache.asterix.external.dataset.adapter.HDFSAdapter",
+                "org.apache.asterix.external.adapter.factory.HDFSAdapterFactory");
+        adapterFactoryMapping.put("org.apache.asterix.external.dataset.adapter.PullBasedTwitterAdapter",
+                "org.apache.asterix.external.dataset.adapter.PullBasedTwitterAdapterFactory");
+        adapterFactoryMapping.put("org.apache.asterix.external.dataset.adapter.RSSFeedAdapter",
+                "org.apache.asterix.external.dataset.adapter..RSSFeedAdapterFactory");
+        adapterFactoryMapping.put("org.apache.asterix.external.dataset.adapter.CNNFeedAdapter",
+                "org.apache.asterix.external.dataset.adapter.CNNFeedAdapterFactory");
+        adapterFactoryMapping.put("org.apache.asterix.tools.external.data.RateControlledFileSystemBasedAdapter",
+                "org.apache.asterix.tools.external.data.RateControlledFileSystemBasedAdapterFactory");
 
         return adapterFactoryMapping;
     }

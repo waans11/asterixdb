@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package edu.uci.ics.asterix.dataflow.data.nontagged.hash;
+package org.apache.asterix.dataflow.data.nontagged.hash;
 
 import java.io.IOException;
 
