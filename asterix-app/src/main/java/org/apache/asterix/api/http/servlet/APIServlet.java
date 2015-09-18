@@ -1,16 +1,20 @@
 /*
- * Copyright 2009-2013 by The Regents of the University of California
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * you may obtain a copy of the License from
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 package org.apache.asterix.api.http.servlet;
 
@@ -31,6 +35,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.asterix.api.common.APIFramework;
 import org.apache.asterix.api.common.SessionConfig;
 import org.apache.asterix.api.common.SessionConfig.OutputFormat;
 import org.apache.asterix.aql.base.Statement;
@@ -66,15 +71,12 @@ public class APIServlet extends HttpServlet {
         String output = request.getParameter("output-format");
         if (output.equals("ADM")) {
             format = OutputFormat.ADM;
-        }
-        else if (output.equals("CSV")) {
+        } else if (output.equals("CSV")) {
             format = OutputFormat.CSV;
-        }
-        else if (output.equals("CSV-Header")) {
+        } else if (output.equals("CSV-Header")) {
             format = OutputFormat.CSV;
             csv_and_header = true;
-        }
-        else {
+        } else {
             // Default output format
             format = OutputFormat.JSON;
         }
@@ -110,8 +112,7 @@ public class APIServlet extends HttpServlet {
             sessionConfig.set(SessionConfig.FORMAT_HTML, true);
             sessionConfig.set(SessionConfig.FORMAT_CSV_HEADER, csv_and_header);
             sessionConfig.setOOBData(isSet(printExprParam), isSet(printRewrittenExprParam),
-                                     isSet(printLogicalPlanParam), isSet(printOptimizedLogicalPlanParam),
-                                     isSet(printJob));
+                    isSet(printLogicalPlanParam), isSet(printOptimizedLogicalPlanParam), isSet(printJob));
             MetadataManager.INSTANCE.init();
             AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, sessionConfig);
             double duration = 0;
@@ -126,6 +127,7 @@ public class APIServlet extends HttpServlet {
             aqlTranslator.compileAndExecute(hcc, hds, AqlTranslator.ResultDelivery.SYNC);
             long endTime = System.currentTimeMillis();
             duration = (endTime - startTime) / 1000.00;
+            out.println(APIFramework.HTML_STATEMENT_SEPARATOR);
             out.println("<PRE>Duration of all jobs: " + duration + " sec</PRE>");
 
             // For Experiment Profiler

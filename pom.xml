@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
- ! Copyright 2009-2013 by The Regents of the University of California
- ! Licensed under the Apache License, Version 2.0 (the "License");
- ! you may not use this file except in compliance with the License.
- ! you may obtain a copy of the License from
- ! 
- !     http://www.apache.org/licenses/LICENSE-2.0
- ! 
- ! Unless required by applicable law or agreed to in writing, software
- ! distributed under the License is distributed on an "AS IS" BASIS,
- ! WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- ! See the License for the specific language governing permissions and
- ! limitations under the License.
+ ! Licensed to the Apache Software Foundation (ASF) under one
+ ! or more contributor license agreements.  See the NOTICE file
+ ! distributed with this work for additional information
+ ! regarding copyright ownership.  The ASF licenses this file
+ ! to you under the Apache License, Version 2.0 (the
+ ! "License"); you may not use this file except in compliance
+ ! with the License.  You may obtain a copy of the License at
+ !
+ !   http://www.apache.org/licenses/LICENSE-2.0
+ !
+ ! Unless required by applicable law or agreed to in writing,
+ ! software distributed under the License is distributed on an
+ ! "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ ! KIND, either express or implied.  See the License for the
+ ! specific language governing permissions and limitations
+ ! under the License.
  !-->
 <project
     xmlns="http://maven.apache.org/POM/4.0.0"
@@ -22,6 +26,12 @@
     <artifactId>asterix</artifactId>
     <version>0.8.7-SNAPSHOT</version>
     <packaging>pom</packaging>
+
+    <parent>
+      <groupId>org.apache</groupId>
+      <artifactId>apache</artifactId>
+      <version>LATEST</version>
+    </parent>
 
     <licenses>
         <license>
@@ -46,8 +56,8 @@
         <global.test.includes>**/*TestSuite.java,**/*Test.java,${execution.tests}</global.test.includes>
         <global.test.excludes>${optimizer.tests},${metadata.tests},${invalid.tests},${repeated.tests}</global.test.excludes>
     <!-- Versions under dependencymanagement or used in many projects via properties -->
-        <algebricks.version>0.2.16-SNAPSHOT</algebricks.version>
-        <hyracks.version>0.2.16-SNAPSHOT</hyracks.version>
+        <algebricks.version>0.2.17-SNAPSHOT</algebricks.version>
+        <hyracks.version>0.2.17-SNAPSHOT</hyracks.version>
         <hadoop.version>2.2.0</hadoop.version>
         <junit.version>4.11</junit.version>
         <commons.io.version>2.4</commons.io.version>
@@ -57,14 +67,6 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-release-plugin</artifactId>
-                <version>2.1</version>
-                <configuration>
-                    <goals>package source:jar javadoc:jar deploy:deploy</goals>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -144,25 +146,40 @@
                     </includes>
                 </configuration>
             </plugin>
-
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                 <!-- We override the configuration plugin to override the descriptor to use for building
+                  the source release zip. Specifically, we would like to control the inclusions/exclusions.
+                  For example, we exclude the KEYS file from the zip -->
+                <executions>
+                    <execution>
+                    <!-- Use this id to match the id mentioned in the assembly plugin configuration in
+                     the apache parent POM under the apache-release profile -->
+                        <id>source-release-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+            <!-- combine.self should be override to replace the configuration in the parent POM -->
+                        <configuration combine.self="override">
+                            <runOnlyAtExecutionRoot>true</runOnlyAtExecutionRoot>
+                            <descriptors>
+                                <descriptor>src/main/assembly/source.xml</descriptor>
+                            </descriptors>
+                        </configuration>
+                  </execution>
+              </executions>
+            </plugin>
         </plugins>
     </build>
 
     <scm>
-        <connection>scm:git:https://code.google.com/p/asterixdb/</connection>
-        <developerConnection>scm:git:ssh://fulliautomatix.ics.uci.edu:29418/asterixdb</developerConnection>
-    </scm>
+        <connection>scm:git:https://github.com/apache/incubator-asterixdb</connection>
+        <developerConnection>scm:git:ssh://asterix-gerrit.ics.uci.edu:29418/asterixdb</developerConnection>
+        <url>https://github.com/apache/incubator-asterixdb</url>
 
-    <distributionManagement>
-        <repository>
-            <id>asterix-releases</id>
-            <url>http://obelix.ics.uci.edu/nexus/content/repositories/asterix-releases/</url>
-        </repository>
-        <snapshotRepository>
-            <id>asterix-snapshots</id>
-            <url>http://obelix.ics.uci.edu/nexus/content/repositories/asterix-snapshots/</url>
-        </snapshotRepository>
-    </distributionManagement>
+    </scm>
 
     <profiles>
         <profile>
@@ -291,6 +308,15 @@
             </snapshots>
             <id>algebricks-snapshots</id>
             <url>http://obelix.ics.uci.edu/nexus/content/repositories/algebricks-snapshots/</url>
+        </repository>
+        <repository>
+            <snapshots>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+                <checksumPolicy>fail</checksumPolicy>
+            </snapshots>
+            <id>apache-staging</id>
+            <url>https://repository.apache.org/content/repositories/orgapacheasterix-1005/</url>
         </repository>
     </repositories>
     <dependencyManagement>
