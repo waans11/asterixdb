@@ -35,7 +35,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.asterix.api.common.APIFramework;
 import org.apache.asterix.api.common.SessionConfig;
 import org.apache.asterix.api.common.SessionConfig.OutputFormat;
 import org.apache.asterix.aql.base.Statement;

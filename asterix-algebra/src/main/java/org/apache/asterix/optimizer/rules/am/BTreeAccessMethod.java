@@ -130,6 +130,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         // Check whether assign (unnest) operator exists before the select operator
         Mutable<ILogicalOperator> assignBeforeSelectOpRef = (subTree.assignsAndUnnestsRefs.isEmpty()) ? null
                 : subTree.assignsAndUnnestsRefs.get(0);
+        System.out.println("subTree.assignsAndUnnestsRefs.size() " + subTree.assignsAndUnnestsRefs.size());
         ILogicalOperator assignBeforeSelectOp = null;
         if (assignBeforeSelectOpRef != null) {
             assignBeforeSelectOp = assignBeforeSelectOpRef.getValue();
@@ -188,7 +189,13 @@ public class BTreeAccessMethod implements IAccessMethod {
                 }
             }
 
-        }
+        //        Quadruple<Boolean, Boolean, Boolean, Boolean> indexOnlyPlanCheck = new Quadruple<Boolean, Boolean, Boolean, Boolean>(
+        //                isIndexOnlyPlanPossible, secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
+        //                verificationAfterSIdxSearchRequired);
+
+        Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean> indexOnlyPlanCheck = new Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean>(
+                isIndexOnlyPlanPossible, secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
+                verificationAfterSIdxSearchRequired, noFalsePositiveResultsFromSIdxSearch);
 
         Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean> indexOnlyPlanInfo = new Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean>(
                 isIndexOnlyPlan, secondaryKeyFieldUsedInSelectOpCondition, secondaryKeyFieldUsedAfterSelectOp,
@@ -196,17 +203,17 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         // If there can be any false positive results, an index-only plan is not possible
         if (dataset.getDatasetType() == DatasetType.INTERNAL) {
-            boolean indexOnlyPlancheck = AccessMethodUtils.indexOnlyPlanCheck(aboveSelectRefs, selectRef, subTree,
-                    null, chosenIndex, analysisCtx, context, indexOnlyPlanInfo);
+            indexOnlyPlanCheck = AccessMethodUtils.isIndexOnlyPlan(aboveSelectRefs, selectRef, subTree, chosenIndex,
+                    analysisCtx, context);
 
             if (!indexOnlyPlancheck) {
                 return false;
             } else {
-                isIndexOnlyPlan = indexOnlyPlanInfo.first;
-                secondaryKeyFieldUsedInSelectOpCondition = indexOnlyPlanInfo.second;
-                secondaryKeyFieldUsedAfterSelectOp = indexOnlyPlanInfo.third;
-                verificationAfterSIdxSearchRequired = indexOnlyPlanInfo.fourth;
-                noFalsePositiveResultsFromSIdxSearch = indexOnlyPlanInfo.fifth;
+                isIndexOnlyPlanPossible = indexOnlyPlanCheck.first;
+                secondaryKeyFieldUsedInSelectCondition = indexOnlyPlanCheck.second;
+                secondaryKeyFieldUsedAfterSelectOp = indexOnlyPlanCheck.third;
+                verificationAfterSIdxSearchRequired = indexOnlyPlanCheck.fourth;
+                noFalsePositiveResultsFromSIdxSearch = indexOnlyPlanCheck.fifth;
             }
         } else {
             // We don't consider an index on an external dataset to be an index-only plan.
@@ -223,7 +230,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         // Transform the current path to the path that is utilizing the corresponding indexes
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(aboveSelectRefs, selectRef, conditionRef,
                 subTree.assignsAndUnnestsRefs, subTree, null, chosenIndex, analysisCtx, false, false, false, context,
-                verificationAfterSIdxSearchRequired, secondaryKeyFieldUsedInSelectOpCondition,
+                verificationAfterSIdxSearchRequired, secondaryKeyFieldUsedInSelectCondition,
                 secondaryKeyFieldUsedAfterSelectOp, noFalsePositiveResultsFromSIdxSearch);
         if (primaryIndexUnnestOp == null) {
             return false;
@@ -863,7 +870,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         } else if (!isPrimaryIndex) {
             if (noFalsePositiveResultsFromSIdxSearch && !isIndexOnlyPlanEnabled) {
                 tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
-                        aboveTopOpRefs, opRef, conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType,
+                        aboveTopOpRefs, opRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType,
                         secondaryIndexUnnestOp, context, true, true, retainNull, false, chosenIndex, analysisCtx,
                         outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
                         secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
@@ -871,7 +878,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             } else {
                 // pass retainInput variable's value
                 tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
-                        aboveTopOpRefs, opRef, conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType,
+                        aboveTopOpRefs, opRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType,
                         secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex,
                         analysisCtx, outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
                         secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,

@@ -2720,6 +2720,7 @@
                 <output-dir compare="Text">btree-secondary-index-indexonly-plan-limit-orderby-01</output-dir>
             </compilation-unit>
         </test-case>
+
         <test-case FilePath="index-selection">
             <compilation-unit name="btree-secondary-index-non-indexonly-plan-01">
                 <output-dir compare="Text">btree-secondary-index-non-indexonly-plan-01</output-dir>

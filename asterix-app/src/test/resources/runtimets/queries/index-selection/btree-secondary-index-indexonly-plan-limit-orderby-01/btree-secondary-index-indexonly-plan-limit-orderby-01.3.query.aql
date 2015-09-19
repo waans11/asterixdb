@@ -1,7 +1,7 @@
 use dataverse test;
 
 for $o in dataset('MyData')
-where $o.docid < 50
-order by $o.docid
-limit 5
+where $o.docid < 30
+order by $o.id
+limit 2
 return {"pk":$o.id, "sk":$o.docid}
