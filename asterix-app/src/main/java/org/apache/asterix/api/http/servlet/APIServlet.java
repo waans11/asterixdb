@@ -35,6 +35,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.asterix.api.common.APIFramework;
 import org.apache.asterix.api.common.SessionConfig;
 import org.apache.asterix.api.common.SessionConfig.OutputFormat;
 import org.apache.asterix.aql.base.Statement;
@@ -48,8 +49,6 @@ import org.apache.asterix.result.ResultReader;
 import org.apache.asterix.result.ResultUtils;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.dataset.IHyracksDataset;
-import org.apache.hyracks.api.util.ExecutionTimeProfiler;
-import org.apache.hyracks.api.util.OperatorExecutionTimeProfiler;
 import org.apache.hyracks.client.dataset.HyracksDataset;
 
 public class APIServlet extends HttpServlet {
@@ -118,10 +117,10 @@ public class APIServlet extends HttpServlet {
             long startTime = System.currentTimeMillis();
 
             // For Experiment Profiler
-//            if(ExperimentProfiler.PROFILE_MODE) {
-//            	messageToWrite = "\n\n" + sdf.format(startTime) + "\t***** Query:\n" + query;
-//                OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("APIServlet", messageToWrite + "\n", false);
-//            }
+            //            if(ExperimentProfiler.PROFILE_MODE) {
+            //            	messageToWrite = "\n\n" + sdf.format(startTime) + "\t***** Query:\n" + query;
+            //                OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("APIServlet", messageToWrite + "\n", false);
+            //            }
 
             aqlTranslator.compileAndExecute(hcc, hds, AqlTranslator.ResultDelivery.SYNC);
             long endTime = System.currentTimeMillis();
@@ -130,10 +129,10 @@ public class APIServlet extends HttpServlet {
             out.println("<PRE>Duration of all jobs: " + duration + " sec</PRE>");
 
             // For Experiment Profiler
-//            if(ExperimentProfiler.PROFILE_MODE) {
-//            	messageToWrite = sdf.format(System.currentTimeMillis()) + "\t***** Query Duration: " + duration;
-//                OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("APIServlet", messageToWrite + "\n", true);
-//            }
+            //            if(ExperimentProfiler.PROFILE_MODE) {
+            //            	messageToWrite = sdf.format(System.currentTimeMillis()) + "\t***** Query Duration: " + duration;
+            //                OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.add("APIServlet", messageToWrite + "\n", true);
+            //            }
 
         } catch (ParseException | TokenMgrError | org.apache.asterix.aqlplus.parser.TokenMgrError pe) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.INFO, pe.toString(), pe);

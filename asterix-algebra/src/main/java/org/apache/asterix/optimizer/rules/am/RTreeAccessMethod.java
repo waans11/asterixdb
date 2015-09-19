@@ -57,13 +57,14 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperat
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
+import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
 /**
  * Class for helping rewrite rules to choose and apply RTree indexes.
  */
 public class RTreeAccessMethod implements IAccessMethod {
 
-    // The second boolean value means that this function can produce false positive results.
+    // The second boolean value means that this function can produce false positive results if this value is set to false.
     // That is, an index-search alone cannot replace SELECT condition and
     // SELECT condition needs to be applied afterwards to get the correct results.
     // In R-Tree case, depends on the parameters of the SPATIAL_INTERSECT function, it may/may not produce false positive results.
@@ -107,7 +108,6 @@ public class RTreeAccessMethod implements IAccessMethod {
         SelectOperator select = (SelectOperator) selectRef.getValue();
         Mutable<ILogicalExpression> conditionRef = select.getCondition();
         AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) conditionRef.getValue();
-        FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();
 
         ARecordType recordType = subTree.recordType;
 
@@ -192,7 +192,7 @@ public class RTreeAccessMethod implements IAccessMethod {
             noFalsePositiveResultsFromSIdxSearch = true;
         }
 
-        Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean> indexOnlyPlanCheck = new Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean>(
+        Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean> indexOnlyPlanInfo = new Quintuple<Boolean, Boolean, Boolean, Boolean, Boolean>(
                 isIndexOnlyPlanPossible, secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
                 verificationAfterSIdxSearchRequired, noFalsePositiveResultsFromSIdxSearch);
 
@@ -201,17 +201,17 @@ public class RTreeAccessMethod implements IAccessMethod {
         // Is this plan an index-only plan?
         if (isIndexOnlyPlanPossible) {
             if (dataset.getDatasetType() == DatasetType.INTERNAL) {
-                indexOnlyPlanCheck = AccessMethodUtils.isIndexOnlyPlan(aboveSelectRefs, selectRef, subTree,
-                        chosenIndex, analysisCtx, context);
+                boolean indexOnlyPlancheck = AccessMethodUtils.indexOnlyPlanCheck(aboveSelectRefs, selectRef, subTree,
+                        null, chosenIndex, analysisCtx, context, indexOnlyPlanInfo);
 
                 if (!indexOnlyPlancheck) {
                     return false;
                 } else {
-                    isIndexOnlyPlanPossible = indexOnlyPlanCheck.first;
-                    secondaryKeyFieldUsedInSelectCondition = indexOnlyPlanCheck.second;
-                    secondaryKeyFieldUsedAfterSelectOp = indexOnlyPlanCheck.third;
-                    verificationAfterSIdxSearchRequired = indexOnlyPlanCheck.fourth;
-                    noFalsePositiveResultsFromSIdxSearch = indexOnlyPlanCheck.fifth;
+                    isIndexOnlyPlanPossible = indexOnlyPlanInfo.first;
+                    secondaryKeyFieldUsedInSelectCondition = indexOnlyPlanInfo.second;
+                    secondaryKeyFieldUsedAfterSelectOp = indexOnlyPlanInfo.third;
+                    verificationAfterSIdxSearchRequired = indexOnlyPlanInfo.fourth;
+                    noFalsePositiveResultsFromSIdxSearch = indexOnlyPlanInfo.fifth;
                 }
             } else {
                 // For a index on an external dataset can't be optimized for the index-only plan.
@@ -232,9 +232,11 @@ public class RTreeAccessMethod implements IAccessMethod {
             noFalsePositiveResultsFromSIdxSearch = false;
         }
 
+        SelectOperator selectOp = (SelectOperator) selectRef.getValue();
+
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(aboveSelectRefs, selectRef,
-                subTree.assignsAndUnnestsRefs, subTree, null, chosenIndex, optFuncExpr, analysisCtx, false, false,
-                false, context, isIndexOnlyPlanPossible, verificationAfterSIdxSearchRequired,
+                selectOp.getCondition(), subTree.assignsAndUnnestsRefs, subTree, null, chosenIndex, optFuncExpr,
+                analysisCtx, false, false, false, context, verificationAfterSIdxSearchRequired,
                 secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp,
                 noFalsePositiveResultsFromSIdxSearch);
         if (primaryIndexUnnestOp == null) {
@@ -486,11 +488,11 @@ public class RTreeAccessMethod implements IAccessMethod {
     }
 
     private ILogicalOperator createSecondaryToPrimaryPlan(List<Mutable<ILogicalOperator>> afterTopRefs,
-            Mutable<ILogicalOperator> topRef, List<Mutable<ILogicalOperator>> assignBeforeTopRefs,
-            OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, Index chosenIndex,
-            IOptimizableFuncExpr optFuncExpr, AccessMethodAnalysisContext analysisCtx, boolean retainInput,
-            boolean retainNull, boolean requiresBroadcast, IOptimizationContext context,
-            boolean isIndexOnlyPlanPossible, boolean verificationAfterSIdxSearchRequired,
+            Mutable<ILogicalOperator> topRef, Mutable<ILogicalExpression> conditionRef,
+            List<Mutable<ILogicalOperator>> assignBeforeTopRefs, OptimizableOperatorSubTree indexSubTree,
+            OptimizableOperatorSubTree probeSubTree, Index chosenIndex, IOptimizableFuncExpr optFuncExpr,
+            AccessMethodAnalysisContext analysisCtx, boolean retainInput, boolean retainNull,
+            boolean requiresBroadcast, IOptimizationContext context, boolean verificationAfterSIdxSearchRequired,
             boolean secondaryKeyFieldUsedInSelectCondition, boolean secondaryKeyFieldUsedAfterSelectOp,
             boolean noFalsePositiveResultsFromSIdxSearch) throws AlgebricksException {
         Dataset dataset = indexSubTree.dataset;
@@ -520,7 +522,7 @@ public class RTreeAccessMethod implements IAccessMethod {
         AbstractDataSourceOperator dataSourceOp = (AbstractDataSourceOperator) indexSubTree.dataSourceRef.getValue();
         RTreeJobGenParams jobGenParams = new RTreeJobGenParams(chosenIndex.getIndexName(), IndexType.RTREE,
                 dataset.getDataverseName(), dataset.getDatasetName(), retainInput, retainNull, requiresBroadcast,
-                isIndexOnlyPlanEnabled || noFalsePositiveResultsFromSIdxSearch);
+                isIndexOnlyPlanEnabled || noFalsePositiveResultsFromSIdxSearch, limitNumberOfResult);
         // A spatial object is serialized in the constant of the func expr we are optimizing.
         // The R-Tree expects as input an MBR represented with 1 field per dimension.
         // Here we generate vars and funcs for extracting MBR fields from the constant into fields of a tuple (as the R-Tree expects them).
@@ -589,16 +591,16 @@ public class RTreeAccessMethod implements IAccessMethod {
             // the result of tryLock on a PK during a secondary index search. The SPLIT operator needs to see this variable.
             if (noFalsePositiveResultsFromSIdxSearch && !isIndexOnlyPlanEnabled) {
                 primaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
-                        afterTopRefs, topRef, assignBeforeTopRefs, dataSourceOp, dataset, recordType,
-                        secondaryIndexUnnestOp, context, true, true, false, false, chosenIndex, analysisCtx,
+                        afterTopRefs, topRef, conditionRef, assignBeforeTopRefs, dataSourceOp, dataset, recordType,
+                        secondaryIndexUnnestOp, context, true, true, retainNull, false, chosenIndex, analysisCtx,
                         outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
                         secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
                         noFalsePositiveResultsFromSIdxSearch);
             } else {
                 primaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
-                        afterTopRefs, topRef, assignBeforeTopRefs, dataSourceOp, dataset, recordType,
-                        secondaryIndexUnnestOp, context, true, retainInput, false, false, chosenIndex, analysisCtx,
-                        outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
+                        afterTopRefs, topRef, conditionRef, assignBeforeTopRefs, dataSourceOp, dataset, recordType,
+                        secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex,
+                        analysisCtx, outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
                         secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
                         noFalsePositiveResultsFromSIdxSearch);
             }

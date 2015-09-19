@@ -22,6 +22,6 @@ create index ngram_index on DBLP(title:string) type ngram(3) enforced;
 write output to nc1:"rttest/inverted-index-basic_ngram-contains.adm";
 
 for $o in dataset('DBLP')
-where contains($o.title, "Multimedia")
+where contains-substring($o.title, "Multimedia")
 order by $o.id
 return $o

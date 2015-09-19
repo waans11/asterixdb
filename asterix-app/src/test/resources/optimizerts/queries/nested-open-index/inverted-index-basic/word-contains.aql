@@ -27,6 +27,6 @@ write output to nc1:"rttest/inverted-index-basic_word-contains.adm";
 
 // Contains cannot be answered with a word inverted index.
 for $o in dataset('DBLP')
-where contains($o.nested.title, "Multimedia")
+where contains-substring($o.nested.title, "Multimedia")
 order by $o.nested.id
 return $o

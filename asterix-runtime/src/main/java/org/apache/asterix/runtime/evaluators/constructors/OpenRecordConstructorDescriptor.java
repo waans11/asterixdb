@@ -98,6 +98,8 @@ public class OpenRecordConstructorDescriptor extends AbstractScalarFunctionDynam
                                     fieldNameBuffer.reset();
                                     evalNames[i].evaluate(tuple);
                                     recBuilder.addField(fieldNameBuffer, fieldValueBuffer);
+                                    System.out.println("OpenRecordConstructorDescriptor: " + evalNames[i]
+                                            + " field added.");
                                 } else {
                                     if (fieldValueBuffer.getByteArray()[0] != ATypeTag.NULL.serialize()) {
                                         recBuilder.addField(closedFieldId, fieldValueBuffer);

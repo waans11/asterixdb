@@ -27,6 +27,6 @@ create index ngram_index on DBLP(nested.title) type ngram(3);
 write output to nc1:"rttest/inverted-index-basic_ngram-contains.adm";
 
 for $o in dataset('DBLP')
-where contains($o.nested.title, "Multimedia")
+where contains-substring($o.nested.title, "Multimedia")
 order by $o.nested.id
 return $o

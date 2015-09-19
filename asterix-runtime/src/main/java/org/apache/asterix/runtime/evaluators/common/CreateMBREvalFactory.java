@@ -325,6 +325,7 @@ public class CreateMBREvalFactory implements ICopyEvaluatorFactory {
                     }
                     out.writeByte(ATypeTag.DOUBLE.serialize());
                     out.writeDouble(value);
+                    System.out.println("MBR double:" + value + " " + dimension + " " + coordinate);
                 } catch (HyracksDataException hde) {
                     throw new AlgebricksException(hde);
                 } catch (IOException e) {

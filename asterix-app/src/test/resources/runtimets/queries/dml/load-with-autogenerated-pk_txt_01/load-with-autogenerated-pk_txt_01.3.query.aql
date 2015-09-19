@@ -1,5 +1,5 @@
 use dataverse test;
 
 for $o in dataset('DBLP')
-where contains($o.title,"Physical Object Management.")
+where contains-substring($o.title,"Physical Object Management.")
 return $o.title;

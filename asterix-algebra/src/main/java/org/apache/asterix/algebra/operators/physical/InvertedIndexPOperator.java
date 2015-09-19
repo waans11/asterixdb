@@ -218,6 +218,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
 
             IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
             List<LogicalVariable> outputVars = unnestMap.getVariables();
+            int outputFromUnnestVarsSize = outputVars.size();
+
             if (retainInput) {
                 outputVars = new ArrayList<LogicalVariable>();
                 VariableUtilities.getLiveVariables(unnestMap, outputVars);
@@ -270,8 +272,10 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                         : new SecondaryIndexSearchOperationCallbackFactory();
             } else {
                 // We deduct 1 because the last field will be the result of searchCallback.proceed()
+                int startIdx = outputFromUnnestVarsSize - 1;
+
                 for (int i = 0; i < numPrimaryKeys; i++) {
-                    primaryKeyFieldsInSecondaryIndex[i] = outputRecDesc.getFieldCount() - 1 - numPrimaryKeys + i;
+                    primaryKeyFieldsInSecondaryIndex[i] = startIdx - numPrimaryKeys + i;
                 }
 
                 // If it's an index-only plan, we try to get a record-level lock on PK.

@@ -9,7 +9,7 @@ use dataverse test;
 
 for $a in dataset('DBLP')
 for $b in dataset('CSX')
-where $a.authors contains text ($b.authors)
+where $b.authors contains text ($a.authors)
 //where $a.authors /*+ indexnl */ = $b.authors
 order by $a.id, $b.id
 return {"aid": $a.id, "bid": $b.id}

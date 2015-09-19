@@ -83,11 +83,13 @@ public class AsterixLSMInsertDeleteOperatorNodePushable extends LSMIndexInsertUp
         accessor.reset(buffer);
         ILSMIndexAccessor lsmAccessor = (ILSMIndexAccessor) indexAccessor;
         int tupleCount = accessor.getTupleCount();
+        int tmpCnt = 0;
         try {
             for (int i = 0; i < tupleCount; i++) {
                 if (tupleFilter != null) {
                     frameTuple.reset(accessor, i);
                     if (!tupleFilter.accept(frameTuple)) {
+                        tmpCnt++;
                         continue;
                     }
                 }
@@ -115,6 +117,8 @@ public class AsterixLSMInsertDeleteOperatorNodePushable extends LSMIndexInsertUp
                     }
                 }
             }
+            System.out.println("AsterixLSMInsertDeleteOperatorNodePushable tupleFilter: " + tupleFilter + " accessor: "
+                    + lsmAccessor + " tupleCnt: " + tupleCount + " skipped: " + tmpCnt);
         } catch (Exception e) {
             e.printStackTrace();
             throw new HyracksDataException(e);

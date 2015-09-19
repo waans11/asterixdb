@@ -33,5 +33,5 @@ write output to nc1:"rttest/inverted-index-join_ngram-edit-distance-contains.adm
 
 for $a in dataset('DBLP')
 for $b in dataset('CSX')
-where edit-distance-contains($a.authors, $b.authors, 3)[0] and $a.id < $b.id
+where edit-distance-contains-substring($a.authors, $b.authors, 3)[0] and $a.id < $b.id
 return {"arec": $a, "brec": $b }

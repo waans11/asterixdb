@@ -43,8 +43,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperato
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
-import org.apache.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
-import org.apache.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
 /**
@@ -144,10 +143,10 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         if (!planTransformed) {
             return false;
         } else {
-            StringBuilder sb = new StringBuilder();
-            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
-            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) opRef.getValue(), sb, pvisitor, 0);
-            System.out.println("\n" + sb.toString());
+            //            StringBuilder sb = new StringBuilder();
+            //            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
+            //            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) opRef.getValue(), sb, pvisitor, 0);
+            //            System.out.println("\n" + sb.toString());
             OperatorPropertiesUtil.typeOpRec(opRef, context);
         }
 

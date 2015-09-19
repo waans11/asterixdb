@@ -77,7 +77,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             Map<FunctionIdentifier, List<IAccessMethod>> accessMethods) {
         List<Pair<FunctionIdentifier, Boolean>> funcs = accessMethod.getOptimizableFunctions();
         for (Pair<FunctionIdentifier, Boolean> funcIdent : funcs) {
-            List<IAccessMethod> l = accessMethods.get(funcIdent);
+            List<IAccessMethod> l = accessMethods.get(funcIdent.first);
             if (l == null) {
                 l = new ArrayList<IAccessMethod>();
                 accessMethods.put(funcIdent.first, l);
