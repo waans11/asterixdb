@@ -53,6 +53,7 @@ public class CastRecordDescriptor extends AbstractScalarFunctionDynamicDescripto
     public void reset(ARecordType reqType, ARecordType inputType) {
         this.reqType = reqType;
         this.inputType = inputType;
+        System.out.println("reqType: " + reqType + "\n\ninputType: " + inputType);
     }
 
     @Override

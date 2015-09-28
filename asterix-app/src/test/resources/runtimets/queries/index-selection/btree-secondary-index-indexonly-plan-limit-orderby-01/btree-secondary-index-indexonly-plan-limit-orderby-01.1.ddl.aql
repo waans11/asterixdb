@@ -7,6 +7,8 @@
  *                      ... -> unnest-map (secondary index look-up) -> split -> unnest-map (primary index look-up) -> select -> union -> ...
  *                  : The right path:
  *                      ... -> unnest-map -> split -> union -> ...
+ *                  : We also have a LIMIT and order by. Each partition in the secondary index should only generate the number of tuples
+ *                    that are equivalent to the LIMIT number. We call this "parameterizing the LIMIT".
  *  Expected Result : Success
  *
 */

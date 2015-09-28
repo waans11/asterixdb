@@ -43,9 +43,9 @@ public class AccessMethodJobGenParams {
     protected boolean retainNull;
     protected boolean requiresBroadcast;
     protected boolean isPrimaryIndex;
-    // In index-only plan, for a secondary index-search, we need to let the index know
-    // that it needs to generate a variable that keeps the result of tryLock on PKs that are found.
-    protected boolean splitValueForIndexOnlyPlanRequired;
+    // In an index-only plan, for a secondary index-search, we need to let the index accessor know
+    // that it needs to generate a variable that keeps the result of tryLock on PKs that are found during an index search.
+    protected boolean requireSplitValueForIndexOnlyPlan;
     // If used, this access method should only generate this number of results and stop further searching. -1: no limit.
     protected long limitNumberOfResult;
 
@@ -77,7 +77,7 @@ public class AccessMethodJobGenParams {
         this.retainNull = retainNull;
         this.requiresBroadcast = requiresBroadcast;
         this.isPrimaryIndex = datasetName.equals(indexName);
-        this.splitValueForIndexOnlyPlanRequired = splitValueForIndexOnlyPlanRequired;
+        this.requireSplitValueForIndexOnlyPlan = splitValueForIndexOnlyPlanRequired;
         this.limitNumberOfResult = limitNumberOfResult;
     }
 
@@ -90,7 +90,7 @@ public class AccessMethodJobGenParams {
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(retainNull)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(requiresBroadcast)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils
-                .createBooleanConstant(splitValueForIndexOnlyPlanRequired)));
+                .createBooleanConstant(requireSplitValueForIndexOnlyPlan)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt64Constant(limitNumberOfResult)));
     }
 
@@ -103,7 +103,7 @@ public class AccessMethodJobGenParams {
         retainNull = AccessMethodUtils.getBooleanConstant(funcArgs.get(5));
         requiresBroadcast = AccessMethodUtils.getBooleanConstant(funcArgs.get(6));
         isPrimaryIndex = datasetName.equals(indexName);
-        splitValueForIndexOnlyPlanRequired = AccessMethodUtils.getBooleanConstant(funcArgs.get(7));
+        requireSplitValueForIndexOnlyPlan = AccessMethodUtils.getBooleanConstant(funcArgs.get(7));
         limitNumberOfResult = AccessMethodUtils.getInt64Constant(funcArgs.get(8));
     }
 
@@ -136,7 +136,7 @@ public class AccessMethodJobGenParams {
     }
 
     public boolean getIsIndexOnlyPlanEnabled() {
-        return splitValueForIndexOnlyPlanRequired;
+        return requireSplitValueForIndexOnlyPlan;
     }
 
     public long getLimitNumberOfResult() {

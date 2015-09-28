@@ -117,8 +117,6 @@ public class AsterixLSMInsertDeleteOperatorNodePushable extends LSMIndexInsertUp
                     }
                 }
             }
-            System.out.println("AsterixLSMInsertDeleteOperatorNodePushable tupleFilter: " + tupleFilter + " accessor: "
-                    + lsmAccessor + " tupleCnt: " + tupleCount + " skipped: " + tmpCnt);
         } catch (Exception e) {
             e.printStackTrace();
             throw new HyracksDataException(e);
