@@ -38,6 +38,8 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCa
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.canDecreaseCardinalityCode;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.canPreserveOrderCode;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LimitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
@@ -97,7 +99,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
     // Used to logically push-down LIMIT operator
     protected long limitNumberOfResult = -1;
     protected boolean canPushDownLimit = true;
-    List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions;
+    List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions = null;
     protected boolean leftOuterJoinFound = false;
     protected boolean leftOuterJoinVisited = false;
 
@@ -211,6 +213,16 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                                 // Find the field name of each variable in the sub-tree - required when checking index-only plan.
                                 fillFieldNamesInTheSubTree(subTree);
 
+                                // If the chosen index is the primary index - add variable:name to subTree.fieldNames
+                                ArrayList<LogicalVariable> pkVars = new ArrayList<LogicalVariable>();
+                                if (chosenIndex.second.isPrimaryIndex()) {
+                                    subTree.getPrimaryKeyVars(pkVars);
+                                    List<List<String>> chosenIndexFieldNames = chosenIndex.second.getKeyFieldNames();
+                                    for (int i = 0; i < pkVars.size(); i++) {
+                                        subTree.fieldNames.put(pkVars.get(i), chosenIndexFieldNames.get(i));
+                                    }
+                                }
+
                                 // There is a LIMIT operator in the plan and we can push down this to the secondary index search.
                                 if (canPushDownLimit && limitNumberOfResult > -1) {
 
@@ -275,25 +287,52 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         } else {
             afterSelectRefs.add(opRef);
 
-            // If there is a LEFT-OUTER-JOIN in the path, we can only push down the LIMIT to the first (left) branch.
-            // If there is a JOIN or UNION in the path, we can't push down the LIMIT to the secondary index search.
-            if ((leftOuterJoinFound && nthChild != 0) || op.getOperatorTag() == LogicalOperatorTag.INNERJOIN
-                    || op.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
-                canPushDownLimit = false;
-                limitNumberOfResult = -1;
-            } else if (op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN) {
-                leftOuterJoinFound = true;
-            } else if (op.getOperatorTag() == LogicalOperatorTag.LIMIT && canPushDownLimit) {
+            if (op.getOperatorTag() == LogicalOperatorTag.LIMIT) {
                 // Keep the limit number of Result
                 LimitOperator limitOp = (LimitOperator) op;
                 if (limitOp.getMaxObjects().getValue().getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+                    // Currently, we support constant LIMIT
                     limitNumberOfResult = AccessMethodUtils.getInt64Constant(limitOp.getMaxObjects());
+                    canPushDownLimit = true;
+                    // Reset orderby expression since the previous one (if any) can't be combined with this new LIMIT
+                    orderByExpressions = null;
+                } else {
+                    limitNumberOfResult = -1;
+                    canPushDownLimit = false;
+                    orderByExpressions = null;
                 }
-            } else if (op.getOperatorTag() == LogicalOperatorTag.ORDER && canPushDownLimit) {
+            } else if (canPushDownLimit && op.getOperatorTag() == LogicalOperatorTag.ORDER) {
                 // Check the order by property
                 OrderOperator orderOp = (OrderOperator) op;
                 orderByExpressions = orderOp.getOrderExpressions();
+            } else if (op.canDecreaseCardinality() != canDecreaseCardinalityCode.FALSE
+                    || (orderByExpressions != null && op.canPreserveOrder() != canPreserveOrderCode.TRUE)) {
+                // If the given operator can decrease the input cardinality or
+                // cannot preserve the input order when there is an order by, we can't pass the LIMIT information to
+                // the index-search. We need to find another LIMIT.
+                canPushDownLimit = false;
+                limitNumberOfResult = -1;
             }
+
+            // If there is a LEFT-OUTER-JOIN in the path, we can only push down the LIMIT to the first (left) branch.
+            // If there is a JOIN or UNION in the path, we can't push down the LIMIT to the secondary index search.
+            //            if ((leftOuterJoinFound && nthChild != 0) || op.getOperatorTag() == LogicalOperatorTag.INNERJOIN
+            //                    || op.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
+            //                canPushDownLimit = false;
+            //                limitNumberOfResult = -1;
+            //            } else if (op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN) {
+            //                leftOuterJoinFound = true;
+            //            } else if (op.getOperatorTag() == LogicalOperatorTag.LIMIT && canPushDownLimit) {
+            //                // Keep the limit number of Result
+            //                LimitOperator limitOp = (LimitOperator) op;
+            //                if (limitOp.getMaxObjects().getValue().getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+            //                    limitNumberOfResult = AccessMethodUtils.getInt64Constant(limitOp.getMaxObjects());
+            //                }
+            //            } else if (op.getOperatorTag() == LogicalOperatorTag.ORDER && canPushDownLimit) {
+            //                // Check the order by property
+            //                OrderOperator orderOp = (OrderOperator) op;
+            //                orderByExpressions = orderOp.getOrderExpressions();
+            //            }
         }
 
         // Recursively check the plan and try to optimize it.
@@ -309,11 +348,11 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
 
         // If we reach here, that means there is a left outer join and the optimization was not possible.
         // For the second branch, there should not be any LIMIT push-down.
-        if (op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN && !leftOuterJoinVisited) {
-            leftOuterJoinVisited = true;
-        } else if (leftOuterJoinVisited) {
-            leftOuterJoinVisited = false;
-        }
+        //        if (op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN && !leftOuterJoinVisited) {
+        //            leftOuterJoinVisited = true;
+        //        } else if (leftOuterJoinVisited) {
+        //            leftOuterJoinVisited = false;
+        //        }
 
         return false;
     }

@@ -1467,6 +1467,11 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="dml">
+            <compilation-unit name="insert-delete-using-secondary-index">
+                <output-dir compare="Text">insert-delete-using-secondary-index</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="dml">
             <compilation-unit name="insert-into-loaded-dataset-with-index_01">
                 <output-dir compare="Text">insert-into-loaded-dataset-with-index_01</output-dir>
             </compilation-unit>
@@ -2539,6 +2544,11 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-join">
+            <compilation-unit name="rtree-spatial-intersect-point_06">
+                <output-dir compare="Text">rtree-spatial-intersect-point_06</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
             <compilation-unit name="invertedindex-secondary-fulltext-search-contains-join_01">
                 <output-dir compare="Text">invertedindex-secondary-fulltext-search-contains-join_01</output-dir>
             </compilation-unit>
@@ -2558,6 +2568,11 @@
         <test-case FilePath="index-selection">
             <compilation-unit name="btree-index-rewrite-multiple">
                 <output-dir compare="Text">btree-index-rewrite-multiple</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="btree-index-limit-orderby-01">
+                <output-dir compare="Text">btree-index-limit-orderby-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">

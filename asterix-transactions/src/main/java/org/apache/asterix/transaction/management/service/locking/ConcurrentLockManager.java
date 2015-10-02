@@ -50,6 +50,7 @@ public class ConcurrentLockManager implements ILockManager, ILifeCycleComponent 
 
     private static final Logger LOGGER = Logger.getLogger(ConcurrentLockManager.class.getName());
     private static final Level LVL = Level.FINER;
+    //    private static final Level LVL = Level.WARNING;
 
     public static final boolean DEBUG_MODE = false;//true
     public static final boolean CHECK_CONSISTENCY = false;
@@ -87,6 +88,8 @@ public class ConcurrentLockManager implements ILockManager, ILifeCycleComponent 
             { LockAction.ERR, LockAction.GET, LockAction.WAIT, LockAction.GET, LockAction.WAIT }, // S
             { LockAction.ERR, LockAction.WAIT, LockAction.WAIT, LockAction.WAIT, LockAction.WAIT } // X
     };
+
+    static String[] lockStringCode = new String[] { "NL", "IS", "IX", "S", "X" };
 
     public ConcurrentLockManager(TransactionSubsystem txnSubsystem) throws ACIDException {
         this.txnSubsystem = txnSubsystem;
@@ -151,6 +154,8 @@ public class ConcurrentLockManager implements ILockManager, ILifeCycleComponent 
                         break;
                     case WAIT:
                     case CONV:
+                        //                        LOGGER.warning("lock: Calling enqueueWaiter: group " + group + " reqSlot " + reqSlot
+                        //                                + " resSlot " + resSlot + " jobSlot " + jobSlot + " act " + act);
                         enqueueWaiter(group, reqSlot, resSlot, jobSlot, act, txnContext);
                         break;
                     case ERR:
@@ -266,21 +271,30 @@ public class ConcurrentLockManager implements ILockManager, ILifeCycleComponent 
      * @return true if a cycle would be introduced, false otherwise
      */
     private boolean introducesDeadlock(final long resSlot, final long jobSlot, final DeadlockTracker tracker) {
+        return introducesDeadlock(resSlot, resSlot, jobSlot, tracker);
+    }
+
+    private boolean introducesDeadlock(final long resSlot, final long curResSlot, final long jobSlot,
+            final DeadlockTracker tracker) {
         synchronized (jobArenaMgr) {
-            tracker.pushResource(resSlot);
-            long reqSlot = resArenaMgr.getLastHolder(resSlot);
+            tracker.pushResource(curResSlot);
+            long reqSlot = resArenaMgr.getLastHolder(curResSlot);
             while (reqSlot >= 0) {
                 tracker.pushRequest(reqSlot);
                 final long holderJobSlot = reqArenaMgr.getJobSlot(reqSlot);
                 tracker.pushJob(holderJobSlot);
-                if (holderJobSlot == jobSlot) {
+                LOGGER.warning("introducesDeadlock - resSlot " + resSlot + " jobSlot " + jobSlot + " reqSlot "
+                        + reqSlot + " holderJobSlot " + holderJobSlot);
+                if (holderJobSlot == jobSlot && curResSlot == resSlot) {
+                    LOGGER.warning("deadlock holderJobSlot == jobSlot detected.");
                     return true;
                 }
                 boolean scanWaiters = true;
                 long waiter = jobArenaMgr.getLastWaiter(holderJobSlot);
                 while (waiter >= 0) {
                     long watingOnResSlot = reqArenaMgr.getResourceId(waiter);
-                    if (introducesDeadlock(watingOnResSlot, jobSlot, tracker)) {
+                    if (introducesDeadlock(resSlot, watingOnResSlot, jobSlot, tracker)) {
+                        LOGGER.warning("waiter deadlock - introducesDeadlock(watingOnResSlot, jobSlot, tracker) detected.");
                         return true;
                     }
                     waiter = reqArenaMgr.getNextJobRequest(waiter);
@@ -636,6 +650,8 @@ public class ConcurrentLockManager implements ILockManager, ILifeCycleComponent 
     private LockAction determineLockAction(long resSlot, long jobSlot, byte lockMode) {
         final int curLockMode = resArenaMgr.getMaxMode(resSlot);
         final LockAction act = ACTION_MATRIX[curLockMode][lockMode];
+        LOGGER.warning("determineLockAction - curLockMode: " + lockStringCode[curLockMode] + " lockMode: "
+                + lockStringCode[lockMode] + " -> action:" + act);
         if (act == LockAction.WAIT) {
             return updateActionForSameJob(resSlot, jobSlot, lockMode);
         }
@@ -665,13 +681,19 @@ public class ConcurrentLockManager implements ILockManager, ILifeCycleComponent 
         while (holder != -1) {
             if (job == reqArenaMgr.getJobSlot(holder)) {
                 if (reqArenaMgr.getLockMode(holder) == lockMode) {
+                    LOGGER.warning("Returning updateActionForSameJob: the same lock - " + lockStringCode[lockMode]
+                            + " " + LockAction.GET);
                     return LockAction.GET;
                 } else {
                     res = LockAction.CONV;
+                    LOGGER.warning("updateActionForSameJob: conversion from "
+                            + lockStringCode[reqArenaMgr.getLockMode(holder)] + " to " + lockStringCode[lockMode] + " "
+                            + LockAction.CONV);
                 }
             }
             holder = reqArenaMgr.getNextRequest(holder);
         }
+        LOGGER.warning("Returning updateActionForSameJob: " + res);
         return res;
     }
 

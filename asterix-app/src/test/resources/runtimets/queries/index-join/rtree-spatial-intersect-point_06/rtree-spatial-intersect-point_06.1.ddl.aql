@@ -1,0 +1,32 @@
+/*
+ * Description    : Joins two datasets on the intersection of their point attributes.
+ *                  Both inner and outer dataset have an RTree index, and we expect the
+ *                  join to be transformed into an indexed nested-loop join by using an RTree index from the inner dataset.
+ * Success        : Yes
+ */
+
+drop dataverse STBench if exists;
+create dataverse STBench;
+use dataverse STBench;
+/* longitude: x, latitude: y */
+
+create type SimpleGeoPlaceType as closed {
+   coordinates: point,
+    id: int64,
+    name: string,
+    tags: string,
+    categories: string,
+    phone: string
+}
+
+create type JoinSeedType as closed {
+    id: int64,
+    coordinates: point
+}
+
+create dataset SimpleGeoPlace (SimpleGeoPlaceType) primary key id;
+
+create index rtreePlaceCoordinate on SimpleGeoPlace(coordinates) type rtree;
+
+
+create dataset JoinSeed (JoinSeedType) primary key id;

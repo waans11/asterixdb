@@ -38,11 +38,14 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCall
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.canDecreaseCardinalityCode;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.canPreserveOrderCode;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterJoinOperator;
-import org.apache.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
-import org.apache.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LimitOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
 /**
@@ -86,6 +89,11 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
     protected IOptimizationContext context = null;
     protected List<Mutable<ILogicalOperator>> afterJoinRefs = null;
 
+    // used for pushing-down LIMIT
+    protected long limitNumberOfResult = -1;
+    protected boolean canPushDownLimit = true;
+    List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions = null;
+
     // Register access methods.
     protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
     static {
@@ -128,10 +136,10 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         if (!planTransformed) {
             return false;
         } else {
-            StringBuilder sb = new StringBuilder();
-            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
-            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) opRef.getValue(), sb, pvisitor, 0);
-            System.out.println("\n" + sb.toString());
+            //            StringBuilder sb = new StringBuilder();
+            //            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
+            //            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) opRef.getValue(), sb, pvisitor, 0);
+            //            System.out.println("\n" + sb.toString());
             OperatorPropertiesUtil.typeOpRec(opRef, context);
         }
 
@@ -196,6 +204,32 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
             joinOpFromThisOp = (LeftOuterJoinOperator) joinRefFromThisOp.getValue();
         } else {
             afterJoinRefs.add(opRef);
+
+            if (op.getOperatorTag() == LogicalOperatorTag.LIMIT) {
+                canPushDownLimit = true;
+
+                // Reset orderby expression since the previous one (if any) can't be combined with this new LIMIT
+                orderByExpressions = null;
+                // Keep the limit number of Result
+                LimitOperator limitOp = (LimitOperator) op;
+                if (limitOp.getMaxObjects().getValue().getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+                    limitNumberOfResult = AccessMethodUtils.getInt64Constant(limitOp.getMaxObjects());
+                } else {
+                    canPushDownLimit = false;
+                    limitNumberOfResult = -1;
+                }
+            } else if (canPushDownLimit && op.getOperatorTag() == LogicalOperatorTag.ORDER) {
+                // Check the order by property
+                OrderOperator orderOp = (OrderOperator) op;
+                orderByExpressions = orderOp.getOrderExpressions();
+            } else if (op.canDecreaseCardinality() != canDecreaseCardinalityCode.FALSE
+                    || (orderByExpressions != null && op.canPreserveOrder() != canPreserveOrderCode.TRUE)) {
+                // If the given operator can decrease the input cardinality or
+                // cannot preserve the input order when there is an order by, we can't pass the LIMIT information to
+                // the index-search. We need to find another LIMIT.
+                canPushDownLimit = false;
+                limitNumberOfResult = -1;
+            }
         }
 
         // Recursively check the plan and try to optimize it.
@@ -270,7 +304,8 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                     }
                                 }
                             }
-                            removeIndexCandidatesFromOuterRelation(analyzedAMs, innerDatasets);
+                            boolean indexFromOuterBranchRemoved = removeIndexCandidatesFromOuterRelation(analyzedAMs,
+                                    innerDatasets);
 
                             // For the case of left-outer-join, we have to use indexes from the inner branch.
                             // For the inner-join, we try to use the indexes from the inner branch first.
@@ -295,6 +330,26 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                     ScalarFunctionCallExpression isNullFuncExpr = AccessMethodUtils
                                             .findLOJIsNullFuncInGroupBy((GroupByOperator) opRef.getValue());
                                     analysisCtx.setLOJIsNullFuncInGroupBy(isNullFuncExpr);
+                                }
+
+                                // There is a LIMIT operator in the plan and we can push down this to the secondary index search.
+                                if (canPushDownLimit && limitNumberOfResult > -1) {
+
+                                    // If this is LEFT-OUTER-JOIN,
+                                    // and outer branch has an UNNEST-MAP (index-search),
+                                    // and the order of its index attribute is the same as the attributes
+                                    // in the order by expressions, then, we can pass LIMIT information
+                                    // to the index-search of the inner branch (index subtree).
+                                    // If not, we can't pass LIMIT information.
+
+                                    // We don't support pushing down LIMIT when there is an order-by in join case, yet.
+                                    if (orderByExpressions != null) {
+                                        canPushDownLimit = false;
+                                        limitNumberOfResult = -1;
+                                    } else {
+                                        analysisCtx.setLimitNumberOfResult(limitNumberOfResult);
+                                        analysisCtx.setOrderByExpressions(orderByExpressions);
+                                    }
                                 }
 
                                 boolean res = chosenIndex.first.applyJoinPlanTransformation(afterJoinRefs, joinRef,

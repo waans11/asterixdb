@@ -1,0 +1,14 @@
+drop dataverse test if exists;
+create dataverse test;
+
+use dataverse test;
+
+create type aType as closed {
+  id: int64,
+  name: string
+}
+
+create dataset LineItem(aType)
+  primary key id;
+
+create index btreeName on LineItem(name);

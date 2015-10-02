@@ -1,0 +1,4 @@
+use dataverse test;
+
+insert into dataset LineItem( { "id" : 1, "name":"check"} );
+

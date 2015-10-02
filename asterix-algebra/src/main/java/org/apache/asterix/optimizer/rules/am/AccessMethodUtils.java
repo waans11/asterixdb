@@ -870,6 +870,7 @@ public class AccessMethodUtils {
                 condExprFnCall = (AbstractFunctionCallExpression) condExpr;
                 for (int i = 0; i < condExprFnCall.getArguments().size(); i++) {
                     Mutable<ILogicalExpression> t = condExprFnCall.getArguments().get(i);
+                    // For SELECT case, we check whether an index is on POINT or RECTANGLE
                     if (t.getValue().getExpressionTag() == LogicalExpressionTag.CONSTANT) {
                         AsterixConstantValue tmpVal = (AsterixConstantValue) ((ConstantExpression) t.getValue())
                                 .getValue();
@@ -886,43 +887,110 @@ public class AccessMethodUtils {
                             break;
                         }
                     } else if (t.getValue().getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-                        // If we check the join condition
+                        // We are dealing with JOIN case here.
                         LogicalVariable tmpVal = ((VariableReferenceExpression) t.getValue()).getVariableReference();
-                        List<String> tmpValFieldName = null;
-                        if (probeSubTree != null) {
-                            tmpValFieldName = probeSubTree.fieldNames.get(tmpVal);
+
+                        // We only need to take care of the variables from the probe tree.
+                        // liveVarsInTopOp only contains live variables in the index sub tree.
+                        if (liveVarsInTopOp.contains(tmpVal)) {
+                            continue;
                         }
+
+                        List<String> tmpValFieldName = null;
                         IAType tmpValFieldType = null;
-                        if (tmpValFieldName != null) {
-                            for (int j = 0; j < probeRecordType.getFieldNames().length; j++) {
-                                String fieldName = probeRecordType.getFieldNames()[j];
-                                if (tmpValFieldName.contains(fieldName)) {
-                                    try {
-                                        tmpValFieldType = probeRecordType.getFieldType(fieldName);
-                                    } catch (IOException e) {
-                                        throw new IllegalStateException(
-                                                "Can't get the field type for the given fieldname: " + fieldName);
+
+                        ILogicalExpression tmpCondExpr = null;
+                        AbstractFunctionCallExpression tmpCondExprCall = null;
+                        FunctionIdentifier tmpFuncID = null;
+
+                        // Since we know the type of the given index from index sub tree,
+                        // we need to find the type of other join variable
+                        if (probeSubTree != null) {
+                            // We first check whether the given variable is produced from an assigned function-call.
+                            for (int j = 0; j < probeSubTree.assignsAndUnnestsRefs.size(); j++) {
+                                List<LogicalVariable> producedVarsFromProbeTree = new ArrayList<LogicalVariable>();
+                                List<LogicalVariable> usedVarsFromProbeTree = new ArrayList<LogicalVariable>();
+                                ILogicalOperator tmpOp = probeSubTree.assignsAndUnnestsRefs.get(j).getValue();
+                                VariableUtilities.getProducedVariables(tmpOp, producedVarsFromProbeTree);
+
+                                // If this is the assign (unnest-map) that we are looking for.
+                                if (producedVarsFromProbeTree.contains(tmpVal)) {
+                                    // If the operator is ASSIGN
+                                    if (tmpOp.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
+                                        AssignOperator tmpAssignOp = (AssignOperator) tmpOp;
+                                        List<Mutable<ILogicalExpression>> tmpCondExprs = tmpAssignOp.getExpressions();
+
+                                        for (Mutable<ILogicalExpression> tmpConditionExpr : tmpCondExprs) {
+                                            if (tmpConditionExpr.getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+                                                tmpCondExpr = tmpConditionExpr.getValue();
+                                                tmpCondExprCall = (AbstractFunctionCallExpression) tmpCondExpr;
+                                                tmpFuncID = tmpCondExprCall.getFunctionIdentifier();
+                                                // Get the field type for the given variable
+                                                tmpValFieldType = findSpatialType(tmpFuncID);
+                                                if (tmpValFieldType == null) {
+                                                    continue;
+                                                } else {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    } else if (tmpOp.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+                                        // If the operator is UNNESTMAP
+                                        UnnestMapOperator tmpUnnestMapOp = (UnnestMapOperator) tmpOp;
+                                        tmpCondExpr = tmpUnnestMapOp.getExpressionRef().getValue();
+                                        tmpCondExprCall = (AbstractFunctionCallExpression) tmpCondExpr;
+                                        tmpFuncID = tmpCondExprCall.getFunctionIdentifier();
+                                        tmpValFieldType = findSpatialType(tmpFuncID);
+                                        if (tmpValFieldType == null) {
+                                            continue;
+                                        } else {
+                                            break;
+                                        }
+                                    } else {
+                                        // We only care ASSIGN or UNNEST_MAP operator.
+                                        continue;
                                     }
-                                    break;
                                 }
                             }
-                            if (keyPairType.first == BuiltinType.APOINT || keyPairType.first == BuiltinType.ARECTANGLE) {
-                                // If the given field from the other join branch is a POINT or a RECTANGLE,
-                                // we don't need to verify it again using SELECT operator since there are no false positive results.
-                                if (tmpValFieldType == BuiltinType.APOINT || tmpValFieldType == BuiltinType.ARECTANGLE) {
-                                    verificationAfterSIdxSearchRequired = false;
-                                } else {
-                                    verificationAfterSIdxSearchRequired = true;
-                                }
+                        }
+
+                        // We tried to find the field type of the given variable, but couldn't.
+                        // This variable is a direct field from the probe tree so that we can find the field type.
+                        if (tmpValFieldType == null) {
+                            tmpValFieldName = probeSubTree.fieldNames.get(tmpVal);
+
+                            if (tmpValFieldName == null) {
+                                continue;
                             } else {
-                                // If the type of an R-Tree index is not a point or rectangle, an index-only plan is not possible
-                                // since we can't reconstruct the original field value from an R-Tree index search.
-                                isIndexOnlyPlan = false;
+                                for (int j = 0; j < probeRecordType.getFieldNames().length; j++) {
+                                    String fieldName = probeRecordType.getFieldNames()[j];
+                                    if (tmpValFieldName.contains(fieldName)) {
+                                        try {
+                                            tmpValFieldType = probeRecordType.getFieldType(fieldName);
+                                        } catch (IOException e) {
+                                            throw new IllegalStateException(
+                                                    "Can't get the field type for the given fieldname: " + fieldName);
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (keyPairType.first == BuiltinType.APOINT || keyPairType.first == BuiltinType.ARECTANGLE) {
+                            // If the given field from the other join branch is a POINT or a RECTANGLE,
+                            // we don't need to verify it again using SELECT operator since there are no false positive results.
+                            if (tmpValFieldType == BuiltinType.APOINT || tmpValFieldType == BuiltinType.ARECTANGLE) {
+                                verificationAfterSIdxSearchRequired = false;
+                            } else {
                                 verificationAfterSIdxSearchRequired = true;
-                                noFalsePositiveResultsFromSIdxSearch = false;
                             }
                         } else {
-                            continue;
+                            // If the type of an R-Tree index is not a point or rectangle, an index-only plan is not possible
+                            // since we can't reconstruct the original field value from an R-Tree index search.
+                            isIndexOnlyPlan = false;
+                            verificationAfterSIdxSearchRequired = true;
+                            noFalsePositiveResultsFromSIdxSearch = false;
                         }
                     }
                 }
@@ -939,6 +1007,24 @@ public class AccessMethodUtils {
 
         return true;
 
+    }
+
+    // Helper function that finds a corresponding IAType for the given function identifier
+    public static IAType findSpatialType(FunctionIdentifier fid) {
+        if (fid == AsterixBuiltinFunctions.CREATE_CIRCLE || fid == AsterixBuiltinFunctions.CIRCLE_CONSTRUCTOR) {
+            return BuiltinType.ACIRCLE;
+        } else if (fid == AsterixBuiltinFunctions.CREATE_POINT || fid == AsterixBuiltinFunctions.POINT_CONSTRUCTOR) {
+            return BuiltinType.APOINT;
+        } else if (fid == AsterixBuiltinFunctions.CREATE_RECTANGLE
+                || fid == AsterixBuiltinFunctions.RECTANGLE_CONSTRUCTOR) {
+            return BuiltinType.ARECTANGLE;
+        } else if (fid == AsterixBuiltinFunctions.CREATE_POLYGON || fid == AsterixBuiltinFunctions.POLYGON_CONSTRUCTOR) {
+            return BuiltinType.APOLYGON;
+        } else if (fid == AsterixBuiltinFunctions.CREATE_LINE || fid == AsterixBuiltinFunctions.LINE_CONSTRUCTOR) {
+            return BuiltinType.ALINE;
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -1568,8 +1654,11 @@ public class AccessMethodUtils {
             // Index-only plan is constructed. Return this operator to the caller.
             return unionAllOp;
 
-        } else if (noFalsePositiveResultsFromSIdxSearch) {
-            // Yet, reducing the number of SELECT operations optimization is possible even there is no index-only plan for the given query.
+        } else if (noFalsePositiveResultsFromSIdxSearch && !verificationAfterSIdxSearchRequired) {
+            // Yet, reducing the number of SELECT operations optimization is possible
+            // even there is no index-only plan for the given query.
+            // However, the query should not generate false positive results from the given index.
+            // In addition, no verification should be required.
             // At this moment, an unnest-map (primary index look-up) is the top operator.
 
             // Transforming a join plan? If so, the top operator is the join operator so we can't simply use it as a SELECT operator.

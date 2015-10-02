@@ -1,0 +1,4 @@
+use dataverse test;
+
+delete $x from dataset LineItem where $x.name = "check";
+
