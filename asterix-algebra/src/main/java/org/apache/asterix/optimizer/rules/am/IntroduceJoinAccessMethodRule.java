@@ -20,6 +20,7 @@ package org.apache.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -115,6 +116,13 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         if (context.checkIfInDontApplySet(this, op)) {
             return false;
         }
+        if (checkLeftSubTreeMetadata) {
+            fillSubTreeIndexExprs(leftSubTree, analyzedAMs, context);
+        }
+        if (checkRightSubTreeMetadata) {
+            fillSubTreeIndexExprs(rightSubTree, analyzedAMs, context);
+        }
+        pruneIndexCandidates(analyzedAMs);
 
         // Begin from the root operator - DISTRIBUTE_RESULT or SINK
         if (op.getOperatorTag() != LogicalOperatorTag.DISTRIBUTE_RESULT) {
@@ -132,9 +140,30 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         if (joinOp != null) {
             context.addToDontApplySet(this, joinOp);
         }
+        boolean res = chosenIndex.first.applyJoinPlanTransformation(joinRef, leftSubTree, rightSubTree,
+                chosenIndex.second, analysisCtx, context, isLeftOuterJoin, hasGroupBy);
+        if (res) {
+            OperatorPropertiesUtil.typeOpRec(opRef, context);
+        }
+        context.addToDontApplySet(this, join);
+        return res;
+    }
 
         if (!planTransformed) {
             return false;
+        }
+
+        boolean isInnerJoin = isInnerJoin(op1);
+        isLeftOuterJoin = isLeftOuterJoin(op1);
+
+        if (!isInnerJoin && !isLeftOuterJoin) {
+            return false;
+        }
+
+        // Set and analyze select.
+        if (isInnerJoin) {
+            joinRef = opRef;
+            join = (InnerJoinOperator) op1;
         } else {
             //            StringBuilder sb = new StringBuilder();
             //            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
