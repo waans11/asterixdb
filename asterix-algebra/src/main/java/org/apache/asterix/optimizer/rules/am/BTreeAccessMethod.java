@@ -34,6 +34,7 @@ import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
+import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.optimizer.rules.util.EquivalenceClassUtils;
 import org.apache.commons.lang3.mutable.Mutable;
@@ -50,6 +51,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IndexedNLJoinExpressionAnnotation;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import org.apache.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions.ComparisonKind;
@@ -317,6 +319,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 }
             }
         } else {
+            // condition is now gone. Unnest-map can replace the SELECT condition.
             ((AbstractLogicalOperator) primaryIndexUnnestOp).setExecutionMode(ExecutionMode.PARTITIONED);
             if (assignBeforeSelectOp != null) {
                 subTree.dataSourceRef.setValue(primaryIndexUnnestOp);
@@ -900,17 +903,19 @@ public class BTreeAccessMethod implements IAccessMethod {
                 indexSubTree.dataSourceRef.setValue(tmpPrimaryIndexUnnestOp);
             }
         } else {
+            // Primary index search case
             List<Object> primaryIndexOutputTypes = new ArrayList<Object>();
             try {
                 AccessMethodUtils.appendPrimaryIndexTypes(dataset, recordType, primaryIndexOutputTypes);
             } catch (IOException e) {
                 throw new AlgebricksException(e);
             }
-            List<LogicalVariable> scanVariables = dataSourceOp.getVariables();
-            primaryIndexUnnestOp = new UnnestMapOperator(scanVariables, secondaryIndexUnnestOp.getExpressionRef(),
-                    primaryIndexOutputTypes, retainInput);
-            primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
 
+            List<LogicalVariable> scanVariables = dataSourceOp.getVariables();
+
+            // Checks whether the primary index search can replace the given SELECT condition.
+            // If so, condition will be set to null and eventually the SELECT operator will be removed.
+            // If not, we create a new condition based on remaining ones.
             if (!primaryIndexPostProccessingIsNeeded) {
                 List<Mutable<ILogicalExpression>> remainingFuncExprs = new ArrayList<Mutable<ILogicalExpression>>();
                 getNewConditionExprs(conditionRef, replacedFuncExprs, remainingFuncExprs);
@@ -922,6 +927,28 @@ public class BTreeAccessMethod implements IAccessMethod {
                     conditionRef.setValue(null);
                 }
             }
+
+            // If we cannot replace SELECT with unnest-map, we can't apply LIMIT push-down
+            // since we can't guarantee that the results will be the final results.
+            if (conditionRef.getValue() != null) {
+                jobGenParams.limitNumberOfResult = -1;
+                // The job gen parameters are transferred to the actual job gen via the UnnestMapOperator's function arguments.
+                ArrayList<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
+                jobGenParams.writeToFuncArgs(primaryIndexFuncArgs);
+                // An index search is expressed as an unnest-map over an index-search function.
+                IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+                UnnestingFunctionCallExpression primaryIndexSearchFunc = new UnnestingFunctionCallExpression(
+                        primaryIndexSearch, primaryIndexFuncArgs);
+                primaryIndexSearchFunc.setReturnsUniqueValues(true);
+                primaryIndexUnnestOp = new UnnestMapOperator(scanVariables, new MutableObject<ILogicalExpression>(
+                        primaryIndexSearchFunc), primaryIndexOutputTypes, retainInput);
+            } else {
+                // We can apply LIMIT-push down if the SELECT condition can be replaced by the primary index-search.
+                primaryIndexUnnestOp = new UnnestMapOperator(scanVariables, secondaryIndexUnnestOp.getExpressionRef(),
+                        primaryIndexOutputTypes, retainInput);
+            }
+
+            primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
 
             // Adds equivalence classes --- one equivalent class between a primary key
             // variable and a record field-access expression.
