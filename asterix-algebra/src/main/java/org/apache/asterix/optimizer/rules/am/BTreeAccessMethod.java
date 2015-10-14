@@ -215,11 +215,11 @@ public class BTreeAccessMethod implements IAccessMethod {
             isIndexOnlyPlan = false;
         }
 
+        // Set the result of index-only plan check
         if (isIndexOnlyPlan) {
             analysisCtx.setIndexOnlyPlanEnabled(true);
         } else {
             analysisCtx.setIndexOnlyPlanEnabled(false);
-
         }
 
         // Transform the current path to the path that is utilizing the corresponding indexes
@@ -236,7 +236,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             if (assignBeforeSelectOp != null) {
                 // If a tryLock() on PK optimization is possible,
                 // the whole plan is changed. replace the current path with the new plan.
-                if (analysisCtx.isIndexOnlyPlanEnabled() && dataset.getDatasetType() == DatasetType.INTERNAL) {
+                if (isIndexOnlyPlan && dataset.getDatasetType() == DatasetType.INTERNAL) {
                     // Get the revised dataSourceRef operator - unnest-map (PK, record)
                     // Right now, the order of operators is: union <- select <- assign <- unnest-map (primary index look-up)
                     ILogicalOperator dataSourceRefOp = (ILogicalOperator) primaryIndexUnnestOp.getInputs().get(0)
@@ -353,15 +353,17 @@ public class BTreeAccessMethod implements IAccessMethod {
         // Determine probe and index subtrees based on chosen index.
         OptimizableOperatorSubTree indexSubTree = null;
         OptimizableOperatorSubTree probeSubTree = null;
-        if ((rightSubTree.hasDataSourceScan() && dataset.getDatasetName().equals(rightSubTree.dataset.getDatasetName()))
-                || isLeftOuterJoin) {
+
+        boolean isRightTreeIndexSubTree = AccessMethodUtils.isRightTreeIndexSubTree(dataset, isLeftOuterJoin,
+                leftSubTree, rightSubTree);
+        if (isRightTreeIndexSubTree) {
             indexSubTree = rightSubTree;
             probeSubTree = leftSubTree;
-        } else if (!isLeftOuterJoin && leftSubTree.hasDataSourceScan()
-                && dataset.getDatasetName().equals(leftSubTree.dataset.getDatasetName())) {
+        } else {
             indexSubTree = leftSubTree;
             probeSubTree = rightSubTree;
         }
+
         if (indexSubTree == null) {
             //This may happen for left outer join case
             return false;
@@ -844,6 +846,13 @@ public class BTreeAccessMethod implements IAccessMethod {
             inputOp = probeSubTree.root;
         }
 
+        if (isIndexOnlyPlanEnabled) {
+
+        }
+        if (!isIndexOnlyPlanEnabled && noFalsePositiveResultsFromSIdxSearch) {
+
+        }
+
         // Create an unnest-map for the secondary index search
         // The result: SK, PK, [Optional: The result of a Trylock on PK]
         boolean outputPrimaryKeysOnlyFromSIdxSearch = false;
@@ -928,9 +937,9 @@ public class BTreeAccessMethod implements IAccessMethod {
                 }
             }
 
-            // If we cannot replace SELECT with unnest-map, we can't apply LIMIT push-down
-            // since we can't guarantee that the results will be the final results.
             if (conditionRef.getValue() != null) {
+                // If we cannot replace SELECT with unnest-map, we can't parameterize LIMIT on the primary index search
+                // since we can't guarantee that the results will be the final results and an additional SELECT needs to be applied.
                 jobGenParams.limitNumberOfResult = -1;
                 // The job gen parameters are transferred to the actual job gen via the UnnestMapOperator's function arguments.
                 ArrayList<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
@@ -943,7 +952,8 @@ public class BTreeAccessMethod implements IAccessMethod {
                 primaryIndexUnnestOp = new UnnestMapOperator(scanVariables, new MutableObject<ILogicalExpression>(
                         primaryIndexSearchFunc), primaryIndexOutputTypes, retainInput);
             } else {
-                // We can apply LIMIT-push down if the SELECT condition can be replaced by the primary index-search.
+                // We can parameterize LIMIT (if any) on the primary index search
+                // since the SELECT condition can be replaced by the primary index-search.
                 primaryIndexUnnestOp = new UnnestMapOperator(scanVariables, secondaryIndexUnnestOp.getExpressionRef(),
                         primaryIndexOutputTypes, retainInput);
             }

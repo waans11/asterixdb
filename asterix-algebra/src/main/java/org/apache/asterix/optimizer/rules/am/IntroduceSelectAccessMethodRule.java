@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.commons.lang3.mutable.Mutable;
@@ -45,7 +46,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperato
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
 /**
@@ -98,7 +98,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
 
     // Used to logically push-down LIMIT operator
     protected long limitNumberOfResult = -1;
-    protected boolean canPushDownLimit = true;
+    protected boolean canPassLimitToIndexSearch = false;
     List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions = null;
     protected boolean leftOuterJoinFound = false;
     protected boolean leftOuterJoinVisited = false;
@@ -223,45 +223,61 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                                     }
                                 }
 
-                                // There is a LIMIT operator in the plan and we can push down this to the secondary index search.
-                                if (canPushDownLimit && limitNumberOfResult > -1) {
+                                // There is a LIMIT operator in the plan and we can pass
+                                // this information this to the secondary index search or primary index search.
+                                if (canPassLimitToIndexSearch && limitNumberOfResult > -1) {
 
-                                    int varOrder = 0;
-                                    List<List<String>> chosenIndexFieldNames = chosenIndex.second.getKeyFieldNames();
-
-                                    // Check whether the variables in ORDER operator matches the variables in the SELECT operator
-                                    List<LogicalVariable> usedVarsInSelectOp = new ArrayList<LogicalVariable>();
-                                    VariableUtilities.getUsedVariables(selectOp, usedVarsInSelectOp);
-
-                                    for (Pair<IOrder, Mutable<ILogicalExpression>> orderPair : orderByExpressions) {
-                                        // We don't yet support a complex ORDER BY clause to do the LIMIT push-down.
-                                        // So, the ORDER BY expression should only include variables.
-                                        if (orderPair.second.getValue().getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+                                    if (orderByExpressions != null) {
+                                        // an R-Tree or an inverted index doesn't have any particular order from the index
+                                        // so we can't pass LIMIT information if there is an order by.
+                                        if (chosenIndex.second.getIndexType() == IndexType.SINGLE_PARTITION_WORD_INVIX
+                                                || chosenIndex.second.getIndexType() == IndexType.SINGLE_PARTITION_NGRAM_INVIX
+                                                || chosenIndex.second.getIndexType() == IndexType.LENGTH_PARTITIONED_NGRAM_INVIX
+                                                || chosenIndex.second.getIndexType() == IndexType.LENGTH_PARTITIONED_WORD_INVIX
+                                                || chosenIndex.second.getIndexType() == IndexType.RTREE) {
                                             limitNumberOfResult = -1;
-                                            canPushDownLimit = false;
-                                            break;
+                                            canPassLimitToIndexSearch = false;
                                         } else {
-                                            VariableReferenceExpression varRef = (VariableReferenceExpression) orderPair.second
-                                                    .getValue();
-                                            LogicalVariable var = varRef.getVariableReference();
+                                            int varOrder = 0;
+                                            List<List<String>> chosenIndexFieldNames = chosenIndex.second
+                                                    .getKeyFieldNames();
 
-                                            // Try to match the attribute order in the ORDER BY to the attribute order in the index.
-                                            int sIndexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames.get(var));
-                                            if (sIndexIdx != varOrder || orderPair.first.getKind() != OrderKind.ASC) {
-                                                // Either the attribute order doesn't match or
-                                                // the attribute in the ORDER BY is not found on the index.
-                                                // Also, for now, since we only support an ascending index, the ORDER BY should be ascending.
-                                                canPushDownLimit = false;
-                                                limitNumberOfResult = -1;
-                                                break;
-                                            } else {
-                                                // Increase the index of the attribute in case of the composite indexes
-                                                varOrder++;
+                                            // Check whether the variables in ORDER operator matches
+                                            // the attributes order in the chosen index.
+                                            for (Pair<IOrder, Mutable<ILogicalExpression>> orderPair : orderByExpressions) {
+                                                // We don't yet support a complex ORDER BY clause to do the LIMIT push-down.
+                                                // So, the ORDER BY expression should only include variables.
+                                                if (orderPair.second.getValue().getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+                                                    limitNumberOfResult = -1;
+                                                    canPassLimitToIndexSearch = false;
+                                                    break;
+                                                } else {
+                                                    VariableReferenceExpression varRef = (VariableReferenceExpression) orderPair.second
+                                                            .getValue();
+                                                    LogicalVariable var = varRef.getVariableReference();
+
+                                                    // Try to match the attribute order in the ORDER BY to the attribute order in the index.
+                                                    int indexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames
+                                                            .get(var));
+                                                    if (indexIdx != varOrder
+                                                            || orderPair.first.getKind() != OrderKind.ASC) {
+                                                        // Either the attribute order doesn't match or
+                                                        // the attribute in the ORDER BY is not found on the index.
+                                                        // Also, for now, since we only support an ascending index,
+                                                        // the ORDER BY should be ascending.
+                                                        canPassLimitToIndexSearch = false;
+                                                        limitNumberOfResult = -1;
+                                                        break;
+                                                    } else {
+                                                        // Increase the index of the attribute in case of the composite indexes
+                                                        varOrder++;
+                                                    }
+                                                }
                                             }
                                         }
                                     }
 
-                                    if (canPushDownLimit) {
+                                    if (canPassLimitToIndexSearch) {
                                         analysisCtx.setLimitNumberOfResult(limitNumberOfResult);
                                         analysisCtx.setOrderByExpressions(orderByExpressions);
                                     }
@@ -291,17 +307,17 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                 // Keep the limit number of Result
                 LimitOperator limitOp = (LimitOperator) op;
                 if (limitOp.getMaxObjects().getValue().getExpressionTag() == LogicalExpressionTag.CONSTANT) {
-                    // Currently, we support constant LIMIT
+                    // Currently, we support LIMIT with a constant value.
                     limitNumberOfResult = AccessMethodUtils.getInt64Constant(limitOp.getMaxObjects());
-                    canPushDownLimit = true;
-                    // Reset orderby expression since the previous one (if any) can't be combined with this new LIMIT
+                    canPassLimitToIndexSearch = true;
+                    // Reset order-by expression since the previous one (if any) can't be combined with this new LIMIT
                     orderByExpressions = null;
                 } else {
                     limitNumberOfResult = -1;
-                    canPushDownLimit = false;
+                    canPassLimitToIndexSearch = false;
                     orderByExpressions = null;
                 }
-            } else if (canPushDownLimit && op.getOperatorTag() == LogicalOperatorTag.ORDER) {
+            } else if (canPassLimitToIndexSearch && op.getOperatorTag() == LogicalOperatorTag.ORDER) {
                 // Check the order by property
                 OrderOperator orderOp = (OrderOperator) op;
                 orderByExpressions = orderOp.getOrderExpressions();
@@ -310,7 +326,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                 // If the given operator can decrease the input cardinality or
                 // cannot preserve the input order when there is an order by, we can't pass the LIMIT information to
                 // the index-search. We need to find another LIMIT.
-                canPushDownLimit = false;
+                canPassLimitToIndexSearch = false;
                 limitNumberOfResult = -1;
             }
 
@@ -369,7 +385,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         selectCond = null;
         context = null;
         limitNumberOfResult = -1;
-        canPushDownLimit = true;
+        canPassLimitToIndexSearch = true;
         orderByExpressions = null;
     }
 }

@@ -25,8 +25,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.dataflow.data.common.AqlExpressionTypeComputer;
 import org.apache.asterix.metadata.api.IMetadataEntity;
@@ -44,6 +42,7 @@ import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
 import org.apache.asterix.optimizer.rules.am.OptimizableOperatorSubTree.DataSourceType;
+import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -133,7 +132,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
      * @throws AlgebricksException
      */
     protected boolean removeIndexCandidatesFromOuterRelation(
-            Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs, List<String> innerDatasets)
+            Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs, String innerDataset)
             throws AlgebricksException {
         boolean removed = false;
         Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
@@ -145,44 +144,27 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
 
             // Check whether we can choose the indexes from the inner relations (removing indexes from the outer relations)
             int totalIndexCount = 0;
-            int removedIndexCountFromTheOuterBranch = 0;
+            int indexCountFromTheOuterBranch = 0;
 
             while (indexIt.hasNext()) {
                 Map.Entry<Index, List<Pair<Integer, Integer>>> indexEntry = indexIt.next();
 
                 Index chosenIndex = indexEntry.getKey();
-                boolean indexFoundInInnerRelation = false;
                 //Remove possibly chosen indexes from left Tree (outer branch)
-                for (int i = 0; i < innerDatasets.size(); i++) {
-                    if (chosenIndex.getDatasetName().equals(innerDatasets.get(i))) {
-                        indexFoundInInnerRelation = true;
-                        break;
-                    }
-                }
-
-                if (!indexFoundInInnerRelation) {
-                    removedIndexCountFromTheOuterBranch++;
+                if (!chosenIndex.getDatasetName().equals(innerDataset)) {
+                    indexCountFromTheOuterBranch++;
                 }
                 totalIndexCount++;
             }
 
-            if (removedIndexCountFromTheOuterBranch < totalIndexCount) {
+            if (indexCountFromTheOuterBranch < totalIndexCount) {
                 indexIt = amCtx.indexExprsAndVars.entrySet().iterator();
                 while (indexIt.hasNext()) {
                     Map.Entry<Index, List<Pair<Integer, Integer>>> indexEntry = indexIt.next();
 
                     Index chosenIndex = indexEntry.getKey();
                     //Remove possibly chosen indexes from left Tree (outer branch)
-                    boolean indexFoundInInnerRelation = false;
-                    //Remove possibly chosen indexes from left Tree (outer branch)
-                    for (int i = 0; i < innerDatasets.size(); i++) {
-                        if (chosenIndex.getDatasetName().equals(innerDatasets.get(i))) {
-                            indexFoundInInnerRelation = true;
-                            break;
-                        }
-                    }
-
-                    if (!indexFoundInInnerRelation) {
+                    if (!chosenIndex.getDatasetName().equals(innerDataset)) {
                         indexIt.remove();
                         removed = true;
                     }
@@ -900,4 +882,5 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         }
         return null;
     }
+
 }

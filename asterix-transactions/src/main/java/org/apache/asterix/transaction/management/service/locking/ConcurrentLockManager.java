@@ -650,8 +650,8 @@ public class ConcurrentLockManager implements ILockManager, ILifeCycleComponent 
     private LockAction determineLockAction(long resSlot, long jobSlot, byte lockMode) {
         final int curLockMode = resArenaMgr.getMaxMode(resSlot);
         final LockAction act = ACTION_MATRIX[curLockMode][lockMode];
-        LOGGER.warning("determineLockAction - curLockMode: " + lockStringCode[curLockMode] + " lockMode: "
-                + lockStringCode[lockMode] + " -> action:" + act);
+        //        LOGGER.warning("determineLockAction - curLockMode: " + lockStringCode[curLockMode] + " lockMode: "
+        //                + lockStringCode[lockMode] + " -> action:" + act);
         if (act == LockAction.WAIT) {
             return updateActionForSameJob(resSlot, jobSlot, lockMode);
         }
@@ -681,14 +681,14 @@ public class ConcurrentLockManager implements ILockManager, ILifeCycleComponent 
         while (holder != -1) {
             if (job == reqArenaMgr.getJobSlot(holder)) {
                 if (reqArenaMgr.getLockMode(holder) == lockMode) {
-                    LOGGER.warning("Returning updateActionForSameJob: the same lock - " + lockStringCode[lockMode]
-                            + " " + LockAction.GET);
+                    //                    LOGGER.warning("Returning updateActionForSameJob: the same lock - " + lockStringCode[lockMode]
+                    //                            + " " + LockAction.GET);
                     return LockAction.GET;
                 } else {
                     res = LockAction.CONV;
-                    LOGGER.warning("updateActionForSameJob: conversion from "
-                            + lockStringCode[reqArenaMgr.getLockMode(holder)] + " to " + lockStringCode[lockMode] + " "
-                            + LockAction.CONV);
+                    //                    LOGGER.warning("updateActionForSameJob: conversion from "
+                    //                            + lockStringCode[reqArenaMgr.getLockMode(holder)] + " to " + lockStringCode[lockMode] + " "
+                    //                            + LockAction.CONV);
                 }
             }
             holder = reqArenaMgr.getNextRequest(holder);

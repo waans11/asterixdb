@@ -661,6 +661,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             }
         }
 
+        // Since an inverted-index search can't generate the original secondary key field value,
+        // an index-only plan is not possible if the original secondary key field value is used after SELECT operator.
+
         if (isIndexOnlyPlanPossible && !secondaryKeyFieldUsedAfterSelectOp) {
             analysisCtx.setIndexOnlyPlanEnabled(true);
         } else {

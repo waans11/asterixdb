@@ -22,8 +22,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.utils.DatasetUtils;
@@ -32,6 +30,7 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.optimizer.base.AnalysisUtil;
+import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -45,6 +44,8 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractScan
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractUnnestOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 
 /**
@@ -80,6 +81,9 @@ public class OptimizableOperatorSubTree {
     public List<Dataset> ixJoinOuterAdditionalDatasets = null;
     public List<ARecordType> ixJoinOuterAdditionalRecordTypes = null;
 
+    // Order by expression in this subtree
+    List<Pair<IOrder, Mutable<ILogicalExpression>>> subTreeOrderByExpr = null;
+
     /**
      * Initialize assign, unnest and datasource information
      */
@@ -90,6 +94,13 @@ public class OptimizableOperatorSubTree {
         // Examine the op's children to match the expected patterns.
         AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
         do {
+            // Keep Order by information if one is present
+            if (subTreeOp.getOperatorTag() == LogicalOperatorTag.ORDER) {
+                OrderOperator orderOp = (OrderOperator) subTreeOp;
+                subTreeOrderByExpr = orderOp.getOrderExpressions();
+                subTreeOpRef = subTreeOp.getInputs().get(0);
+                subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+            }
             // Skip select operator.
             if (subTreeOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
                 subTreeOpRef = subTreeOp.getInputs().get(0);

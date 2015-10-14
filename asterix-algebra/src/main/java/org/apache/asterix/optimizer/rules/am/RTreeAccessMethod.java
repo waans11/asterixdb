@@ -184,7 +184,8 @@ public class RTreeAccessMethod implements IAccessMethod {
         // If an index is not built on a POINT or a RECTANGLE field, the query result can include false positives.
         // And the result from secondary index search is an MBR, we can't construct original secondary field value
         // to remove any false positive results.
-        if (keyPairType.first != BuiltinType.APOINT && keyPairType.first != BuiltinType.ARECTANGLE) {
+        if (keyPairType.first.getTypeTag() != BuiltinType.APOINT.getTypeTag()
+                && keyPairType.first.getTypeTag() != BuiltinType.ARECTANGLE.getTypeTag()) {
             isIndexOnlyPlanPossible = false;
             noFalsePositiveResultsFromSIdxSearch = false;
         } else {

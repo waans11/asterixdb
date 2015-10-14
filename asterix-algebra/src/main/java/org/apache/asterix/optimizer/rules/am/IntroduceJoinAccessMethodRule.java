@@ -20,11 +20,11 @@ package org.apache.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;
+import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -34,6 +34,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -116,13 +117,6 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         if (context.checkIfInDontApplySet(this, op)) {
             return false;
         }
-        if (checkLeftSubTreeMetadata) {
-            fillSubTreeIndexExprs(leftSubTree, analyzedAMs, context);
-        }
-        if (checkRightSubTreeMetadata) {
-            fillSubTreeIndexExprs(rightSubTree, analyzedAMs, context);
-        }
-        pruneIndexCandidates(analyzedAMs);
 
         // Begin from the root operator - DISTRIBUTE_RESULT or SINK
         if (op.getOperatorTag() != LogicalOperatorTag.DISTRIBUTE_RESULT) {
@@ -140,30 +134,9 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         if (joinOp != null) {
             context.addToDontApplySet(this, joinOp);
         }
-        boolean res = chosenIndex.first.applyJoinPlanTransformation(joinRef, leftSubTree, rightSubTree,
-                chosenIndex.second, analysisCtx, context, isLeftOuterJoin, hasGroupBy);
-        if (res) {
-            OperatorPropertiesUtil.typeOpRec(opRef, context);
-        }
-        context.addToDontApplySet(this, join);
-        return res;
-    }
 
         if (!planTransformed) {
             return false;
-        }
-
-        boolean isInnerJoin = isInnerJoin(op1);
-        isLeftOuterJoin = isLeftOuterJoin(op1);
-
-        if (!isInnerJoin && !isLeftOuterJoin) {
-            return false;
-        }
-
-        // Set and analyze select.
-        if (isInnerJoin) {
-            joinRef = opRef;
-            join = (InnerJoinOperator) op1;
         } else {
             //            StringBuilder sb = new StringBuilder();
             //            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
@@ -321,20 +294,11 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
 
                             // Prioritize the order of index that will be applied. If the right subtree (inner branch) has indexes,
                             // those indexes will be used.
-                            List<String> innerDatasets = new ArrayList<String>();
+                            String innerDataset = null;
                             if (rightSubTree.dataset != null) {
-                                innerDatasets.add(rightSubTree.dataset.getDatasetName());
+                                innerDataset = rightSubTree.dataset.getDatasetName();
                             }
-                            if (rightSubTree.ixJoinOuterAdditionalDatasets != null) {
-                                for (int i = 0; i < rightSubTree.ixJoinOuterAdditionalDatasets.size(); i++) {
-                                    if (rightSubTree.ixJoinOuterAdditionalDatasets.get(i) != null) {
-                                        innerDatasets.add(rightSubTree.ixJoinOuterAdditionalDatasets.get(i)
-                                                .getDatasetName());
-                                    }
-                                }
-                            }
-                            boolean indexFromOuterBranchRemoved = removeIndexCandidatesFromOuterRelation(analyzedAMs,
-                                    innerDatasets);
+                            removeIndexCandidatesFromOuterRelation(analyzedAMs, innerDataset);
 
                             // For the case of left-outer-join, we have to use indexes from the inner branch.
                             // For the inner-join, we try to use the indexes from the inner branch first.
@@ -361,6 +325,27 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                     analysisCtx.setLOJIsNullFuncInGroupBy(isNullFuncExpr);
                                 }
 
+                                // Determine if the index is applicable on the left or right side (if both, we prefer the right (inner) side).
+                                Dataset indexDataset = analysisCtx.indexDatasetMap.get(chosenIndex.second);
+                                OptimizableOperatorSubTree indexSubTree = null;
+                                boolean isRightTreeIndexSubTree = AccessMethodUtils.isRightTreeIndexSubTree(
+                                        indexDataset, isLeftOuterJoin, leftSubTree, rightSubTree);
+                                if (isRightTreeIndexSubTree) {
+                                    indexSubTree = rightSubTree;
+                                } else {
+                                    indexSubTree = leftSubTree;
+                                }
+
+                                // If the chosen index is the primary index - add variable:name to subTree.fieldNames
+                                ArrayList<LogicalVariable> pkVars = new ArrayList<LogicalVariable>();
+                                if (chosenIndex.second.isPrimaryIndex()) {
+                                    indexSubTree.getPrimaryKeyVars(pkVars);
+                                    List<List<String>> chosenIndexFieldNames = chosenIndex.second.getKeyFieldNames();
+                                    for (int i = 0; i < pkVars.size(); i++) {
+                                        indexSubTree.fieldNames.put(pkVars.get(i), chosenIndexFieldNames.get(i));
+                                    }
+                                }
+
                                 // There is a LIMIT operator in the plan and we can push down this to the secondary index search.
                                 if (canPushDownLimit && limitNumberOfResult > -1) {
 
@@ -370,6 +355,15 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                     // in the order by expressions, then, we can pass LIMIT information
                                     // to the index-search of the inner branch (index subtree).
                                     // If not, we can't pass LIMIT information.
+                                    if (isLeftOuterJoin) {
+                                        if (orderByExpressions != null) {
+
+                                        }
+                                    } else {
+                                        // Can't push-down LIMIT in case of inner-join
+                                        canPushDownLimit = false;
+                                        limitNumberOfResult = -1;
+                                    }
 
                                     // We don't support pushing down LIMIT when there is an order-by in join case, yet.
                                     if (orderByExpressions != null) {

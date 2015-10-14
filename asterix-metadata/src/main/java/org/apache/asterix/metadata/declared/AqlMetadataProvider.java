@@ -899,8 +899,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildRtreeRuntime(JobSpecification jobSpec,
             List<LogicalVariable> outputVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,
             JobGenContext context, boolean retainInput, boolean retainNull, Dataset dataset, String indexName,
-            int[] keyFields, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isIndexOnlyPlanEnabled)
-            throws AlgebricksException {
+            int[] keyFields, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isIndexOnlyPlanEnabled,
+            long limitNumberOfResult) throws AlgebricksException {
 
         try {
             ARecordType recType = (ARecordType) findType(dataset.getDataverseName(), dataset.getItemTypeName());
@@ -1029,7 +1029,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                                 storageProperties.getBloomFilterFalsePositiveRate(), rtreeFields, btreeFields,
                                 filterTypeTraits, filterCmpFactories, filterFields, !temp), retainInput, retainNull,
                         context.getNullWriterFactory(), searchCallbackFactory, minFilterFieldIndexes,
-                        maxFilterFieldIndexes, isIndexOnlyPlanEnabled, valuesForIndexOnlyPlan);
+                        maxFilterFieldIndexes, isIndexOnlyPlanEnabled, valuesForIndexOnlyPlan, limitNumberOfResult);
             } else {
                 // External Dataset
                 ExternalRTreeDataflowHelperFactory indexDataflowHelperFactory = new ExternalRTreeDataflowHelperFactory(

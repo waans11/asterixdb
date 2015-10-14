@@ -149,7 +149,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 jobGenParams.getRetainNull(), jobGenParams.getDatasetName(), dataset, jobGenParams.getIndexName(),
                 jobGenParams.getSearchKeyType(), keyIndexes, jobGenParams.getSearchModifierType(),
                 jobGenParams.getSimilarityThreshold(), minFilterFieldIndexes, maxFilterFieldIndexes,
-                jobGenParams.getIsIndexOnlyPlanEnabled());
+                jobGenParams.getIsIndexOnlyPlanEnabled(), jobGenParams.getLimitNumberOfResult());
 
         // Contribute operator in hyracks job.
         builder.contributeHyracksOperator(unnestMapOp, invIndexSearch.first);
@@ -163,8 +163,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             UnnestMapOperator unnestMap, IOperatorSchema opSchema, boolean retainInput, boolean retainNull,
             String datasetName, Dataset dataset, String indexName, ATypeTag searchKeyType, int[] keyFields,
             SearchModifierType searchModifierType, IAlgebricksConstantValue similarityThreshold,
-            int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isIndexOnlyPlanEnabled)
-            throws AlgebricksException {
+            int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isIndexOnlyPlanEnabled,
+            long limitNumerOfResult) throws AlgebricksException {
 
         try {
             IAObject simThresh = ((AsterixConstantValue) similarityThreshold).getObject();
@@ -344,7 +344,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                     invListsTypeTraits, invListsComparatorFactories, dataflowHelperFactory, queryTokenizerFactory,
                     searchModifierFactory, outputRecDesc, retainInput, retainNull, context.getNullWriterFactory(),
                     searchCallbackFactory, minFilterFieldIndexes, maxFilterFieldIndexes, isIndexOnlyPlanEnabled,
-                    valuesForIndexOnlyPlan);
+                    valuesForIndexOnlyPlan, limitNumerOfResult);
 
             return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp,
                     secondarySplitsAndConstraint.second);

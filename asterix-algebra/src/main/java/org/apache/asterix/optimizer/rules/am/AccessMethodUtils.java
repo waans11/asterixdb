@@ -85,8 +85,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOper
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.algebricks.core.algebra.plan.ALogicalPlanImpl;
-import org.apache.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
-import org.apache.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorManipulationUtil;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
@@ -874,9 +872,10 @@ public class AccessMethodUtils {
                     if (t.getValue().getExpressionTag() == LogicalExpressionTag.CONSTANT) {
                         AsterixConstantValue tmpVal = (AsterixConstantValue) ((ConstantExpression) t.getValue())
                                 .getValue();
-                        if (tmpVal.getObject().getType() == BuiltinType.APOINT
-                                || tmpVal.getObject().getType() == BuiltinType.ARECTANGLE) {
-                            if (keyPairType.first == BuiltinType.APOINT || keyPairType.first == BuiltinType.ARECTANGLE) {
+                        if (tmpVal.getObject().getType().getTypeTag() == BuiltinType.APOINT.getTypeTag()
+                                || tmpVal.getObject().getType().getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag()) {
+                            if (keyPairType.first.getTypeTag() == BuiltinType.APOINT.getTypeTag()
+                                    || keyPairType.first.getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag()) {
                                 verificationAfterSIdxSearchRequired = false;
                             } else {
                                 verificationAfterSIdxSearchRequired = true;
@@ -977,10 +976,12 @@ public class AccessMethodUtils {
                             }
                         }
 
-                        if (keyPairType.first == BuiltinType.APOINT || keyPairType.first == BuiltinType.ARECTANGLE) {
+                        if (keyPairType.first.getTypeTag() == BuiltinType.APOINT.getTypeTag()
+                                || keyPairType.first.getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag()) {
                             // If the given field from the other join branch is a POINT or a RECTANGLE,
                             // we don't need to verify it again using SELECT operator since there are no false positive results.
-                            if (tmpValFieldType == BuiltinType.APOINT || tmpValFieldType == BuiltinType.ARECTANGLE) {
+                            if (tmpValFieldType.getTypeTag() == BuiltinType.APOINT.getTypeTag()
+                                    || tmpValFieldType.getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag()) {
                                 verificationAfterSIdxSearchRequired = false;
                             } else {
                                 verificationAfterSIdxSearchRequired = true;
@@ -1156,7 +1157,7 @@ public class AccessMethodUtils {
             restoredSecondaryKeyFieldExprs = new ArrayList<Mutable<ILogicalExpression>>();
             restoredSecondaryKeyFieldVars = new ArrayList<LogicalVariable>();
 
-            if (spatialType == BuiltinType.APOINT) {
+            if (spatialType.getTypeTag() == BuiltinType.APOINT.getTypeTag()) {
                 // Reconstruct a POINT value
                 AbstractFunctionCallExpression createPointExpr = new ScalarFunctionCallExpression(
                         FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_POINT));
@@ -1170,7 +1171,7 @@ public class AccessMethodUtils {
                 restoredSecondaryKeyFieldExprs.add(new MutableObject<ILogicalExpression>(createPointExpr));
                 assignRestoredSecondaryKeyFieldOp = new AssignOperator(restoredSecondaryKeyFieldVars,
                         restoredSecondaryKeyFieldExprs);
-            } else if (spatialType == BuiltinType.ARECTANGLE) {
+            } else if (spatialType.getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag()) {
                 // Reconstruct a RECTANGLE value
                 AbstractFunctionCallExpression createRectangleExpr = new ScalarFunctionCallExpression(
                         FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_RECTANGLE));
@@ -1643,10 +1644,9 @@ public class AccessMethodUtils {
             unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(newSelectOp));
             unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(currentTopOpInRightPath));
 
-            StringBuilder sb = new StringBuilder();
-            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
-            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) unionAllOp, sb, pvisitor, 0);
-            System.out.println("createPrimaryUnnestMap:\n" + sb.toString());
+            //            StringBuilder sb = new StringBuilder();
+            //            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
+            //            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) unionAllOp, sb, pvisitor, 0);
 
             unionAllOp.setExecutionMode(ExecutionMode.PARTITIONED);
             context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
@@ -1880,5 +1880,28 @@ public class AccessMethodUtils {
         externalLookupOp.setPhysicalOperator(new ExternalDataLookupPOperator(dataSourceId, dataset, recordType,
                 secondaryIndex, primaryKeyVars, false, retainInput, retainNull));
         return externalLookupOp;
+    }
+
+    /**
+     * Decide which side of join is the probe and the inner (index) branch.
+     * Returns true if the right side of join is the join is inner branch.
+     */
+    public static boolean isRightTreeIndexSubTree(Dataset indexDataset, boolean isLeftOuterJoin,
+            OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree) {
+
+        // Determine probe and index subtrees based on chosen index.
+        if ((rightSubTree.hasDataSourceScan() && indexDataset.getDatasetName().equals(
+                rightSubTree.dataset.getDatasetName()))
+                || isLeftOuterJoin) {
+            // Right side: index subtree, Left side: probe subtree
+            return true;
+        } else if (!isLeftOuterJoin && leftSubTree.hasDataSourceScan()
+                && indexDataset.getDatasetName().equals(leftSubTree.dataset.getDatasetName())) {
+            // Left side: index subtree, Right side: probe subtree
+            return false;
+        }
+
+        return false;
+
     }
 }
