@@ -9,7 +9,7 @@ set import-private-functions 'true';
 
 for $a in dataset('DBLP')
 for $b in dataset('CSX')
-where similarity-jaccard(gram-tokens($a.title, 3, false), gram-tokens($b.title, 3, false)) >= 0.5f 
+where /*+ indexnl */ similarity-jaccard(gram-tokens($a.title, 3, false), gram-tokens($b.title, 3, false)) >= 0.5f 
       and $a.id < $b.id
 order by $a.id, $b.id
 return { "arec": $a, "brec": $b }
