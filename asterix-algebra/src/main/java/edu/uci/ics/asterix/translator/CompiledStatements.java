@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,6 +34,7 @@ import edu.uci.ics.asterix.aql.expression.VariableExpr;
 import edu.uci.ics.asterix.aql.expression.WhereClause;
 import edu.uci.ics.asterix.aql.literal.StringLiteral;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.common.feeds.FeedConnectionRequest;
 import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
@@ -197,19 +198,23 @@ public class CompiledStatements {
         private final String indexName;
         private final String dataverseName;
         private final String datasetName;
-        private final List<String> keyFields;
+        private final List<List<String>> keyFields;
+        private final List<IAType> keyTypes;
+        private final boolean isEnforced;
         private final IndexType indexType;
 
         // Specific to NGram index.
         private final int gramLength;
 
         public CompiledCreateIndexStatement(String indexName, String dataverseName, String datasetName,
-                List<String> keyFields, int gramLength, IndexType indexType) {
+                List<List<String>> keyFields, List<IAType> keyTypes, boolean isEnforced, int gramLength, IndexType indexType) {
             this.indexName = indexName;
             this.dataverseName = dataverseName;
             this.datasetName = datasetName;
             this.keyFields = keyFields;
+            this.keyTypes = keyTypes;
             this.gramLength = gramLength;
+            this.isEnforced = isEnforced;
             this.indexType = indexType;
         }
 
@@ -225,8 +230,12 @@ public class CompiledStatements {
             return indexName;
         }
 
-        public List<String> getKeyFields() {
+        public List<List<String>> getKeyFields() {
             return keyFields;
+        }
+
+        public List<IAType> getKeyFieldTypes() {
+            return keyTypes;
         }
 
         public IndexType getIndexType() {
@@ -235,6 +244,10 @@ public class CompiledStatements {
 
         public int getGramLength() {
             return gramLength;
+        }
+
+        public boolean isEnforced() {
+            return isEnforced;
         }
 
         @Override
@@ -373,6 +386,48 @@ public class CompiledStatements {
             return policyName;
         }
     }
+    
+    public static class CompiledSubscribeFeedStatement implements ICompiledDmlStatement {
+
+        private final FeedConnectionRequest request;
+        private Query query;
+        private final int varCounter;
+
+        public CompiledSubscribeFeedStatement(FeedConnectionRequest request, Query query, int varCounter) {
+            this.request = request;
+            this.query = query;
+            this.varCounter = varCounter;
+        }
+
+        @Override
+        public String getDataverseName() {
+            return request.getReceivingFeedId().getDataverse();
+        }
+
+        @Override
+        public String getDatasetName() {
+            return request.getTargetDataset();
+        }
+
+        public int getVarCounter() {
+            return varCounter;
+        }
+
+        public Query getQuery() {
+            return query;
+        }
+
+        public void setQuery(Query query) {
+            this.query = query;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.SUBSCRIBE_FEED;
+        }
+
+    }
+
 
     public static class CompiledDisconnectFeedStatement implements ICompiledDmlStatement {
         private String dataverseName;
@@ -524,27 +579,35 @@ public class CompiledStatements {
 
     public static class CompiledIndexCompactStatement extends CompiledCompactStatement {
         private final String indexName;
-        private final List<String> keyFields;
+        private final List<List<String>> keyFields;
+        private final List<IAType> keyTypes;
         private final IndexType indexType;
+        private final boolean isEnforced;
 
         // Specific to NGram index.
         private final int gramLength;
 
         public CompiledIndexCompactStatement(String dataverseName, String datasetName, String indexName,
-                List<String> keyFields, int gramLength, IndexType indexType) {
+                List<List<String>> keyFields, List<IAType> keyTypes, boolean isEnforced, int gramLength, IndexType indexType) {
             super(dataverseName, datasetName);
             this.indexName = indexName;
             this.keyFields = keyFields;
+            this.keyTypes = keyTypes;
             this.gramLength = gramLength;
             this.indexType = indexType;
+            this.isEnforced = isEnforced;
         }
 
         public String getIndexName() {
             return indexName;
         }
 
-        public List<String> getKeyFields() {
+        public List<List<String>> getKeyFields() {
             return keyFields;
+        }
+
+        public List<IAType> getKeyTypes() {
+            return keyTypes;
         }
 
         public IndexType getIndexType() {
@@ -554,6 +617,9 @@ public class CompiledStatements {
         public int getGramLength() {
             return gramLength;
         }
-    }
 
+        public boolean isEnforced() {
+            return isEnforced;
+        }
+    }
 }

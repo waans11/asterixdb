@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -13,15 +13,6 @@
  * limitations under the License.
  */
 package edu.uci.ics.asterix.runtime.formats;
-
-import java.io.DataOutput;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-
-import org.apache.commons.lang3.mutable.Mutable;
-import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.exceptions.AsterixRuntimeException;
@@ -33,6 +24,7 @@ import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryHashFunctionFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryHashFunctionFamilyProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryIntegerInspector;
+import edu.uci.ics.asterix.formats.nontagged.AqlCSVPrinterFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlJSONPrinterFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlNormalizedKeyComputerFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlPredicateEvaluatorFactoryProvider;
@@ -42,6 +34,7 @@ import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.ANull;
+import edu.uci.ics.asterix.om.base.AOrderedList;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
@@ -117,15 +110,22 @@ import edu.uci.ics.asterix.runtime.evaluators.accessors.PointYCoordinateAccessor
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalDayAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalHourAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalIntervalEndAccessor;
+import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalIntervalEndDateAccessor;
+import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalIntervalEndDatetimeAccessor;
+import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalIntervalEndTimeAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalIntervalStartAccessor;
+import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalIntervalStartDateAccessor;
+import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalIntervalStartDatetimeAccessor;
+import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalIntervalStartTimeAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalMillisecondAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalMinuteAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalMonthAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalSecondAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.accessors.TemporalYearAccessor;
 import edu.uci.ics.asterix.runtime.evaluators.common.CreateMBREvalFactory;
-import edu.uci.ics.asterix.runtime.evaluators.common.FieldAccessByIndexEvalFactory;
 import edu.uci.ics.asterix.runtime.evaluators.common.FunctionManagerImpl;
+import edu.uci.ics.asterix.runtime.evaluators.constructors.ABinaryBase64StringConstructorDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.constructors.ABinaryHexStringConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.constructors.ABooleanConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.constructors.ACircleConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.constructors.ADateConstructorDescriptor;
@@ -152,12 +152,14 @@ import edu.uci.ics.asterix.runtime.evaluators.constructors.APolygonConstructorDe
 import edu.uci.ics.asterix.runtime.evaluators.constructors.ARectangleConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.constructors.AStringConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.constructors.ATimeConstructorDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.constructors.AUUIDFromStringConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.constructors.AYearMonthDurationConstructorDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.constructors.ClosedRecordConstructorDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.constructors.OpenRecordConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.AndDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.AnyCollectionMemberDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.CastListDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.CastRecordDescriptor;
-import edu.uci.ics.asterix.runtime.evaluators.functions.ClosedRecordConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.CodePointToStringDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.ContainsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.CountHashedGramTokensDescriptor;
@@ -176,8 +178,6 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.EditDistanceListIsFilter
 import edu.uci.ics.asterix.runtime.evaluators.functions.EditDistanceStringIsFilterable;
 import edu.uci.ics.asterix.runtime.evaluators.functions.EmbedTypeDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.EndsWithDescriptor;
-import edu.uci.ics.asterix.runtime.evaluators.functions.FieldAccessByIndexDescriptor;
-import edu.uci.ics.asterix.runtime.evaluators.functions.FieldAccessByNameDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.FlowRecordDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.FuzzyEqDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.GetItemDescriptor;
@@ -204,11 +204,9 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.NumericRoundHalfToEven2D
 import edu.uci.ics.asterix.runtime.evaluators.functions.NumericRoundHalfToEvenDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NumericSubDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NumericUnaryMinusDescriptor;
-import edu.uci.ics.asterix.runtime.evaluators.functions.OpenRecordConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.OrDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.OrderedListConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.PrefixLenJaccardDescriptor;
-import edu.uci.ics.asterix.runtime.evaluators.functions.RecordMergeDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.RegExpDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardCheckDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardDescriptor;
@@ -233,6 +231,7 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.StringReplaceDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.StringReplaceWithFlagsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.StringStartWithDescrtiptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.StringToCodePointDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringUpperCaseDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.Substring2Descriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SubstringAfterDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SubstringBeforeDescriptor;
@@ -240,6 +239,22 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.SubstringDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SwitchCaseDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.UnorderedListConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.WordTokensDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.binary.BinaryConcatDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.binary.BinaryLengthDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.binary.FindBinaryDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.binary.FindBinaryFromDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.binary.ParseBinaryDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.binary.PrintBinaryDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.binary.SubBinaryFromDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.binary.SubBinaryFromToDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.records.FieldAccessByIndexDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.records.FieldAccessByIndexEvalFactory;
+import edu.uci.ics.asterix.runtime.evaluators.functions.records.FieldAccessByNameDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.records.FieldAccessNestedDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.records.FieldAccessNestedEvalFactory;
+import edu.uci.ics.asterix.runtime.evaluators.functions.records.GetRecordFieldValueDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.records.GetRecordFieldsDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.records.RecordMergeDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.AdjustDateTimeForTimeZoneDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.AdjustTimeForTimeZoneDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.CalendarDuartionFromDateDescriptor;
@@ -251,12 +266,15 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DateFromDatetim
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DateFromUnixTimeInDaysDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DatetimeFromDateAndTimeDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DatetimeFromUnixTimeInMsDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DatetimeFromUnixTimeInSecsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DayOfWeekDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DayTimeDurationComparatorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DurationEqualDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DurationFromIntervalDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DurationFromMillisecondsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.DurationFromMonthsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.GetDayTimeDurationDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.GetOverlappingIntervalDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.GetYearMonthDurationDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.IntervalAfterDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.IntervalBeforeDescriptor;
@@ -273,6 +291,7 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.IntervalStarted
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.IntervalStartsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.MillisecondsFromDayTimeDurationDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.MonthsFromYearMonthDurationDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.OverlapBinsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.OverlapDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.ParseDateDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.ParseDateTimeDescriptor;
@@ -283,8 +302,8 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.PrintTimeDescri
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.TimeFromDatetimeDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.TimeFromUnixTimeInMsDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.temporal.YearMonthDurationComparatorDecriptor;
-import edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory;
-import edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory;
+import edu.uci.ics.asterix.runtime.operators.file.AsterixTupleParserFactory;
+import edu.uci.ics.asterix.runtime.operators.file.AsterixTupleParserFactory.InputDataFormat;
 import edu.uci.ics.asterix.runtime.runningaggregates.std.TidRunningAggregateDescriptor;
 import edu.uci.ics.asterix.runtime.unnestingfunctions.std.RangeDescriptor;
 import edu.uci.ics.asterix.runtime.unnestingfunctions.std.ScanCollectionDescriptor;
@@ -328,6 +347,16 @@ import edu.uci.ics.hyracks.dataflow.common.data.parsers.IntegerParserFactory;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.LongParserFactory;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.UTF8StringParserFactory;
 import edu.uci.ics.hyracks.dataflow.std.file.ITupleParserFactory;
+import org.apache.commons.lang3.mutable.Mutable;
+import org.apache.commons.lang3.mutable.MutableObject;
+
+import java.io.DataOutput;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class NonTaggedDataFormat implements IDataFormat {
 
@@ -381,6 +410,10 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(ClosedRecordConstructorDescriptor.FACTORY);
         temp.add(FieldAccessByIndexDescriptor.FACTORY);
         temp.add(FieldAccessByNameDescriptor.FACTORY);
+        temp.add(FieldAccessNestedDescriptor.FACTORY);
+        temp.add(GetRecordFieldsDescriptor.FACTORY);
+        temp.add(GetRecordFieldValueDescriptor.FACTORY);
+        temp.add(FieldAccessByNameDescriptor.FACTORY);
         temp.add(GetItemDescriptor.FACTORY);
         temp.add(NumericUnaryMinusDescriptor.FACTORY);
         temp.add(OpenRecordConstructorDescriptor.FACTORY);
@@ -408,12 +441,24 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(NumericRoundDescriptor.FACTORY);
         temp.add(NumericRoundHalfToEvenDescriptor.FACTORY);
         temp.add(NumericRoundHalfToEven2Descriptor.FACTORY);
+
+        // Binary functions
+        temp.add(BinaryLengthDescriptor.FACTORY);
+        temp.add(ParseBinaryDescriptor.FACTORY);
+        temp.add(PrintBinaryDescriptor.FACTORY);
+        temp.add(BinaryConcatDescriptor.FACTORY);
+        temp.add(SubBinaryFromDescriptor.FACTORY);
+        temp.add(SubBinaryFromToDescriptor.FACTORY);
+        temp.add(FindBinaryDescriptor.FACTORY);
+        temp.add(FindBinaryFromDescriptor.FACTORY);
+
         // String functions
         temp.add(StringEqualDescriptor.FACTORY);
         temp.add(StringStartWithDescrtiptor.FACTORY);
         temp.add(StringEndWithDescrtiptor.FACTORY);
         temp.add(StringMatchesDescriptor.FACTORY);
         temp.add(StringLowerCaseDescriptor.FACTORY);
+        temp.add(StringUpperCaseDescriptor.FACTORY);
         temp.add(StringMatchesWithFlagDescriptor.FACTORY);
         temp.add(StringReplaceDescriptor.FACTORY);
         temp.add(StringReplaceWithFlagsDescriptor.FACTORY);
@@ -488,6 +533,8 @@ public class NonTaggedDataFormat implements IDataFormat {
         // new functions - constructors
         temp.add(ABooleanConstructorDescriptor.FACTORY);
         temp.add(ANullConstructorDescriptor.FACTORY);
+        temp.add(ABinaryHexStringConstructorDescriptor.FACTORY);
+        temp.add(ABinaryBase64StringConstructorDescriptor.FACTORY);
         temp.add(AStringConstructorDescriptor.FACTORY);
         temp.add(AInt8ConstructorDescriptor.FACTORY);
         temp.add(AInt16ConstructorDescriptor.FACTORY);
@@ -507,9 +554,9 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(ADurationConstructorDescriptor.FACTORY);
         temp.add(AYearMonthDurationConstructorDescriptor.FACTORY);
         temp.add(ADayTimeDurationConstructorDescriptor.FACTORY);
+        temp.add(AUUIDFromStringConstructorDescriptor.FACTORY);
 
         temp.add(CreateUUIDDescriptor.FACTORY);
-
         // Spatial
         temp.add(CreatePointDescriptor.FACTORY);
         temp.add(CreateLineDescriptor.FACTORY);
@@ -572,6 +619,12 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(TemporalMillisecondAccessor.FACTORY);
         temp.add(TemporalIntervalStartAccessor.FACTORY);
         temp.add(TemporalIntervalEndAccessor.FACTORY);
+        temp.add(TemporalIntervalStartDateAccessor.FACTORY);
+        temp.add(TemporalIntervalEndDateAccessor.FACTORY);
+        temp.add(TemporalIntervalStartTimeAccessor.FACTORY);
+        temp.add(TemporalIntervalEndTimeAccessor.FACTORY);
+        temp.add(TemporalIntervalStartDatetimeAccessor.FACTORY);
+        temp.add(TemporalIntervalEndDatetimeAccessor.FACTORY);
 
         // Temporal functions
         temp.add(DateFromUnixTimeInDaysDescriptor.FACTORY);
@@ -579,6 +632,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(TimeFromUnixTimeInMsDescriptor.FACTORY);
         temp.add(TimeFromDatetimeDescriptor.FACTORY);
         temp.add(DatetimeFromUnixTimeInMsDescriptor.FACTORY);
+        temp.add(DatetimeFromUnixTimeInSecsDescriptor.FACTORY);
         temp.add(DatetimeFromDateAndTimeDescriptor.FACTORY);
         temp.add(CalendarDurationFromDateTimeDescriptor.FACTORY);
         temp.add(CalendarDuartionFromDateDescriptor.FACTORY);
@@ -612,6 +666,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(GetYearMonthDurationDescriptor.FACTORY);
         temp.add(GetDayTimeDurationDescriptor.FACTORY);
         temp.add(IntervalBinDescriptor.FACTORY);
+        temp.add(OverlapBinsDescriptor.FACTORY);
         temp.add(DayOfWeekDescriptor.FACTORY);
         temp.add(ParseDateDescriptor.FACTORY);
         temp.add(ParseTimeDescriptor.FACTORY);
@@ -619,6 +674,8 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(PrintDateDescriptor.FACTORY);
         temp.add(PrintTimeDescriptor.FACTORY);
         temp.add(PrintDateTimeDescriptor.FACTORY);
+        temp.add(GetOverlappingIntervalDescriptor.FACTORY);
+        temp.add(DurationFromIntervalDescriptor.FACTORY);
 
         // Interval constructor
         temp.add(AIntervalFromDateConstructorDescriptor.FACTORY);
@@ -662,36 +719,69 @@ public class NonTaggedDataFormat implements IDataFormat {
 
     @SuppressWarnings("unchecked")
     @Override
-    public ICopyEvaluatorFactory getFieldAccessEvaluatorFactory(ARecordType recType, String fldName, int recordColumn)
-            throws AlgebricksException {
+    public ICopyEvaluatorFactory getFieldAccessEvaluatorFactory(ARecordType recType, List<String> fldName,
+            int recordColumn) throws AlgebricksException {
         String[] names = recType.getFieldNames();
         int n = names.length;
-        for (int i = 0; i < n; i++) {
-            if (names[i].equals(fldName)) {
-                ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(recordColumn);
-                ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-                DataOutput dos = abvs.getDataOutput();
+        boolean fieldFound = false;
+        ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(recordColumn);
+        ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
+        DataOutput dos = abvs.getDataOutput();
+        ICopyEvaluatorFactory evalFactory = null;
+        if (fldName.size() == 1) {
+            for (int i = 0; i < n; i++) {
+                if (names[i].equals(fldName.get(0))) {
+                    fieldFound = true;
+                    try {
+                        AInt32 ai = new AInt32(i);
+                        AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(
+                                ai, dos);
+                    } catch (HyracksDataException e) {
+                        throw new AlgebricksException(e);
+                    }
+                    ICopyEvaluatorFactory fldIndexEvalFactory = new ConstantEvalFactory(Arrays.copyOf(
+                            abvs.getByteArray(), abvs.getLength()));
+
+                    evalFactory = new FieldAccessByIndexEvalFactory(recordEvalFactory, fldIndexEvalFactory, recType);
+                    return evalFactory;
+                }
+            }
+        }
+        if (fldName.size() > 1 || (!fieldFound && recType.isOpen())) {
+            if (fldName.size() == 1) {
+                AString as = new AString(fldName.get(0));
                 try {
-                    AInt32 ai = new AInt32(i);
-                    AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(ai,
+                    AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(as.getType()).serialize(as,
                             dos);
                 } catch (HyracksDataException e) {
                     throw new AlgebricksException(e);
                 }
-                ICopyEvaluatorFactory fldIndexEvalFactory = new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(),
-                        abvs.getLength()));
-                ICopyEvaluatorFactory evalFactory = new FieldAccessByIndexEvalFactory(recordEvalFactory,
-                        fldIndexEvalFactory, recType);
-                return evalFactory;
+            } else {
+                AOrderedList as = new AOrderedList(fldName);
+                try {
+                    AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(as.getType()).serialize(as,
+                            dos);
+                } catch (HyracksDataException e) {
+                    throw new AlgebricksException(e);
+                }
             }
-        }
-        throw new AlgebricksException("Could not find field " + fldName + " in the schema.");
+            ICopyEvaluatorFactory[] factories = new ICopyEvaluatorFactory[2];
+            factories[0] = recordEvalFactory;
+            if (fldName.size() > 1) {
+                evalFactory = new FieldAccessNestedEvalFactory(recordEvalFactory, recType, fldName);
+            } else {
+                evalFactory = FieldAccessByNameDescriptor.FACTORY.createFunctionDescriptor().createEvaluatorFactory(
+                        factories);
+            }
+            return evalFactory;
+        } else
+            throw new AlgebricksException("Could not find field " + fldName + " in the schema.");
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public ICopyEvaluatorFactory[] createMBRFactory(ARecordType recType, String fldName, int recordColumn,
-            int dimension, String filterFieldName) throws AlgebricksException {
+    public ICopyEvaluatorFactory[] createMBRFactory(ARecordType recType, List<String> fldName, int recordColumn,
+            int dimension, List<String> filterFieldName) throws AlgebricksException {
         ICopyEvaluatorFactory evalFactory = getFieldAccessEvaluatorFactory(recType, fldName, recordColumn);
         int numOfFields = dimension * 2;
         ICopyEvaluatorFactory[] evalFactories = new ICopyEvaluatorFactory[numOfFields
@@ -731,35 +821,61 @@ public class NonTaggedDataFormat implements IDataFormat {
     @SuppressWarnings("unchecked")
     @Override
     public Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> partitioningEvaluatorFactory(
-            ARecordType recType, String fldName) throws AlgebricksException {
+            ARecordType recType, List<String> fldName) throws AlgebricksException {
         String[] names = recType.getFieldNames();
         int n = names.length;
-        for (int i = 0; i < n; i++) {
-            if (names[i].equals(fldName)) {
-                ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(
-                        GlobalConfig.DEFAULT_INPUT_DATA_COLUMN);
-                ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-                DataOutput dos = abvs.getDataOutput();
-                try {
-                    AInt32 ai = new AInt32(i);
-                    AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(ai,
-                            dos);
-                } catch (HyracksDataException e) {
-                    throw new AlgebricksException(e);
-                }
-                ICopyEvaluatorFactory fldIndexEvalFactory = new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(),
-                        abvs.getLength()));
-                ICopyEvaluatorFactory evalFactory = new FieldAccessByIndexEvalFactory(recordEvalFactory,
-                        fldIndexEvalFactory, recType);
-                IFunctionInfo finfoAccess = AsterixBuiltinFunctions
-                        .getAsterixFunctionInfo(AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX);
+        if (fldName.size() > 1) {
+            for (int i = 0; i < n; i++) {
+                if (names[i].equals(fldName.get(0))) {
+                    ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(
+                            GlobalConfig.DEFAULT_INPUT_DATA_COLUMN);
+                    ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
+                    DataOutput dos = abvs.getDataOutput();
+                    try {
+                        AInt32 ai = new AInt32(i);
+                        AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(
+                                ai, dos);
+                    } catch (HyracksDataException e) {
+                        throw new AlgebricksException(e);
+                    }
+                    ICopyEvaluatorFactory fldIndexEvalFactory = new ConstantEvalFactory(Arrays.copyOf(
+                            abvs.getByteArray(), abvs.getLength()));
+                    ICopyEvaluatorFactory evalFactory = new FieldAccessByIndexEvalFactory(recordEvalFactory,
+                            fldIndexEvalFactory, recType);
+                    IFunctionInfo finfoAccess = AsterixBuiltinFunctions
+                            .getAsterixFunctionInfo(AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX);
 
-                ScalarFunctionCallExpression partitionFun = new ScalarFunctionCallExpression(finfoAccess,
-                        new MutableObject<ILogicalExpression>(new VariableReferenceExpression(METADATA_DUMMY_VAR)),
-                        new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                                new AInt32(i)))));
+                    ScalarFunctionCallExpression partitionFun = new ScalarFunctionCallExpression(finfoAccess,
+                            new MutableObject<ILogicalExpression>(new VariableReferenceExpression(METADATA_DUMMY_VAR)),
+                            new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
+                                    new AInt32(i)))));
+                    return new Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>(evalFactory,
+                            partitionFun, recType.getFieldTypes()[i]);
+                }
+            }
+        } else {
+            ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(
+                    GlobalConfig.DEFAULT_INPUT_DATA_COLUMN);
+            ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
+            DataOutput dos = abvs.getDataOutput();
+            AOrderedList as = new AOrderedList(fldName);
+            try {
+                AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(as.getType()).serialize(as, dos);
+            } catch (HyracksDataException e) {
+                throw new AlgebricksException(e);
+            }
+            ICopyEvaluatorFactory evalFactory = new FieldAccessNestedEvalFactory(recordEvalFactory, recType, fldName);
+            IFunctionInfo finfoAccess = AsterixBuiltinFunctions
+                    .getAsterixFunctionInfo(AsterixBuiltinFunctions.FIELD_ACCESS_NESTED);
+
+            ScalarFunctionCallExpression partitionFun = new ScalarFunctionCallExpression(finfoAccess,
+                    new MutableObject<ILogicalExpression>(new VariableReferenceExpression(METADATA_DUMMY_VAR)),
+                    new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(as))));
+            try {
                 return new Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>(evalFactory,
-                        partitionFun, recType.getFieldTypes()[i]);
+                        partitionFun, recType.getSubFieldType(fldName));
+            } catch (IOException e) {
+                throw new AlgebricksException(e);
             }
         }
         throw new AlgebricksException("Could not find field " + fldName + " in the schema.");
@@ -786,9 +902,12 @@ public class NonTaggedDataFormat implements IDataFormat {
                 ((ListifyAggregateDescriptor) fd).reset(new AOrderedListType(null, null));
             } else {
                 IAType itemType = (IAType) context.getType(f.getArguments().get(0).getValue());
-                // Convert UNION types into ANY.
                 if (itemType instanceof AUnionType) {
-                    itemType = BuiltinType.ANY;
+                    if (((AUnionType) itemType).isNullableType())
+                        itemType = ((AUnionType) itemType).getNullableType();
+                    else
+                        // Convert UNION types into ANY.
+                        itemType = BuiltinType.ANY;
                 }
                 ((ListifyAggregateDescriptor) fd).reset(new AOrderedListType(itemType, null));
             }
@@ -800,6 +919,7 @@ public class NonTaggedDataFormat implements IDataFormat {
             IAType type1 = (IAType) context.getType(f.getArguments().get(1).getValue());
             ((RecordMergeDescriptor) fd).reset(outType, type0, type1);
         }
+
         if (fd.getIdentifier().equals(AsterixBuiltinFunctions.CAST_RECORD)) {
             AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) expr;
             ARecordType rt = (ARecordType) TypeComputerUtilities.getRequiredType(funcExpr);
@@ -848,7 +968,7 @@ public class NonTaggedDataFormat implements IDataFormat {
                 case UNION: {
                     AUnionType unionT = (AUnionType) t;
                     if (unionT.isNullableType()) {
-                        IAType t2 = unionT.getUnionList().get(1);
+                        IAType t2 = unionT.getNullableType();
                         if (t2.getTypeTag() == ATypeTag.RECORD) {
                             ARecordType recType = (ARecordType) t2;
                             ((FieldAccessByIndexDescriptor) fd).reset(recType);
@@ -860,6 +980,47 @@ public class NonTaggedDataFormat implements IDataFormat {
                 default: {
                     throw new NotImplementedException("field-access-by-index for data of type " + t);
                 }
+            }
+        }
+        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.FIELD_ACCESS_NESTED)) {
+            AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expr;
+            IAType t = (IAType) context.getType(fce.getArguments().get(0).getValue());
+            AOrderedList fieldPath = (AOrderedList) (((AsterixConstantValue) ((ConstantExpression) fce.getArguments()
+                    .get(1).getValue()).getValue()).getObject());
+            List<String> listFieldPath = new ArrayList<String>();
+            for (int i = 0; i < fieldPath.size(); i++) {
+                listFieldPath.add(((AString) fieldPath.getItem(i)).getStringValue());
+            }
+
+            switch (t.getTypeTag()) {
+                case RECORD: {
+                    ARecordType recType = (ARecordType) t;
+                    ((FieldAccessNestedDescriptor) fd).reset(recType, listFieldPath);
+                    break;
+                }
+                default: {
+                    throw new NotImplementedException("field-access-nested for data of type " + t);
+                }
+            }
+        }
+        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.GET_RECORD_FIELDS)) {
+            AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expr;
+            IAType t = (IAType) context.getType(fce.getArguments().get(0).getValue());
+            if (t.getTypeTag().equals(ATypeTag.RECORD)) {
+                ARecordType recType = (ARecordType) t;
+                ((GetRecordFieldsDescriptor) fd).reset(recType);
+            } else {
+                throw new NotImplementedException("get-record-fields for data of type " + t);
+            }
+        }
+        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.GET_RECORD_FIELD_VALUE)) {
+            AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expr;
+            IAType t = (IAType) context.getType(fce.getArguments().get(0).getValue());
+            if (t.getTypeTag().equals(ATypeTag.RECORD)) {
+                ARecordType recType = (ARecordType) t;
+                ((GetRecordFieldValueDescriptor) fd).reset(recType);
+            } else {
+                throw new NotImplementedException("get-record-field-value for data of type " + t);
             }
         }
     }
@@ -897,6 +1058,11 @@ public class NonTaggedDataFormat implements IDataFormat {
         return AqlJSONPrinterFactoryProvider.INSTANCE;
     }
 
+    @Override
+    public IPrinterFactoryProvider getCSVPrinterFactoryProvider() {
+        return AqlCSVPrinterFactoryProvider.INSTANCE;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public ICopyEvaluatorFactory getConstantEvalFactory(IAlgebricksConstantValue value) throws AlgebricksException {
@@ -928,27 +1094,32 @@ public class NonTaggedDataFormat implements IDataFormat {
 
     @Override
     public ITupleParserFactory createTupleParser(ARecordType recType, IParseFileSplitsDecl decl) {
-        return createTupleParser(recType, decl.isDelimitedFileFormat(), decl.getDelimChar());
+        return createTupleParser(recType, decl.isDelimitedFileFormat(), decl.getDelimChar(), decl.getQuote(),
+                decl.getHasHeader());
     }
 
     @Override
-    public ITupleParserFactory createTupleParser(ARecordType recType, boolean delimitedFormat, Character delimiter) {
+    public ITupleParserFactory createTupleParser(ARecordType recType, boolean delimitedFormat, char delimiter,
+            char quote, boolean hasHeader) {
+        Map<String, String> conf = new HashMap<String, String>();
+        AsterixTupleParserFactory.InputDataFormat inputFormat = null;
         if (delimitedFormat) {
-            int n = recType.getFieldTypes().length;
-            IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
-            for (int i = 0; i < n; i++) {
-                ATypeTag tag = recType.getFieldTypes()[i].getTypeTag();
-                IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
-                if (vpf == null) {
-                    throw new NotImplementedException("No value parser factory for delimited fields of type " + tag);
-                }
-                fieldParserFactories[i] = vpf;
-            }
-            return new NtDelimitedDataTupleParserFactory(recType, fieldParserFactories, delimiter);
+            conf.put(AsterixTupleParserFactory.KEY_FORMAT, AsterixTupleParserFactory.FORMAT_DELIMITED_TEXT);
+            conf.put(AsterixTupleParserFactory.KEY_DELIMITER, "" + delimiter);
+            inputFormat = InputDataFormat.DELIMITED;
         } else {
-            return new AdmSchemafullRecordParserFactory(recType);
+            conf.put(AsterixTupleParserFactory.KEY_FORMAT, AsterixTupleParserFactory.FORMAT_ADM);
+            inputFormat = InputDataFormat.ADM;
         }
+
+        if (hasHeader) {
+            conf.put(AsterixTupleParserFactory.HAS_HEADER,
+                    hasHeader ? Boolean.TRUE.toString() : Boolean.FALSE.toString());
+        }
+        conf.put(AsterixTupleParserFactory.KEY_QUOTE, "" + quote);
+        return new AsterixTupleParserFactory(conf, recType, inputFormat);
     }
+
 
     @Override
     public INullWriterFactory getNullWriterFactory() {

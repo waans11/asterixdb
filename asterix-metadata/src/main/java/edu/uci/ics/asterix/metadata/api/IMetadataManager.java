@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WIThOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,7 +19,6 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 import edu.uci.ics.asterix.common.exceptions.ACIDException;
-import edu.uci.ics.asterix.common.feeds.FeedConnectionId;
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
@@ -30,8 +29,6 @@ import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.ExternalFile;
 import edu.uci.ics.asterix.metadata.entities.Feed;
-import edu.uci.ics.asterix.metadata.entities.FeedActivity;
-import edu.uci.ics.asterix.metadata.entities.FeedActivity.FeedActivityType;
 import edu.uci.ics.asterix.metadata.entities.FeedPolicy;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
@@ -489,26 +486,8 @@ public interface IMetadataManager {
      */
     public void dropFeed(MetadataTransactionContext ctx, String dataverse, String feedName) throws MetadataException;
 
-    /**
-     * @param ctx
-     * @param feedId
-     * @param feedActivity
-     * @throws MetadataException
-     */
-    public void registerFeedActivity(MetadataTransactionContext ctx, FeedConnectionId feedId, FeedActivity feedActivity)
-            throws MetadataException;
-
-    /**
-     * @param ctx
-     * @param dataverseName
-     * @param datasetName
-     * @return
-     * @throws MetadataException
-     */
-    public FeedActivity getRecentActivityOnFeedConnection(MetadataTransactionContext ctx, FeedConnectionId feedId,
-            FeedActivityType... activityTypeFilter) throws MetadataException;
-
-    /**
+   
+   /**
      * @param ctx
      * @param policy
      * @throws MetadataException
@@ -525,19 +504,7 @@ public interface IMetadataManager {
     public FeedPolicy getFeedPolicy(MetadataTransactionContext ctx, String dataverse, String policyName)
             throws MetadataException;
 
-    /**
-     * @param ctx
-     * @param dataverse
-     * @param dataset
-     * @return
-     * @throws MetadataException
-     */
-    public List<FeedActivity> getActiveFeeds(MetadataTransactionContext ctx, String dataverse, String dataset)
-            throws MetadataException;
-
-    public List<FeedActivity> getConnectFeedActivitiesForFeed(MetadataTransactionContext ctx, String dataverse,
-            String dataset) throws MetadataException;
-
+   
     public void initializeDatasetIdFactory(MetadataTransactionContext ctx) throws MetadataException;
 
     public int getMostRecentDatasetId() throws MetadataException;
@@ -616,7 +583,8 @@ public interface IMetadataManager {
      *            added
      * @throws MetadataException
      */
-    public void addExternalFile(MetadataTransactionContext mdTxnCtx, ExternalFile externalFile) throws MetadataException;
+    public void addExternalFile(MetadataTransactionContext mdTxnCtx, ExternalFile externalFile)
+            throws MetadataException;
 
     /**
      * @param mdTxnCtx
@@ -637,7 +605,8 @@ public interface IMetadataManager {
      *            dropped
      * @throws MetadataException
      */
-    public void dropExternalFile(MetadataTransactionContext mdTxnCtx, ExternalFile externalFile) throws MetadataException;
+    public void dropExternalFile(MetadataTransactionContext mdTxnCtx, ExternalFile externalFile)
+            throws MetadataException;
 
     /**
      * @param mdTxnCtx
@@ -648,9 +617,10 @@ public interface IMetadataManager {
      * @throws MetadataException
      */
     public void dropDatasetExternalFiles(MetadataTransactionContext mdTxnCtx, Dataset dataset) throws MetadataException;
-    
+
     /**
      * Get en external file
+     * 
      * @param mdTxnCtx
      * @param dataverseName
      * @param datasetName
@@ -658,9 +628,9 @@ public interface IMetadataManager {
      * @return
      * @throws MetadataException
      */
-    public ExternalFile getExternalFile(MetadataTransactionContext mdTxnCtx, String dataverseName, String datasetName, Integer fileNumber)
-            throws MetadataException;
-    
+    public ExternalFile getExternalFile(MetadataTransactionContext mdTxnCtx, String dataverseName, String datasetName,
+            Integer fileNumber) throws MetadataException;
+
     /**
      * update an existing dataset in metadata.
      * 
@@ -672,5 +642,12 @@ public interface IMetadataManager {
      *             For example, if the dataset already exists.
      */
     public void updateDataset(MetadataTransactionContext ctx, Dataset dataset) throws MetadataException;
-    
+
+    /**
+     * Clean up temporary datasets that have not been active for a long time.
+     * 
+     * @throws MetadataException
+     */
+    public void cleanupTempDatasets() throws MetadataException;
+
 }

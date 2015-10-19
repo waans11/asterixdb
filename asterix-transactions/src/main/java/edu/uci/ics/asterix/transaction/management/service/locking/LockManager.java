@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -31,10 +31,10 @@ import edu.uci.ics.asterix.common.transactions.ILockManager;
 import edu.uci.ics.asterix.common.transactions.ITransactionContext;
 import edu.uci.ics.asterix.common.transactions.ITransactionManager;
 import edu.uci.ics.asterix.common.transactions.JobId;
+import edu.uci.ics.asterix.common.transactions.LogRecord;
+import edu.uci.ics.asterix.common.transactions.LogType;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogPage;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogPageReader;
-import edu.uci.ics.asterix.transaction.management.service.logging.LogRecord;
-import edu.uci.ics.asterix.transaction.management.service.logging.LogType;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionSubsystem;
 import edu.uci.ics.hyracks.api.lifecycle.ILifeCycleComponent;
@@ -43,7 +43,7 @@ import edu.uci.ics.hyracks.api.lifecycle.ILifeCycleComponent;
  * An implementation of the ILockManager interface for the
  * specific case of locking protocol with two lock modes: (S) and (X),
  * where S lock mode is shown by 0, and X lock mode is shown by 1.
- * 
+ *
  * @author pouria, kisskys
  */
 
@@ -61,29 +61,29 @@ public class LockManager implements ILockManager, ILifeCycleComponent {
     private static final int ESCALATED = 1;
     private static final int DONOT_ESCALATE = 2;
 
-    private TransactionSubsystem txnSubsystem;
+    private final TransactionSubsystem txnSubsystem;
 
     //all threads accessing to LockManager's tables such as jobHT and datasetResourceHT
     //are serialized through LockTableLatch. All threads waiting the latch will be fairly served
     //in FIFO manner when the latch is available. 
     private final ReadWriteLock lockTableLatch;
     private final ReadWriteLock waiterLatch;
-    private HashMap<JobId, JobInfo> jobHT;
-    private HashMap<DatasetId, DatasetLockInfo> datasetResourceHT;
+    private final HashMap<JobId, JobInfo> jobHT;
+    private final HashMap<DatasetId, DatasetLockInfo> datasetResourceHT;
 
-    private EntityLockInfoManager entityLockInfoManager;
-    private EntityInfoManager entityInfoManager;
-    private LockWaiterManager lockWaiterManager;
+    private final EntityLockInfoManager entityLockInfoManager;
+    private final EntityInfoManager entityInfoManager;
+    private final LockWaiterManager lockWaiterManager;
 
-    private DeadlockDetector deadlockDetector;
-    private TimeOutDetector toutDetector;
-    private DatasetId tempDatasetIdObj; //temporary object to avoid object creation
-    private JobId tempJobIdObj;
+    private final DeadlockDetector deadlockDetector;
+    private final TimeOutDetector toutDetector;
+    private final DatasetId tempDatasetIdObj; //temporary object to avoid object creation
+    private final JobId tempJobIdObj;
 
     private int tryLockDatasetGranuleRevertOperation;
 
     private LockRequestTracker lockRequestTracker; //for debugging
-    private ConsecutiveWakeupContext consecutiveWakeupContext;
+    private final ConsecutiveWakeupContext consecutiveWakeupContext;
 
     public LockManager(TransactionSubsystem txnSubsystem) throws ACIDException {
         this.txnSubsystem = txnSubsystem;
@@ -638,7 +638,8 @@ public class LockManager implements ILockManager, ILifeCycleComponent {
     }
 
     @Override
-    public void unlock(DatasetId datasetId, int entityHashValue, byte lockMode, ITransactionContext txnContext) throws ACIDException {
+    public void unlock(DatasetId datasetId, int entityHashValue, byte lockMode, ITransactionContext txnContext)
+            throws ACIDException {
         internalUnlock(datasetId, entityHashValue, txnContext, false);
     }
 
@@ -2010,7 +2011,7 @@ public class LockManager implements ILockManager, ILifeCycleComponent {
 
             Iterator<Entry<JobId, JobInfo>> iter = jobHT.entrySet().iterator();
             while (iter.hasNext()) {
-                Map.Entry<JobId, JobInfo> pair = (Map.Entry<JobId, JobInfo>) iter.next();
+                Map.Entry<JobId, JobInfo> pair = iter.next();
                 jobInfo = pair.getValue();
                 waiterObjId = jobInfo.getFirstWaitingResource();
                 while (waiterObjId != -1) {
@@ -2215,7 +2216,7 @@ public class LockManager implements ILockManager, ILifeCycleComponent {
                     tempJobIdObj.setId(logRecord.getJobId());
                     txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(tempJobIdObj, false);
                     txnCtx.notifyOptracker(true);
-                    ((LogPage) logPage).notifyJobTerminator();
+                    logPage.notifyJobTerminator();
                 }
                 logRecord = logPageReader.next();
             }

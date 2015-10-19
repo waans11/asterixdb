@@ -17,6 +17,7 @@ package edu.uci.ics.asterix.runtime.operators.file;
 import java.io.DataOutput;
 
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
+import edu.uci.ics.asterix.om.base.ABinary;
 import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.ACircle;
 import edu.uci.ics.asterix.om.base.ADate;
@@ -30,6 +31,7 @@ import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AInt64;
 import edu.uci.ics.asterix.om.base.AInt8;
 import edu.uci.ics.asterix.om.base.ALine;
+import edu.uci.ics.asterix.om.base.AMutableBinary;
 import edu.uci.ics.asterix.om.base.AMutableCircle;
 import edu.uci.ics.asterix.om.base.AMutableDate;
 import edu.uci.ics.asterix.om.base.AMutableDateTime;
@@ -47,6 +49,7 @@ import edu.uci.ics.asterix.om.base.AMutablePoint3D;
 import edu.uci.ics.asterix.om.base.AMutableRectangle;
 import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.AMutableTime;
+import edu.uci.ics.asterix.om.base.AMutableUUID;
 import edu.uci.ics.asterix.om.base.AMutableYearMonthDuration;
 import edu.uci.ics.asterix.om.base.ANull;
 import edu.uci.ics.asterix.om.base.APoint;
@@ -54,6 +57,7 @@ import edu.uci.ics.asterix.om.base.APoint3D;
 import edu.uci.ics.asterix.om.base.ARectangle;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.ATime;
+import edu.uci.ics.asterix.om.base.AUUID;
 import edu.uci.ics.asterix.om.base.AYearMonthDuration;
 import edu.uci.ics.asterix.om.base.temporal.ADateParserFactory;
 import edu.uci.ics.asterix.om.base.temporal.ADurationParserFactory;
@@ -64,6 +68,8 @@ import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.dataflow.common.data.parsers.ByteArrayBase64ParserFactory;
+import edu.uci.ics.hyracks.dataflow.common.data.parsers.ByteArrayHexParserFactory;
 
 /**
  * Base class for data parsers. Includes the common set of definitions for
@@ -78,7 +84,9 @@ public abstract class AbstractDataParser implements IDataParser {
     protected AMutableDouble aDouble = new AMutableDouble(0);
     protected AMutableFloat aFloat = new AMutableFloat(0);
     protected AMutableString aString = new AMutableString("");
+    protected AMutableBinary aBinary = new AMutableBinary(new byte[] {}, 0, 0);
     protected AMutableString aStringFieldName = new AMutableString("");
+    protected AMutableUUID aUUID = new AMutableUUID(0, 0);
     // For temporal and spatial data types
     protected AMutableTime aTime = new AMutableTime(0);
     protected AMutableDateTime aDateTime = new AMutableDateTime(0L);
@@ -92,6 +100,8 @@ public abstract class AbstractDataParser implements IDataParser {
     protected AMutablePoint aPoint2 = new AMutablePoint(0, 0);
     protected AMutableLine aLine = new AMutableLine(null, null);
     protected AMutableDate aDate = new AMutableDate(0);
+
+    private final byte[] base64ParserQuadruplet = new byte[4];
 
     // Serializers
     @SuppressWarnings("unchecked")
@@ -121,6 +131,13 @@ public abstract class AbstractDataParser implements IDataParser {
     @SuppressWarnings("unchecked")
     protected ISerializerDeserializer<ANull> nullSerde = AqlSerializerDeserializerProvider.INSTANCE
             .getSerializerDeserializer(BuiltinType.ANULL);
+
+    // For UUID, we assume that the format is the string representation of UUID
+    // (xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxx) when parsing the data.
+    // Thus, we need to call UUID.fromStringToAMuatbleUUID() to convert it to the internal representation (two long values).
+    @SuppressWarnings("unchecked")
+    protected ISerializerDeserializer<AUUID> uuidSerde = AqlSerializerDeserializerProvider.INSTANCE
+            .getSerializerDeserializer(BuiltinType.AUUID);
 
     // To avoid race conditions, the serdes for temporal and spatial data types needs to be one per parser
     @SuppressWarnings("unchecked")
@@ -156,6 +173,9 @@ public abstract class AbstractDataParser implements IDataParser {
     @SuppressWarnings("unchecked")
     protected final static ISerializerDeserializer<ALine> lineSerde = AqlSerializerDeserializerProvider.INSTANCE
             .getSerializerDeserializer(BuiltinType.ALINE);
+    @SuppressWarnings("unchecked")
+    protected final static ISerializerDeserializer<ABinary> binarySerde = AqlSerializerDeserializerProvider.INSTANCE
+            .getSerializerDeserializer(BuiltinType.ABINARY);
 
     protected String filename;
 
@@ -279,8 +299,9 @@ public abstract class AbstractDataParser implements IDataParser {
     protected void parseRectangle(String rectangle, DataOutput out) throws HyracksDataException {
         try {
             String[] points = rectangle.split(" ");
-            if (points.length != 2)
+            if (points.length != 2) {
                 throw new HyracksDataException("rectangle consists of only 2 points.");
+            }
             aPoint.setValue(Double.parseDouble(points[0].split(",")[0]), Double.parseDouble(points[0].split(",")[1]));
             aPoint2.setValue(Double.parseDouble(points[1].split(",")[0]), Double.parseDouble(points[1].split(",")[1]));
             if (aPoint.getX() > aPoint2.getX() && aPoint.getY() > aPoint2.getY()) {
@@ -300,8 +321,9 @@ public abstract class AbstractDataParser implements IDataParser {
     protected void parseLine(String line, DataOutput out) throws HyracksDataException {
         try {
             String[] points = line.split(" ");
-            if (points.length != 2)
+            if (points.length != 2) {
                 throw new HyracksDataException("line consists of only 2 points.");
+            }
             aPoint.setValue(Double.parseDouble(points[0].split(",")[0]), Double.parseDouble(points[0].split(",")[1]));
             aPoint2.setValue(Double.parseDouble(points[1].split(",")[0]), Double.parseDouble(points[1].split(",")[1]));
             aLine.setValue(aPoint, aPoint2);
@@ -311,4 +333,19 @@ public abstract class AbstractDataParser implements IDataParser {
         }
     }
 
+    protected void parseHexBinaryString(char[] input, int start, int length, DataOutput out)
+            throws HyracksDataException {
+        byte[] newBytes = ByteArrayHexParserFactory.extractPointableArrayFromHexString(input, start, length,
+                aBinary.getBytes());
+        aBinary.setValue(newBytes, 0, newBytes.length);
+        binarySerde.serialize(aBinary, out);
+    }
+
+    protected void parseBase64BinaryString(char[] input, int start, int length, DataOutput out)
+            throws HyracksDataException {
+        byte[] newBytes = ByteArrayBase64ParserFactory.extractPointableArrayFromBase64String(input, start, length,
+                aBinary.getBytes(), base64ParserQuadruplet);
+        aBinary.setValue(newBytes, 0, newBytes.length);
+        binarySerde.serialize(aBinary, out);
+    }
 }

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -38,6 +38,9 @@ public class AsterixExternalProperties extends AbstractAsterixProperties {
 
     private static final String EXTERNAL_MAX_WAIT_FOR_ACTIVE_CLUSTER = "max.wait.active.cluster";
     private static int EXTERNAL_MAX_WAIT_FOR_ACTIVE_CLUSTER_DEFAULT = 60;
+
+    private static final String EXTERNAL_PLOT_ACTIVATE = "plot.activate";
+    private static Boolean EXTERNAL_PLOT_ACTIVATE_DEFAULT = new Boolean(false);
 
     public AsterixExternalProperties(AsterixPropertiesAccessor accessor) {
         super(accessor);
@@ -77,4 +80,10 @@ public class AsterixExternalProperties extends AbstractAsterixProperties {
         return accessor.getProperty(EXTERNAL_MAX_WAIT_FOR_ACTIVE_CLUSTER, EXTERNAL_MAX_WAIT_FOR_ACTIVE_CLUSTER_DEFAULT,
                 PropertyInterpreters.getIntegerPropertyInterpreter());
     }
+
+    public Boolean getIsPlottingEnabled() {
+        return accessor.getProperty(EXTERNAL_PLOT_ACTIVATE, EXTERNAL_PLOT_ACTIVATE_DEFAULT,
+                PropertyInterpreters.getBooleanPropertyInterpreter());
+    }
+
 }

@@ -15,32 +15,29 @@
 package edu.uci.ics.asterix.external.indexing.dataflow;
 
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.external.indexing.input.AbstractHDFSReader;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
+import edu.uci.ics.hyracks.api.comm.VSizeFrame;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAppender;
-import edu.uci.ics.hyracks.dataflow.common.comm.util.FrameUtils;
 import edu.uci.ics.hyracks.dataflow.std.file.ITupleParser;
 
 /*
  * This class is used with hdfs objects instead of hdfs
  */
 public class HDFSObjectTupleParser implements ITupleParser{
-    
+
     private ArrayTupleBuilder tb;
     private final FrameTupleAppender appender;
-    private final ByteBuffer frame;
     private IAsterixHDFSRecordParser deserializer;
-    
+
     public HDFSObjectTupleParser(IHyracksTaskContext ctx, ARecordType recType, IAsterixHDFSRecordParser deserializer) throws HyracksDataException {
-        appender = new FrameTupleAppender(ctx.getFrameSize());
-        frame = ctx.allocateFrame();
+        appender = new FrameTupleAppender(new VSizeFrame(ctx));
         this.deserializer = deserializer;
         tb = new ArrayTupleBuilder(1);
     }
@@ -48,7 +45,6 @@ public class HDFSObjectTupleParser implements ITupleParser{
     @Override
     public void parse(InputStream in, IFrameWriter writer) throws HyracksDataException {
         AbstractHDFSReader reader = (AbstractHDFSReader) in;
-        appender.reset(frame, true);
         Object object;
         try {
             reader.initialize();
@@ -60,20 +56,17 @@ public class HDFSObjectTupleParser implements ITupleParser{
                 addTupleToFrame(writer);
                 object = reader.readNext();
             }
-            if (appender.getTupleCount() > 0) {
-                FrameUtils.flushFrame(frame, writer);
-            }
+            appender.flush(writer, true);
         } catch (AsterixException ae) {
             throw new HyracksDataException(ae);
         } catch (Exception e) {
             throw new HyracksDataException(e);
         }
     }
-    
+
     protected void addTupleToFrame(IFrameWriter writer) throws HyracksDataException {
         if (!appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize())) {
-            FrameUtils.flushFrame(frame, writer);
-            appender.reset(frame, true);
+            appender.flush(writer, true);
             if (!appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize())) {
                 throw new IllegalStateException();
             }

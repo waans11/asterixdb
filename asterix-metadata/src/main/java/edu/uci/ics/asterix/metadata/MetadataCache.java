@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,10 +17,12 @@ package edu.uci.ics.asterix.metadata;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import edu.uci.ics.asterix.common.feeds.FeedConnectionId;
+import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
 import edu.uci.ics.asterix.metadata.entities.CompactionPolicy;
@@ -29,10 +31,10 @@ import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Feed;
-import edu.uci.ics.asterix.metadata.entities.FeedActivity;
 import edu.uci.ics.asterix.metadata.entities.FeedPolicy;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
+import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.Library;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 
@@ -44,6 +46,8 @@ import edu.uci.ics.asterix.metadata.entities.NodeGroup;
  */
 public class MetadataCache {
 
+    // Default life time period of a temp dataset. It is 30 days.
+    private final static long TEMP_DATASET_INACTIVE_TIME_THRESHOLD = 3600 * 24 * 30 * 1000L;
     // Key is dataverse name.
     protected final Map<String, Dataverse> dataverses = new HashMap<String, Dataverse>();
     // Key is dataverse name. Key of value map is dataset name.
@@ -58,9 +62,7 @@ public class MetadataCache {
     protected final Map<FunctionSignature, Function> functions = new HashMap<FunctionSignature, Function>();
     // Key is adapter dataverse. Key of value map is the adapter name  
     protected final Map<String, Map<String, DatasourceAdapter>> adapters = new HashMap<String, Map<String, DatasourceAdapter>>();
-    // Key is FeedId   
-    protected final Map<FeedConnectionId, FeedActivity> feedActivity = new HashMap<FeedConnectionId, FeedActivity>();
-
+  
     // Key is DataverseName, Key of the value map is the Policy name   
     protected final Map<String, Map<String, FeedPolicy>> feedPolicies = new HashMap<String, Map<String, FeedPolicy>>();
     // Key is library dataverse. Key of value map is the library name
@@ -104,7 +106,6 @@ public class MetadataCache {
                         synchronized (datatypes) {
                             synchronized (functions) {
                                 synchronized (adapters) {
-                                    synchronized (feedActivity) {
                                         synchronized (libraries) {
                                             synchronized (compactionPolicies) {
                                                 dataverses.clear();
@@ -114,7 +115,6 @@ public class MetadataCache {
                                                 datatypes.clear();
                                                 functions.clear();
                                                 adapters.clear();
-                                                feedActivity.clear();
                                                 libraries.clear();
                                                 compactionPolicies.clear();
                                             }
@@ -127,7 +127,7 @@ public class MetadataCache {
                 }
             }
         }
-    }
+    
 
     public Object addDataverseIfNotExists(Dataverse dataverse) {
         synchronized (dataverses) {
@@ -147,34 +147,33 @@ public class MetadataCache {
 
     public Object addDatasetIfNotExists(Dataset dataset) {
         synchronized (datasets) {
-            Map<String, Dataset> m = datasets.get(dataset.getDataverseName());
-            if (m == null) {
-                m = new HashMap<String, Dataset>();
-                datasets.put(dataset.getDataverseName(), m);
+            synchronized (indexes) {
+                // Add the primary index associated with the dataset, if the dataset is an
+                // internal dataset.
+                if (dataset.getDatasetType() == DatasetType.INTERNAL) {
+                    InternalDatasetDetails id = (InternalDatasetDetails) dataset.getDatasetDetails();
+                    Index index = new Index(dataset.getDataverseName(), dataset.getDatasetName(),
+                            dataset.getDatasetName(), IndexType.BTREE, id.getPartitioningKey(), id.getPrimaryKeyType(),
+                            false, true, dataset.getPendingOp());
+                    addIndexIfNotExistsInternal(index);
+                }
+
+                Map<String, Dataset> m = datasets.get(dataset.getDataverseName());
+                if (m == null) {
+                    m = new HashMap<String, Dataset>();
+                    datasets.put(dataset.getDataverseName(), m);
+                }
+                if (!m.containsKey(dataset.getDatasetName())) {
+                    return m.put(dataset.getDatasetName(), dataset);
+                }
+                return null;
             }
-            if (!m.containsKey(dataset.getDatasetName())) {
-                return m.put(dataset.getDatasetName(), dataset);
-            }
-            return null;
         }
     }
 
     public Object addIndexIfNotExists(Index index) {
         synchronized (indexes) {
-            Map<String, Map<String, Index>> datasetMap = indexes.get(index.getDataverseName());
-            if (datasetMap == null) {
-                datasetMap = new HashMap<String, Map<String, Index>>();
-                indexes.put(index.getDataverseName(), datasetMap);
-            }
-            Map<String, Index> indexMap = datasetMap.get(index.getDatasetName());
-            if (indexMap == null) {
-                indexMap = new HashMap<String, Index>();
-                datasetMap.put(index.getDatasetName(), indexMap);
-            }
-            if (!indexMap.containsKey(index.getIndexName())) {
-                return indexMap.put(index.getIndexName(), index);
-            }
-            return null;
+            return addIndexIfNotExistsInternal(index);
         }
     }
 
@@ -235,7 +234,6 @@ public class MetadataCache {
                         synchronized (functions) {
                             synchronized (adapters) {
                                 synchronized (libraries) {
-                                    synchronized (feedActivity) {
                                         synchronized (feeds) {
                                             synchronized (compactionPolicies) {
                                                 datasets.remove(dataverse.getDataverseName());
@@ -252,19 +250,8 @@ public class MetadataCache {
                                                 for (FunctionSignature signature : markedFunctionsForRemoval) {
                                                     functions.remove(signature);
                                                 }
-                                                List<FeedConnectionId> feedActivitiesMarkedForRemoval = new ArrayList<FeedConnectionId>();
-                                                for (FeedConnectionId fid : feedActivity.keySet()) {
-                                                    if (fid.getDataverse().equals(dataverse.getDataverseName())) {
-                                                        feedActivitiesMarkedForRemoval.add(fid);
-                                                    }
-                                                }
-                                                for (FeedConnectionId fid : feedActivitiesMarkedForRemoval) {
-                                                    feedActivity.remove(fid);
-                                                }
-
                                                 libraries.remove(dataverse.getDataverseName());
                                                 feeds.remove(dataverse.getDataverseName());
-
                                                 return dataverses.remove(dataverse.getDataverseName());
                                             }
                                         }
@@ -276,7 +263,7 @@ public class MetadataCache {
                 }
             }
         }
-    }
+    
 
     public Object dropDataset(Dataset dataset) {
         synchronized (datasets) {
@@ -309,7 +296,6 @@ public class MetadataCache {
             if (indexMap == null) {
                 return null;
             }
-
             return indexMap.remove(index.getIndexName());
         }
     }
@@ -393,6 +379,20 @@ public class MetadataCache {
                 retDatasets.add(entry.getValue());
             }
             return retDatasets;
+        }
+    }
+
+    public List<Index> getDatasetIndexes(String dataverseName, String datasetName) {
+        List<Index> retIndexes = new ArrayList<Index>();
+        synchronized (datasets) {
+            Map<String, Index> map = indexes.get(dataverseName).get(datasetName);
+            if (map == null) {
+                return retIndexes;
+            }
+            for (Map.Entry<String, Index> entry : map.entrySet()) {
+                retIndexes.add(entry.getValue());
+            }
+            return retIndexes;
         }
     }
 
@@ -485,9 +485,9 @@ public class MetadataCache {
                 adaptersInDataverse = new HashMap<String, DatasourceAdapter>();
                 adapters.put(adapter.getAdapterIdentifier().getNamespace(), adaptersInDataverse);
             }
-            DatasourceAdapter adapterObject = adaptersInDataverse.get(adapter.getAdapterIdentifier().getAdapterName());
+            DatasourceAdapter adapterObject = adaptersInDataverse.get(adapter.getAdapterIdentifier().getName());
             if (adapterObject == null) {
-                return adaptersInDataverse.put(adapter.getAdapterIdentifier().getAdapterName(), adapter);
+                return adaptersInDataverse.put(adapter.getAdapterIdentifier().getName(), adapter);
             }
             return null;
         }
@@ -498,28 +498,14 @@ public class MetadataCache {
             Map<String, DatasourceAdapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier()
                     .getNamespace());
             if (adaptersInDataverse != null) {
-                return adaptersInDataverse.remove(adapter.getAdapterIdentifier().getAdapterName());
+                return adaptersInDataverse.remove(adapter.getAdapterIdentifier().getName());
             }
             return null;
         }
     }
 
-    public Object addFeedActivityIfNotExists(FeedActivity fa) {
-        synchronized (feedActivity) {
-            FeedConnectionId fid = new FeedConnectionId(fa.getDataverseName(), fa.getFeedName(), fa.getDatasetName());
-            if (!feedActivity.containsKey(fid)) {
-                feedActivity.put(fid, fa);
-            }
-        }
-        return null;
-    }
+  
 
-    public Object dropFeedActivity(FeedActivity fa) {
-        synchronized (feedActivity) {
-            FeedConnectionId fid = new FeedConnectionId(fa.getDataverseName(), fa.getFeedName(), fa.getDatasetName());
-            return feedActivity.remove(fid);
-        }
-    }
 
     public Object addLibraryIfNotExists(Library library) {
         synchronized (libraries) {
@@ -558,6 +544,45 @@ public class MetadataCache {
                 return feedsInDataverse.remove(feed.getFeedName());
             }
             return null;
+        }
+    }
+
+    private Object addIndexIfNotExistsInternal(Index index) {
+        Map<String, Map<String, Index>> datasetMap = indexes.get(index.getDataverseName());
+        if (datasetMap == null) {
+            datasetMap = new HashMap<String, Map<String, Index>>();
+            indexes.put(index.getDataverseName(), datasetMap);
+        }
+        Map<String, Index> indexMap = datasetMap.get(index.getDatasetName());
+        if (indexMap == null) {
+            indexMap = new HashMap<String, Index>();
+            datasetMap.put(index.getDatasetName(), indexMap);
+        }
+        if (!indexMap.containsKey(index.getIndexName())) {
+            return indexMap.put(index.getIndexName(), index);
+        }
+        return null;
+    }
+
+    /**
+     * Clean up temp datasets that are expired.
+     * The garbage collection will pause other dataset operations.
+     */
+    public void cleanupTempDatasets() {
+        synchronized (datasets) {
+            for (Map<String, Dataset> map : datasets.values()) {
+                Iterator<Dataset> datasetIterator = map.values().iterator();
+                while (datasetIterator.hasNext()) {
+                    Dataset dataset = datasetIterator.next();
+                    if (dataset.getDatasetDetails().isTemp()) {
+                        long currentTime = System.currentTimeMillis();
+                        long duration = currentTime - dataset.getDatasetDetails().getLastAccessTime();
+                        if (duration > TEMP_DATASET_INACTIVE_TIME_THRESHOLD) {
+                            datasetIterator.remove();
+                        }
+                    }
+                }
+            }
         }
     }
 }

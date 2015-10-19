@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,7 +21,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hadoop.hdfs.server.common.HdfsConstants.StartupOption;
+import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.StartupOption;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 
@@ -29,7 +29,7 @@ import edu.uci.ics.asterix.external.dataset.adapter.HDFSAdapter;
 
 /**
  * Manages a Mini (local VM) HDFS cluster with a configured number of datanodes.
- * 
+ *
  * @author ramangrover29
  */
 @SuppressWarnings("deprecation")
@@ -64,7 +64,13 @@ public class HDFSCluster {
         conf.addResource(new Path(PATH_TO_HADOOP_CONF + "/mapred-site.xml"));
         conf.addResource(new Path(PATH_TO_HADOOP_CONF + "/hdfs-site.xml"));
         cleanupLocal();
-        dfsCluster = new MiniDFSCluster(nameNodePort, conf, numDataNodes, true, true, StartupOption.REGULAR, null);
+        //this constructor is deprecated in hadoop 2x 
+        //dfsCluster = new MiniDFSCluster(nameNodePort, conf, numDataNodes, true, true, StartupOption.REGULAR, null);
+        MiniDFSCluster.Builder build = new MiniDFSCluster.Builder(conf);
+        build.nameNodePort(nameNodePort);
+        build.numDataNodes(numDataNodes);
+        build.startupOption(StartupOption.REGULAR);
+        dfsCluster = build.build();
         dfs = FileSystem.get(conf);
         loadData();
     }

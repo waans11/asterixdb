@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,9 +20,10 @@ import java.io.IOException;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADurationSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt32SerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt64SerializerDeserializer;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AYearMonthDurationSerializerDeserializer;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
-import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.AMutableInt32;
+import edu.uci.ics.asterix.om.base.AInt64;
+import edu.uci.ics.asterix.om.base.AMutableInt64;
 import edu.uci.ics.asterix.om.base.ANull;
 import edu.uci.ics.asterix.om.base.temporal.GregorianCalendarSystem;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
@@ -51,6 +52,7 @@ public class TemporalYearAccessor extends AbstractScalarFunctionDynamicDescripto
     private static final byte SER_DATE_TYPE_TAG = ATypeTag.DATE.serialize();
     private static final byte SER_DATETIME_TYPE_TAG = ATypeTag.DATETIME.serialize();
     private static final byte SER_DURATION_TYPE_TAG = ATypeTag.DURATION.serialize();
+    private static final byte SER_YEAR_MONTH_DURATION_TYPE_TAG = ATypeTag.YEARMONTHDURATION.serialize();
     private static final byte SER_STRING_TYPE_TAG = ATypeTag.STRING.serialize();
     private static final byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
 
@@ -72,21 +74,21 @@ public class TemporalYearAccessor extends AbstractScalarFunctionDynamicDescripto
             public ICopyEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
                 return new ICopyEvaluator() {
 
-                    private DataOutput out = output.getDataOutput();
+                    private final DataOutput out = output.getDataOutput();
 
-                    private ArrayBackedValueStorage argOut = new ArrayBackedValueStorage();
+                    private final ArrayBackedValueStorage argOut = new ArrayBackedValueStorage();
 
-                    private ICopyEvaluator eval = args[0].createEvaluator(argOut);
+                    private final ICopyEvaluator eval = args[0].createEvaluator(argOut);
 
-                    private GregorianCalendarSystem calSystem = GregorianCalendarSystem.getInstance();
+                    private final GregorianCalendarSystem calSystem = GregorianCalendarSystem.getInstance();
 
                     // for output: type integer
                     @SuppressWarnings("unchecked")
-                    private ISerializerDeserializer<AInt32> intSerde = AqlSerializerDeserializerProvider.INSTANCE
-                            .getSerializerDeserializer(BuiltinType.AINT32);
-                    private AMutableInt32 aMutableInt32 = new AMutableInt32(0);
+                    private final ISerializerDeserializer<AInt64> intSerde = AqlSerializerDeserializerProvider.INSTANCE
+                            .getSerializerDeserializer(BuiltinType.AINT64);
+                    private final AMutableInt64 aMutableInt64 = new AMutableInt64(0);
                     @SuppressWarnings("unchecked")
-                    private ISerializerDeserializer<ANull> nullSerde = AqlSerializerDeserializerProvider.INSTANCE
+                    private final ISerializerDeserializer<ANull> nullSerde = AqlSerializerDeserializerProvider.INSTANCE
                             .getSerializerDeserializer(BuiltinType.ANULL);
 
                     @Override
@@ -98,9 +100,17 @@ public class TemporalYearAccessor extends AbstractScalarFunctionDynamicDescripto
                         try {
 
                             if (bytes[0] == SER_DURATION_TYPE_TAG) {
-                                aMutableInt32.setValue(calSystem.getDurationYear(ADurationSerializerDeserializer
+                                aMutableInt64.setValue(calSystem.getDurationYear(ADurationSerializerDeserializer
                                         .getYearMonth(bytes, 1)));
-                                intSerde.serialize(aMutableInt32, out);
+                                intSerde.serialize(aMutableInt64, out);
+                                return;
+                            }
+
+                            if (bytes[0] == SER_YEAR_MONTH_DURATION_TYPE_TAG) {
+                                aMutableInt64.setValue(calSystem
+                                        .getDurationYear(AYearMonthDurationSerializerDeserializer
+                                                .getYearMonth(bytes, 1)));
+                                intSerde.serialize(aMutableInt64, out);
                                 return;
                             }
 
@@ -128,8 +138,8 @@ public class TemporalYearAccessor extends AbstractScalarFunctionDynamicDescripto
                                             + (UTF8StringPointable.charAt(bytes, 5) - '0') * 10
                                             + (UTF8StringPointable.charAt(bytes, 6) - '0');
                                 }
-                                aMutableInt32.setValue(year);
-                                intSerde.serialize(aMutableInt32, out);
+                                aMutableInt64.setValue(year);
+                                intSerde.serialize(aMutableInt64, out);
                                 return;
                             } else {
                                 throw new AlgebricksException("Inapplicable input type: " + bytes[0]);
@@ -137,8 +147,8 @@ public class TemporalYearAccessor extends AbstractScalarFunctionDynamicDescripto
 
                             int year = calSystem.getYear(chrononTimeInMs);
 
-                            aMutableInt32.setValue(year);
-                            intSerde.serialize(aMutableInt32, out);
+                            aMutableInt64.setValue(year);
+                            intSerde.serialize(aMutableInt64, out);
 
                         } catch (IOException e) {
                             throw new AlgebricksException(e);

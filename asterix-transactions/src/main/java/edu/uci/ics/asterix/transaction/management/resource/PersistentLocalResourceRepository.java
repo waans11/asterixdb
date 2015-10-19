@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -53,7 +53,7 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
             String mountPoint = devices.get(i).getPath().getPath();
             File mountPointDir = new File(mountPoint);
             if (!mountPointDir.exists()) {
-                throw new HyracksDataException(mountPointDir.getAbsolutePath() + "doesn't exist.");
+                throw new HyracksDataException(mountPointDir.getAbsolutePath() + " doesn't exist.");
             }
             if (!mountPoint.endsWith(System.getProperty("file.separator"))) {
                 mountPoints[i] = new String(mountPoint + System.getProperty("file.separator"));
@@ -84,10 +84,9 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
                 if (!rootMetadataDir.exists()) {
                     boolean success = rootMetadataDir.mkdirs();
                     if (!success) {
-                        if (LOGGER.isLoggable(Level.SEVERE)) {
-                            LOGGER.severe("Unable to create root metadata directory"
-                                    + rootMetadataDir.getAbsolutePath());
-                        }
+                        throw new IllegalStateException(
+                                "Unable to create root metadata directory of PersistentLocalResourceRepository in "
+                                        + rootMetadataDir.getAbsolutePath());
                     }
                     if (LOGGER.isLoggable(Level.INFO)) {
                         LOGGER.info("created the root-metadata-file's directory: " + rootMetadataDir.getAbsolutePath());

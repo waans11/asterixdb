@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,6 +14,7 @@
  */
 package edu.uci.ics.asterix.common.context;
 
+import edu.uci.ics.asterix.common.context.DatasetLifecycleManager.DatasetInfo;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.storage.am.common.api.IModificationOperationCallback;
 import edu.uci.ics.hyracks.storage.am.common.api.ISearchOperationCallback;
@@ -25,17 +26,19 @@ public class BaseOperationTracker implements ILSMOperationTracker {
 
     protected final DatasetLifecycleManager datasetLifecycleManager;
     protected final int datasetID;
-
-    public BaseOperationTracker(DatasetLifecycleManager datasetLifecycleManager, int datasetID) {
+    protected DatasetInfo dsInfo;
+    
+    public BaseOperationTracker(DatasetLifecycleManager datasetLifecycleManager, int datasetID, DatasetInfo dsInfo) {
         this.datasetLifecycleManager = datasetLifecycleManager;
         this.datasetID = datasetID;
+        this.dsInfo = dsInfo;
     }
 
     @Override
     public void beforeOperation(ILSMIndex index, LSMOperationType opType, ISearchOperationCallback searchCallback,
             IModificationOperationCallback modificationCallback) throws HyracksDataException {
         if (opType == LSMOperationType.FLUSH || opType == LSMOperationType.MERGE) {
-            datasetLifecycleManager.declareActiveIOOperation(datasetID);
+            dsInfo.declareActiveIOOperation();
         }
     }
 
@@ -43,7 +46,7 @@ public class BaseOperationTracker implements ILSMOperationTracker {
     public void afterOperation(ILSMIndex index, LSMOperationType opType, ISearchOperationCallback searchCallback,
             IModificationOperationCallback modificationCallback) throws HyracksDataException {
         if (opType == LSMOperationType.FLUSH || opType == LSMOperationType.MERGE) {
-            datasetLifecycleManager.undeclareActiveIOOperation(datasetID);
+            dsInfo.undeclareActiveIOOperation();
         }
     }
 
@@ -52,6 +55,10 @@ public class BaseOperationTracker implements ILSMOperationTracker {
             IModificationOperationCallback modificationCallback) throws HyracksDataException {
     }
 
+    public void setDatasetInfo(DatasetInfo dsInfo){
+        this.dsInfo = dsInfo;
+    }
+    
     public void exclusiveJobCommitted() throws HyracksDataException {
     }
 }

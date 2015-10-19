@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,9 +19,9 @@ import java.io.Reader;
 import java.util.List;
 
 import edu.uci.ics.asterix.api.common.APIFramework;
-import edu.uci.ics.asterix.api.common.APIFramework.DisplayFormat;
 import edu.uci.ics.asterix.api.common.Job;
 import edu.uci.ics.asterix.api.common.SessionConfig;
+import edu.uci.ics.asterix.api.common.SessionConfig.OutputFormat;
 import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
@@ -70,26 +70,30 @@ public class AsterixJavaClient {
         AQLParser parser = new AQLParser(builder.toString());
         List<Statement> aqlStatements;
         try {
-            aqlStatements = parser.Statement();
+            aqlStatements = parser.parse();
         } catch (ParseException pe) {
             throw new AsterixException(pe);
         }
         MetadataManager.INSTANCE.init();
 
-        SessionConfig pc = new SessionConfig(optimize, false, printRewrittenExpressions, printLogicalPlan,
-                printOptimizedPlan, printPhysicalOpsOnly, true, generateBinaryRuntime, printJob);
+        SessionConfig conf = new SessionConfig(writer, OutputFormat.ADM, optimize, true, generateBinaryRuntime);
+        conf.setOOBData(false, printRewrittenExpressions, printLogicalPlan,
+                        printOptimizedPlan, printJob);
+        if (printPhysicalOpsOnly) {
+            conf.set(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS, true);
+        }
 
-        AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, writer, pc, DisplayFormat.TEXT);
+        AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, conf);
         aqlTranslator.compileAndExecute(hcc, null, AqlTranslator.ResultDelivery.SYNC);
         writer.flush();
     }
 
     public void execute() throws Exception {
         if (dmlJobs != null) {
-            APIFramework.executeJobArray(hcc, dmlJobs, writer, DisplayFormat.TEXT);
+            APIFramework.executeJobArray(hcc, dmlJobs, writer);
         }
         if (queryJobSpec != null) {
-            APIFramework.executeJobArray(hcc, new JobSpecification[] { queryJobSpec }, writer, DisplayFormat.TEXT);
+            APIFramework.executeJobArray(hcc, new JobSpecification[] { queryJobSpec }, writer);
         }
     }
 

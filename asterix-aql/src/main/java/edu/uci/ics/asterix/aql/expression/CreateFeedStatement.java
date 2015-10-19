@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,47 +14,32 @@
  */
 package edu.uci.ics.asterix.aql.expression;
 
-import java.util.Map;
-
 import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlVisitorWithVoidReturn;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 
-public class CreateFeedStatement implements Statement {
+public abstract class CreateFeedStatement implements Statement {
 
-    private final Identifier dataverseName;
-    private final Identifier feedName;
-    private final String adaptorName;
-    private final Map<String, String> adaptorConfiguration;
+    private final Pair<Identifier, Identifier> qName;
     private final FunctionSignature appliedFunction;
     private final boolean ifNotExists;
 
-    public CreateFeedStatement(Identifier dataverseName, Identifier feedName, String adaptorName,
-            Map<String, String> adaptorConfiguration, FunctionSignature appliedFunction, boolean ifNotExists) {
-        this.feedName = feedName;
-        this.dataverseName = dataverseName;
-        this.adaptorName = adaptorName;
-        this.adaptorConfiguration = adaptorConfiguration;
+    public CreateFeedStatement(Pair<Identifier, Identifier> qName, FunctionSignature appliedFunction,
+            boolean ifNotExists) {
+        this.qName = qName;
         this.appliedFunction = appliedFunction;
         this.ifNotExists = ifNotExists;
     }
 
     public Identifier getDataverseName() {
-        return dataverseName;
+        return qName.first;
     }
 
     public Identifier getFeedName() {
-        return feedName;
-    }
-
-    public String getAdaptorName() {
-        return adaptorName;
-    }
-
-    public Map<String, String> getAdaptorConfiguration() {
-        return adaptorConfiguration;
+        return qName.second;
     }
 
     public FunctionSignature getAppliedFunction() {
@@ -66,14 +51,10 @@ public class CreateFeedStatement implements Statement {
     }
 
     @Override
-    public Kind getKind() {
-        return Kind.CREATE_FEED;
-    }
+    public abstract Kind getKind();
 
     @Override
-    public <R, T> R accept(IAqlExpressionVisitor<R, T> visitor, T arg) throws AsterixException {
-        return visitor.visitCreateFeedStatement(this, arg);
-    }
+    public abstract <R, T> R accept(IAqlExpressionVisitor<R, T> visitor, T arg) throws AsterixException;
 
     @Override
     public <T> void accept(IAqlVisitorWithVoidReturn<T> visitor, T arg) throws AsterixException {

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -38,6 +38,7 @@ import edu.uci.ics.asterix.om.typecomputer.impl.ARectangleTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.AStringTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ATimeTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.AUUIDTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.AnyTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.BinaryBooleanOrNullFunctionTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.BinaryStringBoolOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.BinaryStringStringOrNullTypeComputer;
@@ -47,6 +48,8 @@ import edu.uci.ics.asterix.om.typecomputer.impl.ClosedRecordConstructorResultTyp
 import edu.uci.ics.asterix.om.typecomputer.impl.CollectionToSequenceTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ConcatNonNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.FieldAccessByIndexResultType;
+import edu.uci.ics.asterix.om.typecomputer.impl.FieldAccessNestedResultType;
+import edu.uci.ics.asterix.om.typecomputer.impl.GetOverlappingInvervalTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.InjectFailureTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedCollectionMemberResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedFieldAccessByNameResultType;
@@ -61,6 +64,7 @@ import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedSwitchCaseComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedUnaryMinusTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NotNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OpenRecordConstructorResultType;
+import edu.uci.ics.asterix.om.typecomputer.impl.OptionalABinaryTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OptionalABooleanTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OptionalACircleTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OptionalADateTimeTypeComputer;
@@ -85,35 +89,30 @@ import edu.uci.ics.asterix.om.typecomputer.impl.OptionalATimeTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OptionalAYearMonthDurationTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListConstructorResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAInt32TypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAInt64TypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAIntervalTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAPointTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAStringTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAnyTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.QuadStringStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.RecordMergeTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ScalarVersionOfAggregateResultType;
+import edu.uci.ics.asterix.om.typecomputer.impl.SubsetCollectionTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.Substring2TypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.SubstringTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.TripleStringBoolOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.TripleStringStringOrNullTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.UnaryBinaryInt64OrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.UnaryBooleanOrNullFunctionTypeComputer;
-import edu.uci.ics.asterix.om.typecomputer.impl.UnaryStringInt32OrNullTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.UnaryStringInt64OrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.UnaryStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.UnorderedListConstructorResultType;
-import edu.uci.ics.asterix.om.types.AOrderedListType;
-import edu.uci.ics.asterix.om.types.ATypeTag;
-import edu.uci.ics.asterix.om.types.AUnionType;
-import edu.uci.ics.asterix.om.types.AbstractCollectionType;
-import edu.uci.ics.asterix.om.types.BuiltinType;
-import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
-import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
 
 public class AsterixBuiltinFunctions {
 
@@ -122,6 +121,8 @@ public class AsterixBuiltinFunctions {
     }
 
     private static final FunctionInfoRepository registeredFunctions = new FunctionInfoRepository();
+
+    private static final Map<IFunctionInfo, ATypeHierarchy.Domain> registeredFunctionsDomain = new HashMap<IFunctionInfo, ATypeHierarchy.Domain>();
 
     // it is supposed to be an identity mapping
     private final static Map<IFunctionInfo, IFunctionInfo> builtinPublicFunctionsSet = new HashMap<IFunctionInfo, IFunctionInfo>();
@@ -180,10 +181,16 @@ public class AsterixBuiltinFunctions {
             "field-access-by-index", 2);
     public final static FunctionIdentifier FIELD_ACCESS_BY_NAME = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "field-access-by-name", 2);
+    public final static FunctionIdentifier FIELD_ACCESS_NESTED = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "field-access-nested", 2);
+    public final static FunctionIdentifier GET_RECORD_FIELDS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "get-record-fields", 1);
+    public final static FunctionIdentifier GET_RECORD_FIELD_VALUE = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "get-record-field-value", 2);
 
+    // numeric
     public final static FunctionIdentifier NUMERIC_UNARY_MINUS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "numeric-unary-minus", 1);
-
     public final static FunctionIdentifier NUMERIC_SUBTRACT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "numeric-subtract", 2);
     public final static FunctionIdentifier NUMERIC_MULTIPLY = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -195,7 +202,6 @@ public class AsterixBuiltinFunctions {
     public final static FunctionIdentifier NUMERIC_IDIV = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "numeric-idiv", 2);
     public final static FunctionIdentifier CARET = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "caret", 2);
-
     public final static FunctionIdentifier NUMERIC_ABS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "abs", 1);
     public final static FunctionIdentifier NUMERIC_CEILING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "ceiling", 1);
@@ -207,6 +213,24 @@ public class AsterixBuiltinFunctions {
             FunctionConstants.ASTERIX_NS, "round-half-to-even", 1);
     public final static FunctionIdentifier NUMERIC_ROUND_HALF_TO_EVEN2 = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "round-half-to-even", 2);
+
+    // binary functions
+    public final static FunctionIdentifier BINARY_LENGTH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "binary-length", 1);
+    public final static FunctionIdentifier PARSE_BINARY = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "parse-binary", 2);
+    public final static FunctionIdentifier PRINT_BINARY = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "print-binary", 2);
+    public final static FunctionIdentifier BINARY_CONCAT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "binary-concat", 1);
+    public final static FunctionIdentifier SUBBINARY_FROM = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "sub-binary", 2);
+    public final static FunctionIdentifier SUBBINARY_FROM_TO = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "sub-binary", 3);
+    public final static FunctionIdentifier FIND_BINARY = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "find-binary", 2);
+    public final static FunctionIdentifier FIND_BINARY_FROM = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "find-binary", 3);
     // String funcitons
     public final static FunctionIdentifier STRING_EQUAL = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "string-equal", 2);
@@ -220,6 +244,8 @@ public class AsterixBuiltinFunctions {
             FunctionConstants.ASTERIX_NS, "matches", 3);
     public final static FunctionIdentifier STRING_LOWERCASE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "lowercase", 1);
+    public final static FunctionIdentifier STRING_UPPERCASE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "uppercase", 1);
     public final static FunctionIdentifier STRING_REPLACE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "replace", 3);
     public final static FunctionIdentifier STRING_REPLACE_WITH_FLAG = new FunctionIdentifier(
@@ -242,8 +268,8 @@ public class AsterixBuiltinFunctions {
             "string-join", 2);
 
     public final static FunctionIdentifier DATASET = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "dataset", 1);
-    public final static FunctionIdentifier FEED_INGEST = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "feed-ingest", 3);
+    public final static FunctionIdentifier FEED_COLLECT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "feed-collect", 6);
     public final static FunctionIdentifier FEED_INTERCEPT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "feed-intercept", 1);
 
@@ -252,6 +278,8 @@ public class AsterixBuiltinFunctions {
 
     public final static FunctionIdentifier MAKE_FIELD_INDEX_HANDLE = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "make-field-index-handle", 2);
+    public final static FunctionIdentifier MAKE_FIELD_NESTED_HANDLE = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "make-field-nested-handle", 3);
     public final static FunctionIdentifier MAKE_FIELD_NAME_HANDLE = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "make-field-name-handle", 1);
 
@@ -427,6 +455,10 @@ public class AsterixBuiltinFunctions {
             "null", 1);
     public final static FunctionIdentifier STRING_CONSTRUCTOR = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "string", 1);
+    public final static FunctionIdentifier BINARY_HEX_CONSTRUCTOR = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "hex", 1);
+    public final static FunctionIdentifier BINARY_BASE64_CONSTRUCTOR = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "base64", 1);
     public final static FunctionIdentifier INT8_CONSTRUCTOR = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "int8", 1);
     public final static FunctionIdentifier INT16_CONSTRUCTOR = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -491,7 +523,7 @@ public class AsterixBuiltinFunctions {
             "interval-overlaps", 2);
     public final static FunctionIdentifier INTERVAL_OVERLAPPED_BY = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "interval-overlapped-by", 2);
-    public final static FunctionIdentifier OVERLAP = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+    public final static FunctionIdentifier INTERVAL_OVERLAPPING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "interval-overlapping", 2);
     public final static FunctionIdentifier INTERVAL_STARTS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "interval-starts", 2);
@@ -534,6 +566,8 @@ public class AsterixBuiltinFunctions {
             FunctionConstants.ASTERIX_NS, "get-year-month-duration", 1);
     public final static FunctionIdentifier GET_DAY_TIME_DURATION = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "get-day-time-duration", 1);
+    public final static FunctionIdentifier DURATION_FROM_INTERVAL = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "duration-from-interval", 1);
 
     // spatial
     public final static FunctionIdentifier CREATE_POINT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -591,8 +625,24 @@ public class AsterixBuiltinFunctions {
             FunctionConstants.ASTERIX_NS, "get-interval-start", 1);
     public static final FunctionIdentifier ACCESSOR_TEMPORAL_INTERVAL_END = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "get-interval-end", 1);
+    public static final FunctionIdentifier ACCESSOR_TEMPORAL_INTERVAL_START_DATETIME = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "get-interval-start-datetime", 1);
+    public static final FunctionIdentifier ACCESSOR_TEMPORAL_INTERVAL_END_DATETIME = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "get-interval-end-datetime", 1);
+    public static final FunctionIdentifier ACCESSOR_TEMPORAL_INTERVAL_START_DATE = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "get-interval-start-date", 1);
+    public static final FunctionIdentifier ACCESSOR_TEMPORAL_INTERVAL_END_DATE = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "get-interval-end-date", 1);
+    public static final FunctionIdentifier ACCESSOR_TEMPORAL_INTERVAL_START_TIME = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "get-interval-start-time", 1);
+    public static final FunctionIdentifier ACCESSOR_TEMPORAL_INTERVAL_END_TIME = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "get-interval-end-time", 1);
     public static final FunctionIdentifier INTERVAL_BIN = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "interval-bin", 3);
+    public static final FunctionIdentifier OVERLAP_BINS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "overlap-bins", 3);
+    public static final FunctionIdentifier GET_OVERLAPPING_INTERVAL = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "get-overlapping-interval", 2);
 
     // Temporal functions
     public static final FunctionIdentifier DATE_FROM_UNIX_TIME_IN_DAYS = new FunctionIdentifier(
@@ -605,6 +655,8 @@ public class AsterixBuiltinFunctions {
             "get-time-from-datetime", 1);
     public final static FunctionIdentifier DATETIME_FROM_UNIX_TIME_IN_MS = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "datetime-from-unix-time-in-ms", 1);
+    public final static FunctionIdentifier DATETIME_FROM_UNIX_TIME_IN_SECS = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "datetime-from-unix-time-in-secs", 1);
     public final static FunctionIdentifier DATETIME_FROM_DATE_TIME = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "datetime-from-date-time", 2);
     public final static FunctionIdentifier CALENDAR_DURATION_FROM_DATETIME = new FunctionIdentifier(
@@ -641,6 +693,8 @@ public class AsterixBuiltinFunctions {
     public final static FunctionIdentifier GET_POINTS_LINE_RECTANGLE_POLYGON_ACCESSOR = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "get-points", 1);
 
+    public final static FunctionIdentifier UNION = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "union", 2);
+
     public static final FunctionIdentifier EQ = AlgebricksBuiltinFunctions.EQ;
     public static final FunctionIdentifier LE = AlgebricksBuiltinFunctions.LE;
     public static final FunctionIdentifier GE = AlgebricksBuiltinFunctions.GE;
@@ -654,7 +708,7 @@ public class AsterixBuiltinFunctions {
     public static final FunctionIdentifier IS_NULL = AlgebricksBuiltinFunctions.IS_NULL;
 
     public static final FunctionIdentifier IS_SYSTEM_NULL = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "is-system-null", 1);;
+            "is-system-null", 1);
     public static final FunctionIdentifier NOT_NULL = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "not-null",
             1);
     public static final FunctionIdentifier COLLECTION_TO_SEQUENCE = new FunctionIdentifier(
@@ -695,8 +749,6 @@ public class AsterixBuiltinFunctions {
         addFunction(BOOLEAN_CONSTRUCTOR, UnaryBooleanOrNullFunctionTypeComputer.INSTANCE, true);
         addPrivateFunction(CARET, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE, true);
         addFunction(CIRCLE_CONSTRUCTOR, OptionalACircleTypeComputer.INSTANCE, true);
-        addPrivateFunction(RECORD_MERGE, RecordMergeTypeComputer.INSTANCE, true);
-        addPrivateFunction(CLOSED_RECORD_CONSTRUCTOR, ClosedRecordConstructorResultType.INSTANCE, true);
         addPrivateFunction(CONCAT_NON_NULL, ConcatNonNullTypeComputer.INSTANCE, true);
 
         addFunction(CONTAINS, ABooleanTypeComputer.INSTANCE, true);
@@ -710,6 +762,7 @@ public class AsterixBuiltinFunctions {
         addFunction(CREATE_POLYGON, OptionalAPolygonTypeComputer.INSTANCE, true);
         addFunction(CREATE_RECTANGLE, OptionalARectangleTypeComputer.INSTANCE, true);
         addFunction(CREATE_UUID, AUUIDTypeComputer.INSTANCE, false);
+        addFunction(UUID_CONSTRUCTOR, AUUIDTypeComputer.INSTANCE, true);
 
         addFunction(DATE_CONSTRUCTOR, OptionalADateTypeComputer.INSTANCE, true);
         addFunction(DATETIME_CONSTRUCTOR, OptionalADateTimeTypeComputer.INSTANCE, true);
@@ -717,22 +770,15 @@ public class AsterixBuiltinFunctions {
         addFunction(DURATION_CONSTRUCTOR, OptionalADurationTypeComputer.INSTANCE, true);
         addFunction(YEAR_MONTH_DURATION_CONSTRUCTOR, OptionalAYearMonthDurationTypeComputer.INSTANCE, true);
         addFunction(DAY_TIME_DURATION_CONSTRUCTOR, OptionalADayTimeDurationTypeComputer.INSTANCE, true);
-        addFunction(EDIT_DISTANCE, AInt32TypeComputer.INSTANCE, true);
+        addFunction(EDIT_DISTANCE, AInt64TypeComputer.INSTANCE, true);
         addFunction(EDIT_DISTANCE_CHECK, OrderedListOfAnyTypeComputer.INSTANCE, true);
         addPrivateFunction(EDIT_DISTANCE_STRING_IS_FILTERABLE, ABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(EDIT_DISTANCE_LIST_IS_FILTERABLE, ABooleanTypeComputer.INSTANCE, true);
-        addPrivateFunction(EMBED_TYPE, new IResultTypeComputer() {
-            @Override
-            public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
-                    IMetadataProvider<?, ?> mp) throws AlgebricksException {
-                return (IAType) BuiltinType.ANY;
-            }
-        }, true);
+        addPrivateFunction(EMBED_TYPE, AnyTypeComputer.INSTANCE, true);
         addPrivateFunction(EMPTY_STREAM, ABooleanTypeComputer.INSTANCE, true);
         addFunction(ENDS_WITH, ABooleanTypeComputer.INSTANCE, true);
         // add(FIELD_ACCESS, NonTaggedFieldAccessByNameResultType.INSTANCE);
-        addPrivateFunction(FIELD_ACCESS_BY_INDEX, FieldAccessByIndexResultType.INSTANCE, true);
-        addPrivateFunction(FIELD_ACCESS_BY_NAME, NonTaggedFieldAccessByNameResultType.INSTANCE, true);
+
         addFunction(FLOAT_CONSTRUCTOR, OptionalAFloatTypeComputer.INSTANCE, true);
         addPrivateFunction(FUZZY_EQ, BinaryBooleanOrNullFunctionTypeComputer.INSTANCE, true);
         addPrivateFunction(GET_HANDLE, null, true); // TODO
@@ -740,22 +786,14 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(GET_DATA, null, true); // TODO
         addPrivateFunction(GLOBAL_AVG, OptionalADoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(GRAM_TOKENS, OrderedListOfAStringTypeComputer.INSTANCE, true);
-        addFunction(GLOBAL_AVG, OptionalADoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(HASHED_GRAM_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE, true);
         addPrivateFunction(HASHED_WORD_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE, true);
-        addPrivateFunction(INDEX_SEARCH, new IResultTypeComputer() {
-
-            @Override
-            public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
-                    IMetadataProvider<?, ?> mp) throws AlgebricksException {
-                return BuiltinType.ANY; // TODO
-            }
-        }, true);
+        addPrivateFunction(INDEX_SEARCH, AnyTypeComputer.INSTANCE, true);
         addFunction(INT8_CONSTRUCTOR, OptionalAInt8TypeComputer.INSTANCE, true);
         addFunction(INT16_CONSTRUCTOR, OptionalAInt16TypeComputer.INSTANCE, true);
         addFunction(INT32_CONSTRUCTOR, OptionalAInt32TypeComputer.INSTANCE, true);
         addFunction(INT64_CONSTRUCTOR, OptionalAInt64TypeComputer.INSTANCE, true);
-        addFunction(LEN, OptionalAInt32TypeComputer.INSTANCE, true);
+        addFunction(LEN, OptionalAInt64TypeComputer.INSTANCE, true);
         addFunction(LIKE, BinaryBooleanOrNullFunctionTypeComputer.INSTANCE, true);
         addFunction(LINE_CONSTRUCTOR, OptionalALineTypeComputer.INSTANCE, true);
         addPrivateFunction(LISTIFY, OrderedListConstructorResultType.INSTANCE, true);
@@ -768,13 +806,13 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(LOCAL_MIN, NonTaggedMinMaxAggTypeComputer.INSTANCE, true);
         addPrivateFunction(NON_EMPTY_STREAM, ABooleanTypeComputer.INSTANCE, true);
         addFunction(NULL_CONSTRUCTOR, ANullTypeComputer.INSTANCE, true);
+
         addPrivateFunction(NUMERIC_UNARY_MINUS, NonTaggedUnaryMinusTypeComputer.INSTANCE, true);
         addPrivateFunction(NUMERIC_SUBTRACT, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE, true);
         addPrivateFunction(NUMERIC_MULTIPLY, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE, true);
         addPrivateFunction(NUMERIC_DIVIDE, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE, true);
         addPrivateFunction(NUMERIC_MOD, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE, true);
-        addPrivateFunction(NUMERIC_IDIV, AInt32TypeComputer.INSTANCE, true);
-
+        addPrivateFunction(NUMERIC_IDIV, AInt64TypeComputer.INSTANCE, true);
         addFunction(NUMERIC_ABS, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE, true);
         addFunction(NUMERIC_CEILING, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE, true);
         addFunction(NUMERIC_FLOOR, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE, true);
@@ -782,12 +820,22 @@ public class AsterixBuiltinFunctions {
         addFunction(NUMERIC_ROUND_HALF_TO_EVEN, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE, true);
         addFunction(NUMERIC_ROUND_HALF_TO_EVEN2, NonTaggedNumericRoundHalfToEven2TypeComputer.INSTANCE, true);
 
-        addFunction(STRING_TO_CODEPOINT, OrderedListOfAInt32TypeComputer.INSTANCE, true);
+        addFunction(BINARY_LENGTH, UnaryBinaryInt64OrNullTypeComputer.INSTANCE, true);
+        addFunction(PARSE_BINARY, OptionalABinaryTypeComputer.INSTANCE, true);
+        addFunction(PRINT_BINARY, OptionalAStringTypeComputer.INSTANCE, true);
+        addFunction(BINARY_CONCAT, OptionalABinaryTypeComputer.INSTANCE, true);
+        addFunction(SUBBINARY_FROM, OptionalABinaryTypeComputer.INSTANCE, true);
+        addFunction(SUBBINARY_FROM_TO, OptionalABinaryTypeComputer.INSTANCE, true);
+        addFunction(FIND_BINARY, OptionalAInt64TypeComputer.INSTANCE, true);
+        addFunction(FIND_BINARY_FROM, OptionalAInt64TypeComputer.INSTANCE, true);
+
+        addFunction(STRING_TO_CODEPOINT, OrderedListOfAInt64TypeComputer.INSTANCE, true);
         addFunction(CODEPOINT_TO_STRING, AStringTypeComputer.INSTANCE, true);
         addFunction(STRING_CONCAT, OptionalAStringTypeComputer.INSTANCE, true);
         addFunction(SUBSTRING2, Substring2TypeComputer.INSTANCE, true);
-        addFunction(STRING_LENGTH, UnaryStringInt32OrNullTypeComputer.INSTANCE, true);
+        addFunction(STRING_LENGTH, UnaryStringInt64OrNullTypeComputer.INSTANCE, true);
         addFunction(STRING_LOWERCASE, UnaryStringOrNullTypeComputer.INSTANCE, true);
+        addFunction(STRING_UPPERCASE, UnaryStringOrNullTypeComputer.INSTANCE, true);
         addFunction(STRING_START_WITH, BinaryStringBoolOrNullTypeComputer.INSTANCE, true);
         addFunction(STRING_END_WITH, BinaryStringBoolOrNullTypeComputer.INSTANCE, true);
         addFunction(STRING_MATCHES, BinaryStringBoolOrNullTypeComputer.INSTANCE, true);
@@ -799,13 +847,12 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(STRING_EQUAL, BinaryStringBoolOrNullTypeComputer.INSTANCE, true);
         addFunction(STRING_JOIN, AStringTypeComputer.INSTANCE, true);
 
-        addPrivateFunction(OPEN_RECORD_CONSTRUCTOR, OpenRecordConstructorResultType.INSTANCE, true);
         addPrivateFunction(ORDERED_LIST_CONSTRUCTOR, OrderedListConstructorResultType.INSTANCE, true);
         addFunction(POINT_CONSTRUCTOR, OptionalAPointTypeComputer.INSTANCE, true);
         addFunction(POINT3D_CONSTRUCTOR, OptionalAPoint3DTypeComputer.INSTANCE, true);
         addFunction(POLYGON_CONSTRUCTOR, OptionalAPolygonTypeComputer.INSTANCE, true);
         addPrivateFunction(PREFIX_LEN_JACCARD, AInt32TypeComputer.INSTANCE, true);
-        addFunction(RANGE, AInt32TypeComputer.INSTANCE, true);
+        addFunction(RANGE, AInt64TypeComputer.INSTANCE, true);
         addFunction(RECTANGLE_CONSTRUCTOR, OptionalARectangleTypeComputer.INSTANCE, true);
 
         // SQL Aggregate Functions
@@ -860,7 +907,7 @@ public class AsterixBuiltinFunctions {
         addFunction(SPATIAL_AREA, ADoubleTypeComputer.INSTANCE, true);
         addFunction(SPATIAL_CELL, ARectangleTypeComputer.INSTANCE, true);
         addFunction(SPATIAL_DISTANCE, ADoubleTypeComputer.INSTANCE, true);
-        addFunction(SPATIAL_INTERSECT, ABooleanTypeComputer.INSTANCE, true);
+        addFunctionWithDomain(SPATIAL_INTERSECT, ATypeHierarchy.Domain.SPATIAL, ABooleanTypeComputer.INSTANCE, true);
         addFunction(GET_POINT_X_COORDINATE_ACCESSOR, ADoubleTypeComputer.INSTANCE, true);
         addFunction(GET_POINT_Y_COORDINATE_ACCESSOR, ADoubleTypeComputer.INSTANCE, true);
         addFunction(GET_CIRCLE_RADIUS_ACCESSOR, ADoubleTypeComputer.INSTANCE, true);
@@ -868,74 +915,52 @@ public class AsterixBuiltinFunctions {
         addFunction(GET_POINTS_LINE_RECTANGLE_POLYGON_ACCESSOR, OrderedListOfAPointTypeComputer.INSTANCE, true);
         addFunction(STARTS_WITH, ABooleanTypeComputer.INSTANCE, true);
         addFunction(STRING_CONSTRUCTOR, OptionalAStringTypeComputer.INSTANCE, true);
-        addPrivateFunction(SUBSET_COLLECTION, new IResultTypeComputer() {
+        addFunction(BINARY_HEX_CONSTRUCTOR, OptionalABinaryTypeComputer.INSTANCE, true);
+        addFunction(BINARY_BASE64_CONSTRUCTOR, OptionalABinaryTypeComputer.INSTANCE, true);
 
-            @Override
-            public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
-                    IMetadataProvider<?, ?> mp) throws AlgebricksException {
-                AbstractFunctionCallExpression fun = (AbstractFunctionCallExpression) expression;
-                IAType t;
-                try {
-                    t = (IAType) env.getType(fun.getArguments().get(0).getValue());
-                } catch (AlgebricksException e) {
-                    throw new AlgebricksException(e);
-                }
-                switch (t.getTypeTag()) {
-                    case UNORDEREDLIST:
-                    case ORDEREDLIST: {
-                        AbstractCollectionType act = (AbstractCollectionType) t;
-                        return act.getItemType();
-                    }
-                    case UNION: {
-                        AUnionType ut = (AUnionType) t;
-                        if (!ut.isNullableType()) {
-                            throw new AlgebricksException("Expecting collection type. Found " + t);
-                        }
-                        IAType t2 = ut.getUnionList().get(1);
-                        ATypeTag tag2 = t2.getTypeTag();
-                        if (tag2 == ATypeTag.UNORDEREDLIST || tag2 == ATypeTag.ORDEREDLIST) {
-                            AbstractCollectionType act = (AbstractCollectionType) t2;
-                            return act.getItemType();
-                        }
-                        throw new AlgebricksException("Expecting collection type. Found " + t);
-                    }
-                    default: {
-                        throw new AlgebricksException("Expecting collection type. Found " + t);
-                    }
-                }
-            }
-        }, true);
+        addPrivateFunction(SUBSET_COLLECTION, SubsetCollectionTypeComputer.INSTANCE, true);
         addFunction(SUBSTRING, SubstringTypeComputer.INSTANCE, true);
         addFunction(SUM, NonTaggedNumericAggTypeComputer.INSTANCE, true);
         addPrivateFunction(LOCAL_SUM, NonTaggedNumericAggTypeComputer.INSTANCE, true);
         addFunction(SWITCH_CASE, NonTaggedSwitchCaseComputer.INSTANCE, true);
         addPrivateFunction(REG_EXP, ABooleanTypeComputer.INSTANCE, true);
-        addFunction(INJECT_FAILURE, InjectFailureTypeComputer.INSTANCE, true);
+        addPrivateFunction(INJECT_FAILURE, InjectFailureTypeComputer.INSTANCE, true);
         addPrivateFunction(CAST_RECORD, CastRecordResultTypeComputer.INSTANCE, true);
-        addFunction(CAST_LIST, CastListResultTypeComputer.INSTANCE, true);
+        addPrivateFunction(CAST_LIST, CastListResultTypeComputer.INSTANCE, true);
 
-        addFunction(TID, AInt32TypeComputer.INSTANCE, true);
+        addFunction(TID, AInt64TypeComputer.INSTANCE, true);
         addFunction(TIME_CONSTRUCTOR, OptionalATimeTypeComputer.INSTANCE, true);
         addPrivateFunction(TYPE_OF, null, true);
+        addPrivateFunction(UNION, UnorderedListConstructorResultType.INSTANCE, true);
         addPrivateFunction(UNORDERED_LIST_CONSTRUCTOR, UnorderedListConstructorResultType.INSTANCE, true);
-        addFunction(WORD_TOKENS, new IResultTypeComputer() {
-            @Override
-            public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
-                    IMetadataProvider<?, ?> mp) throws AlgebricksException {
-                return new AOrderedListType(BuiltinType.ASTRING, "string");
-            }
-        }, true);
+        addFunction(WORD_TOKENS, OrderedListOfAStringTypeComputer.INSTANCE, true);
+
+        // records
+        addPrivateFunction(RECORD_MERGE, RecordMergeTypeComputer.INSTANCE, true);
+        addPrivateFunction(CLOSED_RECORD_CONSTRUCTOR, ClosedRecordConstructorResultType.INSTANCE, true);
+        addPrivateFunction(OPEN_RECORD_CONSTRUCTOR, OpenRecordConstructorResultType.INSTANCE, true);
+        addPrivateFunction(FIELD_ACCESS_BY_INDEX, FieldAccessByIndexResultType.INSTANCE, true);
+        addPrivateFunction(FIELD_ACCESS_NESTED, FieldAccessNestedResultType.INSTANCE, true);
+        addPrivateFunction(FIELD_ACCESS_BY_NAME, NonTaggedFieldAccessByNameResultType.INSTANCE, true);
+        addFunction(GET_RECORD_FIELDS, OrderedListOfAnyTypeComputer.INSTANCE, true);
+        addFunction(GET_RECORD_FIELD_VALUE, FieldAccessNestedResultType.INSTANCE, true);
 
         // temporal type accessors
-        addFunction(ACCESSOR_TEMPORAL_YEAR, OptionalAInt32TypeComputer.INSTANCE, true);
-        addFunction(ACCESSOR_TEMPORAL_MONTH, OptionalAInt32TypeComputer.INSTANCE, true);
-        addFunction(ACCESSOR_TEMPORAL_DAY, OptionalAInt32TypeComputer.INSTANCE, true);
-        addFunction(ACCESSOR_TEMPORAL_HOUR, OptionalAInt32TypeComputer.INSTANCE, true);
-        addFunction(ACCESSOR_TEMPORAL_MIN, OptionalAInt32TypeComputer.INSTANCE, true);
-        addFunction(ACCESSOR_TEMPORAL_SEC, OptionalAInt32TypeComputer.INSTANCE, true);
-        addFunction(ACCESSOR_TEMPORAL_MILLISEC, OptionalAInt32TypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_YEAR, OptionalAInt64TypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_MONTH, OptionalAInt64TypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_DAY, OptionalAInt64TypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_HOUR, OptionalAInt64TypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_MIN, OptionalAInt64TypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_SEC, OptionalAInt64TypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_MILLISEC, OptionalAInt64TypeComputer.INSTANCE, true);
         addFunction(ACCESSOR_TEMPORAL_INTERVAL_START, OptionalATemporalInstanceTypeComputer.INSTANCE, true);
         addFunction(ACCESSOR_TEMPORAL_INTERVAL_END, OptionalATemporalInstanceTypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_INTERVAL_START_DATETIME, OptionalADateTimeTypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_INTERVAL_END_DATETIME, OptionalADateTimeTypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_INTERVAL_START_DATE, OptionalADateTypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_INTERVAL_END_DATE, OptionalADateTypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_INTERVAL_START_TIME, OptionalATimeTypeComputer.INSTANCE, true);
+        addFunction(ACCESSOR_TEMPORAL_INTERVAL_END_TIME, OptionalATimeTypeComputer.INSTANCE, true);
 
         // temporal functions
         addFunction(DATE_FROM_UNIX_TIME_IN_DAYS, OptionalADateTypeComputer.INSTANCE, true);
@@ -944,6 +969,7 @@ public class AsterixBuiltinFunctions {
         addFunction(TIME_FROM_DATETIME, OptionalATimeTypeComputer.INSTANCE, true);
         addFunction(DATETIME_FROM_DATE_TIME, OptionalADateTimeTypeComputer.INSTANCE, true);
         addFunction(DATETIME_FROM_UNIX_TIME_IN_MS, OptionalADateTimeTypeComputer.INSTANCE, true);
+        addFunction(DATETIME_FROM_UNIX_TIME_IN_SECS, OptionalADateTimeTypeComputer.INSTANCE, true);
         addFunction(CALENDAR_DURATION_FROM_DATETIME, OptionalADurationTypeComputer.INSTANCE, true);
         addFunction(CALENDAR_DURATION_FROM_DATE, OptionalADurationTypeComputer.INSTANCE, true);
         addFunction(ADJUST_DATETIME_FOR_TIMEZONE, OptionalAStringTypeComputer.INSTANCE, true);
@@ -954,35 +980,38 @@ public class AsterixBuiltinFunctions {
         addFunction(INTERVAL_MET_BY, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_OVERLAPS, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_OVERLAPPED_BY, OptionalABooleanTypeComputer.INSTANCE, true);
-        addFunction(OVERLAP, OptionalABooleanTypeComputer.INSTANCE, true);
+        addFunction(INTERVAL_OVERLAPPING, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_STARTS, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_STARTED_BY, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_COVERS, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_COVERED_BY, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_ENDS, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_ENDED_BY, OptionalABooleanTypeComputer.INSTANCE, true);
-        addFunction(CURRENT_DATE, ADateTypeComputer.INSTANCE, true);
-        addFunction(CURRENT_TIME, ATimeTypeComputer.INSTANCE, true);
-        addFunction(CURRENT_DATETIME, ADateTimeTypeComputer.INSTANCE, true);
-        addFunction(DAY_TIME_DURATION_GREATER_THAN, OptionalABooleanTypeComputer.INSTANCE, true);
+        addFunction(CURRENT_DATE, ADateTypeComputer.INSTANCE, false);
+        addFunction(CURRENT_TIME, ATimeTypeComputer.INSTANCE, false);
+        addFunction(CURRENT_DATETIME, ADateTimeTypeComputer.INSTANCE, false);
+        addPrivateFunction(DAY_TIME_DURATION_GREATER_THAN, OptionalABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(DAY_TIME_DURATION_LESS_THAN, OptionalABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(YEAR_MONTH_DURATION_GREATER_THAN, OptionalABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(YEAR_MONTH_DURATION_LESS_THAN, OptionalABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(DURATION_EQUAL, OptionalABooleanTypeComputer.INSTANCE, true);
         addFunction(DURATION_FROM_MONTHS, OptionalADurationTypeComputer.INSTANCE, true);
         addFunction(DURATION_FROM_MILLISECONDS, OptionalADurationTypeComputer.INSTANCE, true);
-        addFunction(MONTHS_FROM_YEAR_MONTH_DURATION, OptionalAInt32TypeComputer.INSTANCE, true);
+        addFunction(MONTHS_FROM_YEAR_MONTH_DURATION, OptionalAInt64TypeComputer.INSTANCE, true);
         addFunction(MILLISECONDS_FROM_DAY_TIME_DURATION, OptionalAInt64TypeComputer.INSTANCE, true);
         addFunction(GET_DAY_TIME_DURATION, OptionalADayTimeDurationTypeComputer.INSTANCE, true);
         addFunction(GET_YEAR_MONTH_DURATION, OptionalAYearMonthDurationTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_BIN, OptionalAIntervalTypeComputer.INSTANCE, true);
-        addFunction(DAY_OF_WEEK, OptionalAInt32TypeComputer.INSTANCE, true);
+        addFunction(DAY_OF_WEEK, OptionalAInt64TypeComputer.INSTANCE, true);
         addFunction(PARSE_DATE, OptionalADateTypeComputer.INSTANCE, true);
         addFunction(PARSE_TIME, OptionalATimeTypeComputer.INSTANCE, true);
         addFunction(PARSE_DATETIME, OptionalADateTimeTypeComputer.INSTANCE, true);
         addFunction(PRINT_DATE, OptionalAStringTypeComputer.INSTANCE, true);
         addFunction(PRINT_TIME, OptionalAStringTypeComputer.INSTANCE, true);
         addFunction(PRINT_DATETIME, OptionalAStringTypeComputer.INSTANCE, true);
+        addFunction(OVERLAP_BINS, OrderedListOfAIntervalTypeComputer.INSTANCE, true);
+        addFunction(GET_OVERLAPPING_INTERVAL, GetOverlappingInvervalTypeComputer.INSTANCE, true);
+        addFunction(DURATION_FROM_INTERVAL, OptionalADayTimeDurationTypeComputer.INSTANCE, true);
 
         // interval constructors
         addFunction(INTERVAL_CONSTRUCTOR_DATE, OptionalAIntervalTypeComputer.INSTANCE, true);
@@ -995,16 +1024,7 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(COLLECTION_TO_SEQUENCE, CollectionToSequenceTypeComputer.INSTANCE, true);
 
         // external lookup
-        addPrivateFunction(EXTERNAL_LOOKUP, new IResultTypeComputer() {
-
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
-                    IMetadataProvider<?, ?> mp) throws AlgebricksException {
-                return BuiltinType.ANY;
-            }
-        }, false);
+        addPrivateFunction(EXTERNAL_LOOKUP, AnyTypeComputer.INSTANCE, false);
 
         String metadataFunctionLoaderClassName = "edu.uci.ics.asterix.metadata.functions.MetadataBuiltinFunctions";
         try {
@@ -1169,14 +1189,14 @@ public class AsterixBuiltinFunctions {
 
     static {
         datasetFunctions.add(getAsterixFunctionInfo(DATASET));
-        datasetFunctions.add(getAsterixFunctionInfo(FEED_INGEST));
+        datasetFunctions.add(getAsterixFunctionInfo(FEED_COLLECT));
         datasetFunctions.add(getAsterixFunctionInfo(FEED_INTERCEPT));
         datasetFunctions.add(getAsterixFunctionInfo(INDEX_SEARCH));
     }
 
     static {
         addUnnestFun(DATASET, false);
-        addUnnestFun(FEED_INGEST, false);
+        addUnnestFun(FEED_COLLECT, false);
         addUnnestFun(FEED_INTERCEPT, false);
         addUnnestFun(RANGE, true);
         addUnnestFun(SCAN_COLLECTION, false);
@@ -1306,10 +1326,16 @@ public class AsterixBuiltinFunctions {
     }
 
     public static void addFunction(FunctionIdentifier fi, IResultTypeComputer typeComputer, boolean isFunctional) {
+        addFunctionWithDomain(fi, ATypeHierarchy.Domain.ANY, typeComputer, isFunctional);
+    }
+
+    public static void addFunctionWithDomain(FunctionIdentifier fi, ATypeHierarchy.Domain funcDomain,
+            IResultTypeComputer typeComputer, boolean isFunctional) {
         IFunctionInfo functionInfo = new AsterixFunctionInfo(fi, isFunctional);
         builtinPublicFunctionsSet.put(functionInfo, functionInfo);
         funTypeComputer.put(functionInfo, typeComputer);
         registeredFunctions.put(fi, functionInfo);
+        registeredFunctionsDomain.put(functionInfo, funcDomain);
     }
 
     public static void addPrivateFunction(FunctionIdentifier fi, IResultTypeComputer typeComputer, boolean isFunctional) {

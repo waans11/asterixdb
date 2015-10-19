@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,6 +15,7 @@
 package edu.uci.ics.asterix.om.base;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -22,6 +23,7 @@ import org.json.JSONObject;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
+import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.visitors.IOMVisitor;
 
@@ -38,6 +40,14 @@ public class AOrderedList implements IACollection {
     public AOrderedList(AOrderedListType type, ArrayList<IAObject> sequence) {
         values = sequence;
         this.type = type;
+    }
+
+    public AOrderedList(List<String> sequence) {
+        values = new ArrayList<IAObject>();
+        for (int i = 0; i < sequence.size(); i++) {
+            values.add(new AString(sequence.get(i)));
+        }
+        this.type = new AOrderedListType(BuiltinType.ASTRING, null);
     }
 
     public void add(IAObject obj) {

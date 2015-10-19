@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -50,7 +50,6 @@ public class LSMRTreeLocalResourceMetadata extends AbstractLSMLocalResourceMetad
     protected final int[] rtreeFields;
     protected final int[] btreeFields;
 
-
     public LSMRTreeLocalResourceMetadata(ITypeTraits[] typeTraits, IBinaryComparatorFactory[] rtreeCmpFactories,
             IBinaryComparatorFactory[] btreeCmpFactories, IPrimitiveValueProviderFactory[] valueProviderFactories,
             RTreePolicyType rtreePolicyType, ILinearizeComparatorFactory linearizeCmpFactory, int datasetID,
@@ -76,14 +75,25 @@ public class LSMRTreeLocalResourceMetadata extends AbstractLSMLocalResourceMetad
         FileReference file = new FileReference(new File(filePath));
         List<IVirtualBufferCache> virtualBufferCaches = runtimeContextProvider.getVirtualBufferCaches(datasetID);
         try {
-            return LSMRTreeUtils.createLSMTree(virtualBufferCaches, file, runtimeContextProvider.getBufferCache(),
-                    runtimeContextProvider.getFileMapManager(), typeTraits, rtreeCmpFactories, btreeCmpFactories,
-                    valueProviderFactories, rtreePolicyType, runtimeContextProvider.getBloomFilterFalsePositiveRate(),
-                    mergePolicyFactory.createMergePolicy(mergePolicyProperties), new BaseOperationTracker(
-                            (DatasetLifecycleManager) runtimeContextProvider.getIndexLifecycleManager(), datasetID),
-                    runtimeContextProvider.getLSMIOScheduler(), LSMRTreeIOOperationCallbackFactory.INSTANCE
+            return LSMRTreeUtils.createLSMTree(
+                    virtualBufferCaches,
+                    file,
+                    runtimeContextProvider.getBufferCache(),
+                    runtimeContextProvider.getFileMapManager(),
+                    typeTraits,
+                    rtreeCmpFactories,
+                    btreeCmpFactories,
+                    valueProviderFactories,
+                    rtreePolicyType,
+                    runtimeContextProvider.getBloomFilterFalsePositiveRate(),
+                    mergePolicyFactory.createMergePolicy(mergePolicyProperties,
+                            runtimeContextProvider.getIndexLifecycleManager()),
+                    new BaseOperationTracker((DatasetLifecycleManager) runtimeContextProvider
+                            .getIndexLifecycleManager(), datasetID, ((DatasetLifecycleManager) runtimeContextProvider
+                            .getIndexLifecycleManager()).getDatasetInfo(datasetID)), runtimeContextProvider
+                            .getLSMIOScheduler(), LSMRTreeIOOperationCallbackFactory.INSTANCE
                             .createIOOperationCallback(), linearizeCmpFactory, rtreeFields, btreeFields,
-                    filterTypeTraits, filterCmpFactories, filterFields);
+                    filterTypeTraits, filterCmpFactories, filterFields, true);
         } catch (TreeIndexException e) {
             throw new HyracksDataException(e);
         }

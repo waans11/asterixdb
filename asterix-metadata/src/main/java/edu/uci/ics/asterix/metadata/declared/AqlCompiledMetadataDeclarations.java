@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,7 +34,6 @@ import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Index;
-import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.AsterixAppContextInfo;
@@ -225,10 +224,9 @@ public class AqlCompiledMetadataDeclarations {
         if (dataset.getDatasetType() != DatasetType.INTERNAL) {
             throw new AlgebricksException("Not an internal dataset");
         }
-        InternalDatasetDetails datasetDetails = (InternalDatasetDetails) dataset.getDatasetDetails();
-        List<String> nodeGroup = findNodeGroupNodeNames(datasetDetails.getNodeGroupName());
+        List<String> nodeGroup = findNodeGroupNodeNames(dataset.getNodeGroupName());
         if (nodeGroup == null) {
-            throw new AlgebricksException("Couldn't find node group " + datasetDetails.getNodeGroupName());
+            throw new AlgebricksException("Couldn't find node group " + dataset.getNodeGroupName());
         }
 
         List<FileSplit> splitArray = new ArrayList<FileSplit>();

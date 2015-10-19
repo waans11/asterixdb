@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -47,7 +47,10 @@ import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.ConnectorPolicyAssignmentPolicy;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
+import edu.uci.ics.hyracks.algebricks.runtime.base.IPushRuntimeFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.operators.base.SinkRuntimeFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.operators.meta.AlgebricksMetaOperatorDescriptor;
+import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
@@ -57,7 +60,6 @@ import edu.uci.ics.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeSearchOperatorDescriptor;
-import edu.uci.ics.hyracks.storage.am.btree.impls.BTree;
 import edu.uci.ics.hyracks.storage.am.common.api.IPrimitiveValueProviderFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.AbstractTreeIndexOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory;
@@ -90,7 +92,7 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
         JobSpecification spec = JobSpecificationUtils.createJobSpecification();
 
         AsterixStorageProperties storageProperties = propertiesProvider.getStorageProperties();
-
+        boolean temp = dataset.getDatasetDetails().isTemp();
         IIndexDataflowHelperFactory indexDataflowHelperFactory;
         ILocalResourceFactoryProvider localResourceFactoryProvider;
         if (dataset.getDatasetType() == DatasetType.INTERNAL) {
@@ -110,14 +112,13 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
                     AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, LSMRTreeIOOperationCallbackFactory.INSTANCE,
                     AqlMetadataProvider.proposeLinearizer(keyType, secondaryComparatorFactories.length),
                     storageProperties.getBloomFilterFalsePositiveRate(), rtreeFields, primaryKeyFields,
-                    filterTypeTraits, filterCmpFactories, secondaryFilterFields);
+                    filterTypeTraits, filterCmpFactories, secondaryFilterFields, !temp);
         } else {
             // External dataset
             // Prepare a LocalResourceMetadata which will be stored in NC's local resource repository
-            ILocalResourceMetadata localResourceMetadata = new ExternalRTreeLocalResourceMetadata(
-                    secondaryTypeTraits, secondaryComparatorFactories,
-                    ExternalIndexingOperations.getBuddyBtreeComparatorFactories(), valueProviderFactories,
-                    RTreePolicyType.RTREE, AqlMetadataProvider.proposeLinearizer(keyType,
+            ILocalResourceMetadata localResourceMetadata = new ExternalRTreeLocalResourceMetadata(secondaryTypeTraits,
+                    secondaryComparatorFactories, ExternalIndexingOperations.getBuddyBtreeComparatorFactories(),
+                    valueProviderFactories, RTreePolicyType.RTREE, AqlMetadataProvider.proposeLinearizer(keyType,
                             secondaryComparatorFactories.length), dataset.getDatasetId(), mergePolicyFactory,
                     mergePolicyFactoryProperties, primaryKeyFields);
             localResourceFactoryProvider = new PersistentLocalResourceFactoryProvider(localResourceMetadata,
@@ -130,7 +131,7 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
                     LSMRTreeIOOperationCallbackFactory.INSTANCE, AqlMetadataProvider.proposeLinearizer(keyType,
                             secondaryComparatorFactories.length), storageProperties.getBloomFilterFalsePositiveRate(),
                     new int[] { numNestedSecondaryKeyFields },
-                    ExternalDatasetsRegistry.INSTANCE.getDatasetVersion(dataset));
+                    ExternalDatasetsRegistry.INSTANCE.getDatasetVersion(dataset), true);
         }
 
         TreeIndexCreateOperatorDescriptor secondaryIndexCreateOp = new TreeIndexCreateOperatorDescriptor(spec,
@@ -145,13 +146,15 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
         return spec;
     }
 
+    @Override
     protected int getNumSecondaryKeys() {
         return numNestedSecondaryKeyFields;
     }
 
     @Override
-    protected void setSecondaryRecDescAndComparators(IndexType indexType, List<String> secondaryKeyFields,
-            int gramLength, AqlMetadataProvider metadata) throws AlgebricksException, AsterixException {
+    protected void setSecondaryRecDescAndComparators(IndexType indexType, List<List<String>> secondaryKeyFields,
+            List<IAType> secondaryKeyTypes, int gramLength, AqlMetadataProvider metadata) throws AlgebricksException,
+            AsterixException {
         int numSecondaryKeys = secondaryKeyFields.size();
         if (numSecondaryKeys != 1) {
             throw new AsterixException(
@@ -159,7 +162,8 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
                             + numSecondaryKeys
                             + " fields as a key for the R-tree index. There can be only one field as a key for the R-tree index.");
         }
-        Pair<IAType, Boolean> spatialTypePair = Index.getNonNullableKeyFieldType(secondaryKeyFields.get(0), itemType);
+        Pair<IAType, Boolean> spatialTypePair = Index.getNonNullableOpenFieldType(secondaryKeyTypes.get(0),
+                secondaryKeyFields.get(0), itemType);
         IAType spatialType = spatialTypePair.first;
         anySecondaryKeyIsNullable = spatialTypePair.second;
         if (spatialType == null) {
@@ -168,14 +172,16 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
         int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
         numNestedSecondaryKeyFields = numDimensions * 2;
         int recordColumn = dataset.getDatasetType() == DatasetType.INTERNAL ? numPrimaryKeys : 0;
-        secondaryFieldAccessEvalFactories = metadata.getFormat().createMBRFactory(itemType, secondaryKeyFields.get(0),
-                recordColumn, numDimensions, filterFieldName);
-
+        secondaryFieldAccessEvalFactories = metadata.getFormat().createMBRFactory(
+                isEnforcingKeyTypes ? enforcedItemType : itemType, secondaryKeyFields.get(0), recordColumn,
+                numDimensions, filterFieldName);
         secondaryComparatorFactories = new IBinaryComparatorFactory[numNestedSecondaryKeyFields];
         valueProviderFactories = new IPrimitiveValueProviderFactory[numNestedSecondaryKeyFields];
         ISerializerDeserializer[] secondaryRecFields = new ISerializerDeserializer[numPrimaryKeys
                 + numNestedSecondaryKeyFields + numFilterFields];
+        ISerializerDeserializer[] enforcedRecFields = new ISerializerDeserializer[1 + numPrimaryKeys + numFilterFields];
         secondaryTypeTraits = new ITypeTraits[numNestedSecondaryKeyFields + numPrimaryKeys];
+        ITypeTraits[] enforcedTypeTraits = new ITypeTraits[1 + numPrimaryKeys];
         IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(spatialType.getTypeTag());
         keyType = nestedKeyType.getTypeTag();
         for (int i = 0; i < numNestedSecondaryKeyFields; i++) {
@@ -193,13 +199,20 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
             for (int i = 0; i < numPrimaryKeys; i++) {
                 secondaryRecFields[numNestedSecondaryKeyFields + i] = primaryRecDesc.getFields()[i];
                 secondaryTypeTraits[numNestedSecondaryKeyFields + i] = primaryRecDesc.getTypeTraits()[i];
+                enforcedRecFields[i] = primaryRecDesc.getFields()[i];
+                enforcedTypeTraits[i] = primaryRecDesc.getTypeTraits()[i];
             }
         } else {
             for (int i = 0; i < numPrimaryKeys; i++) {
                 secondaryRecFields[numNestedSecondaryKeyFields + i] = IndexingConstants.getSerializerDeserializer(i);
                 secondaryTypeTraits[numNestedSecondaryKeyFields + i] = IndexingConstants.getTypeTraits(i);
+                enforcedRecFields[i] = IndexingConstants.getSerializerDeserializer(i);
+                enforcedTypeTraits[i] = IndexingConstants.getTypeTraits(i);
             }
         }
+        enforcedRecFields[numPrimaryKeys] = AqlSerializerDeserializerProvider.INSTANCE
+                .getSerializerDeserializer(itemType);
+        enforcedRecDesc = new RecordDescriptor(enforcedRecFields, enforcedTypeTraits);
         if (numFilterFields > 0) {
             rtreeFields = new int[numNestedSecondaryKeyFields + numPrimaryKeys];
             for (int i = 0; i < rtreeFields.length; i++) {
@@ -221,6 +234,7 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
     @Override
     public JobSpecification buildLoadingJobSpec() throws AsterixException, AlgebricksException {
         JobSpecification spec = JobSpecificationUtils.createJobSpecification();
+        boolean temp = dataset.getDatasetDetails().isTemp();
         if (dataset.getDatasetType() == DatasetType.INTERNAL) {
             // Create dummy key provider for feeding the primary index scan. 
             AbstractOperatorDescriptor keyProviderOp = createDummyKeyProviderOp(spec);
@@ -229,12 +243,17 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
             BTreeSearchOperatorDescriptor primaryScanOp = createPrimaryIndexScanOp(spec);
 
             // Assign op.
-            AlgebricksMetaOperatorDescriptor asterixAssignOp = createAssignOp(spec, primaryScanOp,
+            AbstractOperatorDescriptor sourceOp = primaryScanOp;
+            if (isEnforcingKeyTypes) {
+                sourceOp = createCastOp(spec, primaryScanOp, numSecondaryKeys, dataset.getDatasetType());
+                spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, sourceOp, 0);
+            }
+            AlgebricksMetaOperatorDescriptor asterixAssignOp = createAssignOp(spec, sourceOp,
                     numNestedSecondaryKeyFields);
 
             // If any of the secondary fields are nullable, then add a select op that filters nulls.
             AlgebricksMetaOperatorDescriptor selectOp = null;
-            if (anySecondaryKeyIsNullable) {
+            if (anySecondaryKeyIsNullable || isEnforcingKeyTypes) {
                 selectOp = createFilterNullsSelectOp(spec, numNestedSecondaryKeyFields);
             }
 
@@ -256,19 +275,22 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
                             LSMRTreeIOOperationCallbackFactory.INSTANCE, AqlMetadataProvider.proposeLinearizer(keyType,
                                     secondaryComparatorFactories.length), storageProperties
                                     .getBloomFilterFalsePositiveRate(), rtreeFields, primaryKeyFields,
-                            filterTypeTraits, filterCmpFactories, secondaryFilterFields),
+                            filterTypeTraits, filterCmpFactories, secondaryFilterFields, !temp),
                     GlobalConfig.DEFAULT_TREE_FILL_FACTOR);
+            AlgebricksMetaOperatorDescriptor metaOp = new AlgebricksMetaOperatorDescriptor(spec, 1, 0,
+                    new IPushRuntimeFactory[] { new SinkRuntimeFactory() }, new RecordDescriptor[] {});
             // Connect the operators.
             spec.connect(new OneToOneConnectorDescriptor(spec), keyProviderOp, 0, primaryScanOp, 0);
-            spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, asterixAssignOp, 0);
-            if (anySecondaryKeyIsNullable) {
+            spec.connect(new OneToOneConnectorDescriptor(spec), sourceOp, 0, asterixAssignOp, 0);
+            if (anySecondaryKeyIsNullable || isEnforcingKeyTypes) {
                 spec.connect(new OneToOneConnectorDescriptor(spec), asterixAssignOp, 0, selectOp, 0);
                 spec.connect(new OneToOneConnectorDescriptor(spec), selectOp, 0, sortOp, 0);
             } else {
                 spec.connect(new OneToOneConnectorDescriptor(spec), asterixAssignOp, 0, sortOp, 0);
             }
             spec.connect(new OneToOneConnectorDescriptor(spec), sortOp, 0, secondaryBulkLoadOp, 0);
-            spec.addRoot(secondaryBulkLoadOp);
+            spec.connect(new OneToOneConnectorDescriptor(spec), secondaryBulkLoadOp, 0, metaOp, 0);
+            spec.addRoot(metaOp);
             spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
         } else {
             // External dataset
@@ -278,12 +300,17 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
              */
             // Create external indexing scan operator
             ExternalDataScanOperatorDescriptor primaryScanOp = createExternalIndexingOp(spec);
+            AbstractOperatorDescriptor sourceOp = primaryScanOp;
+            if (isEnforcingKeyTypes) {
+                sourceOp = createCastOp(spec, primaryScanOp, numSecondaryKeys, dataset.getDatasetType());
+                spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, sourceOp, 0);
+            }
             // Assign op.
             AlgebricksMetaOperatorDescriptor asterixAssignOp = createExternalAssignOp(spec, numNestedSecondaryKeyFields);
 
             // If any of the secondary fields are nullable, then add a select op that filters nulls.
             AlgebricksMetaOperatorDescriptor selectOp = null;
-            if (anySecondaryKeyIsNullable) {
+            if (anySecondaryKeyIsNullable || isEnforcingKeyTypes) {
                 selectOp = createFilterNullsSelectOp(spec, numSecondaryKeys);
             }
 
@@ -300,28 +327,35 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
                     AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, LSMRTreeIOOperationCallbackFactory.INSTANCE,
                     AqlMetadataProvider.proposeLinearizer(keyType, secondaryComparatorFactories.length),
                     storageProperties.getBloomFilterFalsePositiveRate(), new int[] { numNestedSecondaryKeyFields },
-                    ExternalDatasetsRegistry.INSTANCE.getDatasetVersion(dataset));
+                    ExternalDatasetsRegistry.INSTANCE.getDatasetVersion(dataset), true);
             // Create secondary RTree bulk load op.
+            IOperatorDescriptor root;
             AbstractTreeIndexOperatorDescriptor secondaryBulkLoadOp;
             if (externalFiles != null) {
                 // Transaction load
                 secondaryBulkLoadOp = createExternalIndexBulkModifyOp(spec, numNestedSecondaryKeyFields,
-                        dataflowHelperFactory, BTree.DEFAULT_FILL_FACTOR);
+                        dataflowHelperFactory, GlobalConfig.DEFAULT_TREE_FILL_FACTOR);
+                root = secondaryBulkLoadOp;
             } else {
                 // Initial load
                 secondaryBulkLoadOp = createTreeIndexBulkLoadOp(spec, numNestedSecondaryKeyFields,
-                        dataflowHelperFactory, BTree.DEFAULT_FILL_FACTOR);
+                        dataflowHelperFactory, GlobalConfig.DEFAULT_TREE_FILL_FACTOR);
+                AlgebricksMetaOperatorDescriptor metaOp = new AlgebricksMetaOperatorDescriptor(spec, 1, 0,
+                        new IPushRuntimeFactory[] { new SinkRuntimeFactory() },
+                        new RecordDescriptor[] { secondaryRecDesc });
+                spec.connect(new OneToOneConnectorDescriptor(spec), secondaryBulkLoadOp, 0, metaOp, 0);
+                root = metaOp;
             }
-            // Connect the operators.
-            spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, asterixAssignOp, 0);
-            if (anySecondaryKeyIsNullable) {
+
+            spec.connect(new OneToOneConnectorDescriptor(spec), sourceOp, 0, asterixAssignOp, 0);
+            if (anySecondaryKeyIsNullable || isEnforcingKeyTypes) {
                 spec.connect(new OneToOneConnectorDescriptor(spec), asterixAssignOp, 0, selectOp, 0);
                 spec.connect(new OneToOneConnectorDescriptor(spec), selectOp, 0, sortOp, 0);
             } else {
                 spec.connect(new OneToOneConnectorDescriptor(spec), asterixAssignOp, 0, sortOp, 0);
             }
             spec.connect(new OneToOneConnectorDescriptor(spec), sortOp, 0, secondaryBulkLoadOp, 0);
-            spec.addRoot(secondaryBulkLoadOp);
+            spec.addRoot(root);
             spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
         }
         return spec;
@@ -332,6 +366,7 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
         JobSpecification spec = JobSpecificationUtils.createJobSpecification();
 
         AsterixStorageProperties storageProperties = propertiesProvider.getStorageProperties();
+        boolean temp = dataset.getDatasetDetails().isTemp();
         LSMTreeIndexCompactOperatorDescriptor compactOp;
         if (dataset.getDatasetType() == DatasetType.INTERNAL) {
             compactOp = new LSMTreeIndexCompactOperatorDescriptor(spec,
@@ -345,14 +380,14 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
                             LSMRTreeIOOperationCallbackFactory.INSTANCE, AqlMetadataProvider.proposeLinearizer(keyType,
                                     secondaryComparatorFactories.length),
                             storageProperties.getBloomFilterFalsePositiveRate(), rtreeFields, primaryKeyFields,
-                            filterTypeTraits, filterCmpFactories, secondaryFilterFields),
+                            filterTypeTraits, filterCmpFactories, secondaryFilterFields, !temp),
                     NoOpOperationCallbackFactory.INSTANCE);
         } else {
             // External dataset
             compactOp = new LSMTreeIndexCompactOperatorDescriptor(spec,
                     AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER,
-                    AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, secondaryFileSplitProvider,
-                    secondaryTypeTraits, secondaryComparatorFactories, secondaryBloomFilterKeyFields,
+                    AsterixRuntimeComponentsProvider.RUNTIME_PROVIDER, secondaryFileSplitProvider, secondaryTypeTraits,
+                    secondaryComparatorFactories, secondaryBloomFilterKeyFields,
                     new ExternalRTreeDataflowHelperFactory(valueProviderFactories, RTreePolicyType.RTREE,
                             primaryComparatorFactories, mergePolicyFactory, mergePolicyFactoryProperties,
                             new SecondaryIndexOperationTrackerProvider(dataset.getDatasetId()),
@@ -360,7 +395,7 @@ public class SecondaryRTreeOperationsHelper extends SecondaryIndexOperationsHelp
                             LSMRTreeIOOperationCallbackFactory.INSTANCE, AqlMetadataProvider.proposeLinearizer(keyType,
                                     secondaryComparatorFactories.length), storageProperties
                                     .getBloomFilterFalsePositiveRate(), new int[] { numNestedSecondaryKeyFields },
-                            ExternalDatasetsRegistry.INSTANCE.getDatasetVersion(dataset)),
+                            ExternalDatasetsRegistry.INSTANCE.getDatasetVersion(dataset), true),
                     NoOpOperationCallbackFactory.INSTANCE);
         }
 

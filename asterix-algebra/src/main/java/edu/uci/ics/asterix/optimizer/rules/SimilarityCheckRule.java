@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,12 +21,15 @@ import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.aql.util.FunctionUtils;
+import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.om.base.ADouble;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
+import edu.uci.ics.asterix.om.types.ATypeTag;
+import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -115,7 +118,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
             ConstantExpression constExpr = (ConstantExpression) arg1;
             constVal = (AsterixConstantValue) constExpr.getValue();
             nonConstExpr = arg2;
-            // Get func ident as if swapping lhs and rhs.            
+            // Get func ident as if swapping lhs and rhs.
             normFuncIdent = getLhsAndRhsSwappedFuncIdent(funcIdent);
         } else if (arg2.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
             ConstantExpression constExpr = (ConstantExpression) arg2;
@@ -144,7 +147,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
             AsterixConstantValue constVal, VariableReferenceExpression varRefExpr, List<AssignOperator> assigns,
             IOptimizationContext context) throws AlgebricksException {
 
-        // Find variable in assigns to determine its originating function.    	
+        // Find variable in assigns to determine its originating function.
         LogicalVariable var = varRefExpr.getVariableReference();
         Mutable<ILogicalExpression> simFuncExprRef = null;
         ScalarFunctionCallExpression simCheckFuncExpr = null;
@@ -172,13 +175,13 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
             }
         }
 
-        // Only non-null if we found that varRefExpr refers to an optimizable similarity function call. 
+        // Only non-null if we found that varRefExpr refers to an optimizable similarity function call.
         if (simCheckFuncExpr != null) {
             // Create a new assign under matchingAssign which assigns the result of our similarity-check function to a variable.
             LogicalVariable newVar = context.newVar();
             AssignOperator newAssign = new AssignOperator(newVar, new MutableObject<ILogicalExpression>(
                     simCheckFuncExpr));
-            // Hook up inputs. 
+            // Hook up inputs.
             newAssign.getInputs()
                     .add(new MutableObject<ILogicalOperator>(matchingAssign.getInputs().get(0).getValue()));
             matchingAssign.getInputs().get(0).setValue(newAssign);
@@ -217,7 +220,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
     }
 
     private boolean replaceWithFunctionCallArg(Mutable<ILogicalExpression> expRef, FunctionIdentifier normFuncIdent,
-            AsterixConstantValue constVal, AbstractFunctionCallExpression funcExpr) {
+            AsterixConstantValue constVal, AbstractFunctionCallExpression funcExpr) throws AlgebricksException {
         // Analyze func expr to see if it is an optimizable similarity function.
         ScalarFunctionCallExpression simCheckFuncExpr = getSimilarityCheckExpr(normFuncIdent, constVal, funcExpr);
 
@@ -241,7 +244,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
     }
 
     private ScalarFunctionCallExpression getSimilarityCheckExpr(FunctionIdentifier normFuncIdent,
-            AsterixConstantValue constVal, AbstractFunctionCallExpression funcExpr) {
+            AsterixConstantValue constVal, AbstractFunctionCallExpression funcExpr) throws AlgebricksException {
         // Remember args from original similarity function to add them to the similarity-check function later.
         ArrayList<Mutable<ILogicalExpression>> similarityArgs = null;
         ScalarFunctionCallExpression simCheckFuncExpr = null;
@@ -278,7 +281,13 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
 
         // Look for edit-distance function call, and LE or LT.
         if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE) {
-            AInt32 aInt = (AInt32) constVal.getObject();
+            AInt32 aInt = new AInt32(0);
+            try {
+                aInt = (AInt32) ATypeHierarchy.convertNumericTypeObject(constVal.getObject(), ATypeTag.INT32);
+            } catch (AsterixException e) {
+                throw new AlgebricksException(e);
+            }
+
             AInt32 edThresh;
             if (normFuncIdent == AlgebricksBuiltinFunctions.LE) {
                 edThresh = aInt;

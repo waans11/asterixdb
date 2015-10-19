@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,10 +14,12 @@
  */
 package edu.uci.ics.asterix.formats.nontagged;
 
+import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ABinaryPrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ABooleanPrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ACirclePrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ADatePrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ADateTimePrinterFactory;
+import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ADayTimeDurationPrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ADoublePrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ADurationPrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.AFloatPrinterFactory;
@@ -41,12 +43,13 @@ import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ATimePrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.AUUIDPrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.AUnionPrinterFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.printers.AUnorderedlistPrinterFactory;
+import edu.uci.ics.asterix.dataflow.data.nontagged.printers.AYearMonthDurationPrinterFactory;
+import edu.uci.ics.asterix.dataflow.data.nontagged.printers.ShortWithoutTypeInfoPrinterFactory;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.AUnionType;
 import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.data.IPrinterFactory;
 import edu.uci.ics.hyracks.algebricks.data.IPrinterFactoryProvider;
@@ -64,8 +67,6 @@ public class AqlPrinterFactoryProvider implements IPrinterFactoryProvider {
 
         if (aqlType != null) {
             switch (aqlType.getTypeTag()) {
-            // case ANYTYPE:
-            // return AAnyTypePrinterFactory.INSTANCE;
                 case INT8:
                     return AInt8PrinterFactory.INSTANCE;
                 case INT16:
@@ -90,6 +91,10 @@ public class AqlPrinterFactoryProvider implements IPrinterFactoryProvider {
                     return ADateTimePrinterFactory.INSTANCE;
                 case DURATION:
                     return ADurationPrinterFactory.INSTANCE;
+                case DAYTIMEDURATION:
+                    return ADayTimeDurationPrinterFactory.INSTANCE;
+                case YEARMONTHDURATION:
+                    return AYearMonthDurationPrinterFactory.INSTANCE;
                 case INTERVAL:
                     return AIntervalPrinterFactory.INSTANCE;
                 case POINT:
@@ -106,6 +111,8 @@ public class AqlPrinterFactoryProvider implements IPrinterFactoryProvider {
                     return ARectanglePrinterFactory.INSTANCE;
                 case STRING:
                     return AStringPrinterFactory.INSTANCE;
+                case BINARY:
+                    return ABinaryPrinterFactory.INSTANCE;
                 case RECORD:
                     return new ARecordPrinterFactory((ARecordType) aqlType);
                 case ORDEREDLIST:
@@ -113,7 +120,7 @@ public class AqlPrinterFactoryProvider implements IPrinterFactoryProvider {
                 case UNORDEREDLIST:
                     return new AUnorderedlistPrinterFactory((AUnorderedListType) aqlType);
                 case UNION: {
-                    if (NonTaggedFormatUtil.isOptionalField((AUnionType) aqlType))
+                    if (((AUnionType) aqlType).isNullableType())
                         return new ANullableFieldPrinterFactory((AUnionType) aqlType);
                     else
                         return new AUnionPrinterFactory((AUnionType) aqlType);
@@ -121,6 +128,21 @@ public class AqlPrinterFactoryProvider implements IPrinterFactoryProvider {
                 case UUID: {
                     return AUUIDPrinterFactory.INSTANCE;
                 }
+                case SHORTWITHOUTTYPEINFO:
+                    return ShortWithoutTypeInfoPrinterFactory.INSTANCE;
+                case ANY:
+                case BITARRAY:
+                case ENUM:
+                case SPARSERECORD:
+                case SYSTEM_NULL:
+                case TYPE:
+                case UINT16:
+                case UINT32:
+                case UINT64:
+                case UINT8:
+                case UUID_STRING:
+                    // These types are not intended to be printed to the user.
+                    break;
             }
         }
         return AObjectPrinterFactory.INSTANCE;

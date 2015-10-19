@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -47,22 +47,12 @@ public class EventUtil {
     private static final String SCRIPT = "SCRIPT";
     private static final String ARGS = "ARGS";
     private static final String EXECUTE_SCRIPT = "events/execute.sh";
-    private static final String LOCALHOST = "localhost";
-    private static final String LOCALHOST_IP = "127.0.0.1";
 
     public static Cluster getCluster(String clusterConfigurationPath) throws JAXBException {
         File file = new File(clusterConfigurationPath);
         JAXBContext ctx = JAXBContext.newInstance(Cluster.class);
         Unmarshaller unmarshaller = ctx.createUnmarshaller();
         Cluster cluster = (Cluster) unmarshaller.unmarshal(file);
-        if (cluster.getMasterNode().getClusterIp().equals(LOCALHOST)) {
-            cluster.getMasterNode().setClusterIp(LOCALHOST_IP);
-        }
-        for (Node node : cluster.getNode()) {
-            if (node.getClusterIp().equals(LOCALHOST)) {
-                node.setClusterIp(LOCALHOST_IP);
-            }
-        }
         return cluster;
     }
 

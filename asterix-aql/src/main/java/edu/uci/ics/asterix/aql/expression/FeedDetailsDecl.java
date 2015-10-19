@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,9 +25,8 @@ public class FeedDetailsDecl extends InternalDetailsDecl {
     private final FunctionSignature functionSignature;
 
     public FeedDetailsDecl(String adapterFactoryClassname, Map<String, String> configuration,
-            FunctionSignature signature, Identifier nodeGroupName, List<String> partitioningExpr,
-            String compactionPolicy, Map<String, String> compactionPolicyProperties, String filterField) {
-        super(nodeGroupName, partitioningExpr, false, compactionPolicy, compactionPolicyProperties, filterField);
+            FunctionSignature signature, List<List<String>> partitioningExpr, List<String> filterField) {
+        super(partitioningExpr, false, filterField, false);
         this.adapterFactoryClassname = adapterFactoryClassname;
         this.configuration = configuration;
         this.functionSignature = signature;

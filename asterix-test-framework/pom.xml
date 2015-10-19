@@ -17,15 +17,25 @@
 	<parent>
 		<artifactId>asterix</artifactId>
 		<groupId>edu.uci.ics.asterix</groupId>
-		<version>0.8.6-SNAPSHOT</version>
+		<version>0.8.7-SNAPSHOT</version>
 	</parent>
 	<artifactId>asterix-test-framework</artifactId>
+
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+      <comments>A business-friendly OSS license</comments>
+    </license>
+  </licenses>
+
 	<build>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>2.0.2</version>
+				<version>2.3.2</version>
 				<configuration>
 					<source>1.7</source>
 					<target>1.7</target>
@@ -35,6 +45,7 @@
 			<plugin>
 				<groupId>org.jvnet.jaxb2.maven2</groupId>
 				<artifactId>maven-jaxb2-plugin</artifactId>
+				<version>0.9.0</version>
 				<executions>
 					<execution>
 						<goals>

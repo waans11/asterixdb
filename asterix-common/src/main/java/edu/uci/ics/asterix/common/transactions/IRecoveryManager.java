@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -75,5 +75,15 @@ public interface IRecoveryManager {
      */
     public void rollbackTransaction(ITransactionContext txnContext) throws ACIDException;
 
-    public void checkpoint(boolean isSharpCheckpoint) throws ACIDException, HyracksDataException;
+    /**
+     * Makes a system checkpoint.
+     * @param isSharpCheckpoint a flag indicating whether to perform a sharp or non-sharp checkpoint.
+     * @param nonSharpCheckpointTargetLSN if a non-sharp checkpoint to be performed, what is the minimum LSN it should target.
+     * @return the LSN at which the checkpoint was performed.
+     * @throws ACIDException
+     * @throws HyracksDataException
+     */
+    public long checkpoint(boolean isSharpCheckpoint, long nonSharpCheckpointTargetLSN) throws ACIDException, HyracksDataException;
+    
+    
 }

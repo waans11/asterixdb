@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,7 @@ package edu.uci.ics.asterix.optimizer.base;
 import java.util.ArrayList;
 import java.util.List;
 
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractDataSourceOperator;
 import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
@@ -114,16 +115,17 @@ public class AnalysisUtil {
             AbstractFunctionCallExpression fc = (AbstractFunctionCallExpression) expr;
             FunctionIdentifier fid = fc.getFunctionIdentifier();
             if (fid.equals(AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX)
-                    || fid.equals(AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME)) {
+                    || fid.equals(AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME)
+                    || fid.equals(AsterixBuiltinFunctions.FIELD_ACCESS_NESTED)) {
                 return true;
             }
         }
         return false;
     }
 
-    public static Pair<String, String> getDatasetInfo(DataSourceScanOperator op) throws AlgebricksException {
+    public static Pair<String, String> getDatasetInfo(AbstractDataSourceOperator op) throws AlgebricksException {
         AqlSourceId srcId = (AqlSourceId) op.getDataSource().getId();
-        return new Pair<String, String>(srcId.getDataverseName(), srcId.getDatasetName());
+        return new Pair<String, String>(srcId.getDataverseName(), srcId.getDatasourceName());
     }
 
     private static List<FunctionIdentifier> fieldAccessFunctions = new ArrayList<FunctionIdentifier>();

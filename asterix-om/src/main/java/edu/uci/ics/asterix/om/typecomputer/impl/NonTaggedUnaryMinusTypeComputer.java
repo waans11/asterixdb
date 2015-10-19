@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,13 +14,8 @@
  */
 package edu.uci.ics.asterix.om.typecomputer.impl;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import edu.uci.ics.asterix.om.typecomputer.base.IResultTypeComputer;
-import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnionType;
-import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -41,13 +36,9 @@ public class NonTaggedUnaryMinusTypeComputer implements IResultTypeComputer {
             IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
         AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expression;
         ILogicalExpression arg1 = fce.getArguments().get(0).getValue();
-        if (((IAType) env.getType(arg1)).getTypeTag() == ATypeTag.UNION
-                && NonTaggedFormatUtil.isOptionalField((AUnionType) env.getType(arg1)))
-            return (IAType) env.getType(arg1);
-        List<IAType> unionList = new ArrayList<IAType>();
-        unionList.add(BuiltinType.ANULL);
-        unionList.add((IAType) env.getType(arg1));
-        return new AUnionType(unionList, "UnaryMinusResult");
+        IAType envType = (IAType) env.getType(arg1);
+        if (NonTaggedFormatUtil.isOptional(envType))
+            return envType;
+        return AUnionType.createNullableType(envType, "UnaryMinusResult");
     }
-
 }

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -13,6 +13,8 @@
  * limitations under the License.
  */
 package edu.uci.ics.asterix.formats.base;
+
+import java.util.List;
 
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
@@ -54,29 +56,32 @@ public interface IDataFormat {
 
     public IBinaryIntegerInspectorFactory getBinaryIntegerInspectorFactory();
 
+    // QQQ Refactor: Make this accept an APIFramework.OutputFormat parameter
     public IPrinterFactoryProvider getPrinterFactoryProvider();
 
     public IPrinterFactoryProvider getJSONPrinterFactoryProvider();
 
+    public IPrinterFactoryProvider getCSVPrinterFactoryProvider();
+
     public INullWriterFactory getNullWriterFactory();
 
     public Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> partitioningEvaluatorFactory(
-            ARecordType recType, String fldName) throws AlgebricksException;
+            ARecordType recType, List<String> fldName) throws AlgebricksException;
 
-    public ICopyEvaluatorFactory getFieldAccessEvaluatorFactory(ARecordType recType, String fldName, int recordColumn)
+    public ICopyEvaluatorFactory getFieldAccessEvaluatorFactory(ARecordType recType, List<String> fldName, int recordColumn)
             throws AlgebricksException;
 
     public ITupleParserFactory createTupleParser(ARecordType recType, IParseFileSplitsDecl decl);
 
-    public ITupleParserFactory createTupleParser(ARecordType recType, boolean isDelimited, Character delimiter);
+    public ITupleParserFactory createTupleParser(ARecordType recType, boolean isDelimited, char delimiter, char quote, boolean hasHeader);
 
     public IFunctionDescriptor resolveFunction(ILogicalExpression expr, IVariableTypeEnvironment typeEnvironment)
             throws AlgebricksException;
 
     public ICopyEvaluatorFactory getConstantEvalFactory(IAlgebricksConstantValue value) throws AlgebricksException;
 
-    public ICopyEvaluatorFactory[] createMBRFactory(ARecordType recType, String fldName, int recordColumn,
-            int dimension, String filterFieldName) throws AlgebricksException;
+    public ICopyEvaluatorFactory[] createMBRFactory(ARecordType recType, List<String> fldName, int recordColumn,
+            int dimension, List<String> filterFieldName) throws AlgebricksException;
 
     public IExpressionEvalSizeComputer getExpressionEvalSizeComputer();
 

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,21 +27,25 @@ import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.base.Expression;
 import edu.uci.ics.asterix.aql.base.Expression.Kind;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
-import edu.uci.ics.asterix.aql.expression.ConnectFeedStatement;
-import edu.uci.ics.asterix.aql.expression.DisconnectFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CompactStatement;
+import edu.uci.ics.asterix.aql.expression.ConnectFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CreateDataverseStatement;
+import edu.uci.ics.asterix.aql.expression.CreateFeedPolicyStatement;
 import edu.uci.ics.asterix.aql.expression.CreateFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CreateFunctionStatement;
 import edu.uci.ics.asterix.aql.expression.CreateIndexStatement;
+import edu.uci.ics.asterix.aql.expression.CreatePrimaryFeedStatement;
+import edu.uci.ics.asterix.aql.expression.CreateSecondaryFeedStatement;
 import edu.uci.ics.asterix.aql.expression.DatasetDecl;
 import edu.uci.ics.asterix.aql.expression.DataverseDecl;
 import edu.uci.ics.asterix.aql.expression.DataverseDropStatement;
 import edu.uci.ics.asterix.aql.expression.DeleteStatement;
+import edu.uci.ics.asterix.aql.expression.DisconnectFeedStatement;
 import edu.uci.ics.asterix.aql.expression.DistinctClause;
 import edu.uci.ics.asterix.aql.expression.DropStatement;
 import edu.uci.ics.asterix.aql.expression.FLWOGRExpression;
 import edu.uci.ics.asterix.aql.expression.FeedDropStatement;
+import edu.uci.ics.asterix.aql.expression.FeedPolicyDropStatement;
 import edu.uci.ics.asterix.aql.expression.FieldAccessor;
 import edu.uci.ics.asterix.aql.expression.FieldBinding;
 import edu.uci.ics.asterix.aql.expression.ForClause;
@@ -102,7 +106,6 @@ import edu.uci.ics.asterix.metadata.declared.FileSplitDataSink;
 import edu.uci.ics.asterix.metadata.declared.FileSplitSinkId;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
-import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
@@ -266,11 +269,11 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
             }
             ARecordType itemType = (ARecordType) metadata.findType(dataset.getDataverseName(),
                     dataset.getItemTypeName());
-            List<String> partitioningKeys = DatasetUtils.getPartitioningKeys(dataset);
+            List<List<String>> partitioningKeys = DatasetUtils.getPartitioningKeys(dataset);
             ArrayList<LogicalVariable> vars = new ArrayList<LogicalVariable>();
             ArrayList<Mutable<ILogicalExpression>> exprs = new ArrayList<Mutable<ILogicalExpression>>();
             List<Mutable<ILogicalExpression>> varRefsForLoading = new ArrayList<Mutable<ILogicalExpression>>();
-            for (String partitioningKey : partitioningKeys) {
+            for (List<String> partitioningKey : partitioningKeys) {
                 Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> partitioner = format
                         .partitioningEvaluatorFactory(itemType, partitioningKey);
                 AbstractFunctionCallExpression f = partitioner.second.cloneExpression();
@@ -428,11 +431,11 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
                     FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.ANY_COLLECTION_MEMBER));
             f.getArguments().add(new MutableObject<ILogicalExpression>(p.first));
         } else {
-            Pair<ILogicalExpression, Mutable<ILogicalOperator>> indexPair = aqlExprToAlgExpression(ia.getIndexExpr(), tupSource);
+            Pair<ILogicalExpression, Mutable<ILogicalOperator>> indexPair = aqlExprToAlgExpression(ia.getIndexExpr(),
+                    tupSource);
             f = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.GET_ITEM));
             f.getArguments().add(new MutableObject<ILogicalExpression>(p.first));
-            f.getArguments().add(
-                    new MutableObject<ILogicalExpression>(indexPair.first));
+            f.getArguments().add(new MutableObject<ILogicalExpression>(indexPair.first));
         }
         AssignOperator a = new AssignOperator(v, new MutableObject<ILogicalExpression>(f));
         a.getInputs().add(p.second);
@@ -1445,13 +1448,6 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
     }
 
     @Override
-    public Pair<ILogicalOperator, LogicalVariable> visitCreateFeedStatement(CreateFeedStatement del,
-            Mutable<ILogicalOperator> arg) throws AsterixException {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
     public Pair<ILogicalOperator, LogicalVariable> visitConnectFeedStatement(ConnectFeedStatement del,
             Mutable<ILogicalOperator> arg) throws AsterixException {
         // TODO Auto-generated method stub
@@ -1467,6 +1463,34 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
 
     @Override
     public Pair<ILogicalOperator, LogicalVariable> visitCompactStatement(CompactStatement del,
+            Mutable<ILogicalOperator> arg) throws AsterixException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+    
+    @Override
+    public Pair<ILogicalOperator, LogicalVariable> visitCreatePrimaryFeedStatement(CreatePrimaryFeedStatement del,
+            Mutable<ILogicalOperator> arg) throws AsterixException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public Pair<ILogicalOperator, LogicalVariable> visitCreateSecondaryFeedStatement(CreateSecondaryFeedStatement del,
+            Mutable<ILogicalOperator> arg) throws AsterixException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public Pair<ILogicalOperator, LogicalVariable> visitCreateFeedPolicyStatement(CreateFeedPolicyStatement cfps,
+            Mutable<ILogicalOperator> arg) throws AsterixException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public Pair<ILogicalOperator, LogicalVariable> visitDropFeedPolicyStatement(FeedPolicyDropStatement dfs,
             Mutable<ILogicalOperator> arg) throws AsterixException {
         // TODO Auto-generated method stub
         return null;

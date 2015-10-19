@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,11 +25,9 @@ import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AUnorderedListSerialize
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
-import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnionType;
-import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
@@ -42,22 +40,21 @@ import edu.uci.ics.hyracks.storage.am.lsm.invertedindex.tokenizers.IBinaryTokeni
 
 public final class NonTaggedFormatUtil {
 
-    public static final int OPTIONAL_TYPE_INDEX_IN_UNION_LIST = 1;
-
     public static final boolean isFixedSizedCollection(IAType type) {
         switch (type.getTypeTag()) {
             case STRING:
+            case BINARY:
             case RECORD:
             case ORDEREDLIST:
             case UNORDEREDLIST:
+            case POLYGON:
             case ANY:
                 return false;
             case UNION:
-                if (!NonTaggedFormatUtil.isOptionalField((AUnionType) type))
+                if (!((AUnionType) type).isNullableType())
                     return false;
                 else
-                    return isFixedSizedCollection(((AUnionType) type).getUnionList().get(
-                            OPTIONAL_TYPE_INDEX_IN_UNION_LIST));
+                    return isFixedSizedCollection(((AUnionType) type).getNullableType());
             default:
                 return true;
         }
@@ -83,11 +80,14 @@ public final class NonTaggedFormatUtil {
         return false;
     }
 
-    public static boolean isOptionalField(AUnionType unionType) {
-        if (unionType.getUnionList().size() == 2)
-            if (unionType.getUnionList().get(0).getTypeTag() == ATypeTag.NULL)
-                return true;
-        return false;
+    /**
+     * Decide whether a type is an optional type
+     *
+     * @param type
+     * @return true if it is optional; false otherwise
+     */
+    public static boolean isOptional(IAType type) {
+        return type.getTypeTag() == ATypeTag.UNION && ((AUnionType) type).isNullableType();
     }
 
     public static int getFieldValueLength(byte[] serNonTaggedAObject, int offset, ATypeTag typeTag, boolean tagged)
@@ -137,6 +137,7 @@ public final class NonTaggedFormatUtil {
                 else
                     return AInt16SerializerDeserializer.getShort(serNonTaggedAObject, offset) * 16 + 2;
             case STRING:
+            case BINARY:
                 if (tagged)
                     return AInt16SerializerDeserializer.getUnsignedShort(serNonTaggedAObject, offset + 1) + 2;
                 else
@@ -207,7 +208,7 @@ public final class NonTaggedFormatUtil {
         }
     }
 
-    public static IBinaryComparatorFactory getTokenBinaryComparatorFactory(IAType keyType) throws AlgebricksException {
+    public static IAType getTokenType(IAType keyType) throws AlgebricksException {
         IAType type = keyType;
         ATypeTag typeTag = keyType.getTypeTag();
         // Extract item type from list.
@@ -218,28 +219,17 @@ public final class NonTaggedFormatUtil {
             }
             type = listType.getItemType();
         }
+        return type;
+    }
+
+    public static IBinaryComparatorFactory getTokenBinaryComparatorFactory(IAType keyType) throws AlgebricksException {
+        IAType type = getTokenType(keyType);
         // Ignore case for string types.
         return AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(type, true, true);
     }
 
     public static ITypeTraits getTokenTypeTrait(IAType keyType) throws AlgebricksException {
-        IAType type = keyType;
-        ATypeTag typeTag = keyType.getTypeTag();
-        // Extract item type from list.
-        if (typeTag == ATypeTag.UNORDEREDLIST) {
-            AUnorderedListType ulistType = (AUnorderedListType) keyType;
-            if (!ulistType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = ulistType.getItemType();
-        }
-        if (typeTag == ATypeTag.ORDEREDLIST) {
-            AOrderedListType olistType = (AOrderedListType) keyType;
-            if (!olistType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = olistType.getItemType();
-        }
+        IAType type = getTokenType(keyType);
         return AqlTypeTraitProvider.INSTANCE.getTypeTrait(type);
     }
 }

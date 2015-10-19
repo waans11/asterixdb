@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -61,6 +61,7 @@ import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.TypeSignature;
+import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.tools.translator.ADGenDmlTranslator;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
@@ -665,12 +666,9 @@ public class AdmDataGen {
                 nullable = new boolean[m];
                 for (int i = 0; i < m; i++) {
                     IAType ti = recType.getFieldTypes()[i];
-                    if (ti.getTypeTag() == ATypeTag.UNION) {
-                        AUnionType ut = (AUnionType) ti;
-                        if (ut.isNullableType()) {
-                            ti = ut.getUnionList().get(1);
-                            nullable[i] = true;
-                        }
+                    if (NonTaggedFormatUtil.isOptional(ti)) {
+                        ti = ((AUnionType) ti).getNullableType();
+                        nullable[i] = true;
                     }
                     IRecordFieldDataGen rfdg = annot.getDeclaredFieldsDatagen()[i];
                     if (rfdg == null) {
@@ -942,7 +940,7 @@ public class AdmDataGen {
             AlgebricksException {
         FileReader aql = new FileReader(schemaFile);
         AQLParser parser = new AQLParser(aql);
-        List<Statement> statements = parser.Statement();
+        List<Statement> statements = parser.parse();
         aql.close();
         // TODO: Need to fix how to use transactions here.
         MetadataTransactionContext mdTxnCtx = new MetadataTransactionContext(new JobId(-1));

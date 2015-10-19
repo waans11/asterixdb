@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,7 +18,6 @@ import java.io.DataOutput;
 import java.io.IOException;
 
 import edu.uci.ics.asterix.builders.OrderedListBuilder;
-import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.dataflow.data.nontagged.Coordinate;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADoubleSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt16SerializerDeserializer;
@@ -54,7 +53,7 @@ public class LineRectanglePolygonAccessor extends AbstractScalarFunctionDynamicD
     private static final byte SER_LINE_TAG = ATypeTag.LINE.serialize();
     private static final byte SER_RECTANGLE_TAG = ATypeTag.RECTANGLE.serialize();
     private static final byte SER_POLYGON_TAG = ATypeTag.POLYGON.serialize();
-    private final static byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
+    private static final byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
 
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
 

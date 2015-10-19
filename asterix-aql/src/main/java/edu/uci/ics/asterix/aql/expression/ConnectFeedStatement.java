@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,9 +32,10 @@ import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter.AdapterType;
 import edu.uci.ics.asterix.metadata.entities.Feed;
 import edu.uci.ics.asterix.metadata.entities.Function;
+import edu.uci.ics.asterix.metadata.entities.PrimaryFeed;
 import edu.uci.ics.asterix.metadata.feeds.BuiltinFeedPolicies;
 import edu.uci.ics.asterix.metadata.feeds.FeedUtil;
-import edu.uci.ics.asterix.metadata.feeds.IAdapterFactory;
+import edu.uci.ics.asterix.metadata.feeds.IFeedAdapterFactory;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
@@ -75,6 +76,7 @@ public class ConnectFeedStatement implements Statement {
         this.varCounter = varCounter;
     }
 
+    /*
     public void initialize(MetadataTransactionContext mdTxnCtx, Dataset targetDataset, Feed sourceFeed)
             throws MetadataException {
         query = new Query();
@@ -91,9 +93,9 @@ public class ConnectFeedStatement implements Statement {
             }
         }
 
-        Triple<IAdapterFactory, ARecordType, AdapterType> factoryOutput = null;
+        Triple<IFeedAdapterFactory, ARecordType, AdapterType> factoryOutput = null;
         try {
-            factoryOutput = FeedUtil.getFeedFactoryAndOutput(sourceFeed, mdTxnCtx);
+            factoryOutput = FeedUtil.getPrimaryFeedFactoryAndOutput((PrimaryFeed) sourceFeed, mdTxnCtx);
             adapterOutputType = factoryOutput.second.getTypeName();
         } catch (AlgebricksException ae) {
             ae.printStackTrace();
@@ -129,13 +131,13 @@ public class ConnectFeedStatement implements Statement {
 
         List<Statement> statements;
         try {
-            statements = parser.Statement();
+            statements = parser.parse();
             query = ((InsertStatement) statements.get(1)).getQuery();
         } catch (ParseException pe) {
             throw new MetadataException(pe);
         }
 
-    }
+    }*/
 
     public Identifier getDataverseName() {
         return dataverseName;

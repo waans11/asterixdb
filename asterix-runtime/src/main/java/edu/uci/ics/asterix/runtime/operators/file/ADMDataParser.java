@@ -17,15 +17,16 @@ package edu.uci.ics.asterix.runtime.operators.file;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayDeque;
 import java.util.BitSet;
 import java.util.List;
-import java.util.Queue;
 
+import edu.uci.ics.asterix.builders.AbvsBuilderFactory;
 import edu.uci.ics.asterix.builders.IARecordBuilder;
 import edu.uci.ics.asterix.builders.IAsterixListBuilder;
+import edu.uci.ics.asterix.builders.ListBuilderFactory;
 import edu.uci.ics.asterix.builders.OrderedListBuilder;
 import edu.uci.ics.asterix.builders.RecordBuilder;
+import edu.uci.ics.asterix.builders.RecordBuilderFactory;
 import edu.uci.ics.asterix.builders.UnorderedListBuilder;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AIntervalSerializerDeserializer;
@@ -39,11 +40,14 @@ import edu.uci.ics.asterix.om.types.AUnionType;
 import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
-import edu.uci.ics.asterix.om.types.hierachy.ITypePromoteComputer;
+import edu.uci.ics.asterix.om.types.hierachy.ITypeConvertComputer;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
+import edu.uci.ics.asterix.om.util.container.IObjectPool;
+import edu.uci.ics.asterix.om.util.container.ListObjectPool;
 import edu.uci.ics.asterix.runtime.operators.file.adm.AdmLexer;
 import edu.uci.ics.asterix.runtime.operators.file.adm.AdmLexerException;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.data.std.api.IMutableValueStorage;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 
 /**
@@ -58,10 +62,12 @@ public class ADMDataParser extends AbstractDataParser {
     private int nullableFieldId = 0;
     private ArrayBackedValueStorage castBuffer = new ArrayBackedValueStorage();
 
-    private Queue<ArrayBackedValueStorage> baaosPool = new ArrayDeque<ArrayBackedValueStorage>();
-    private Queue<IARecordBuilder> recordBuilderPool = new ArrayDeque<IARecordBuilder>();
-    private Queue<IAsterixListBuilder> orderedListBuilderPool = new ArrayDeque<IAsterixListBuilder>();
-    private Queue<IAsterixListBuilder> unorderedListBuilderPool = new ArrayDeque<IAsterixListBuilder>();
+    private IObjectPool<IARecordBuilder, ATypeTag> recordBuilderPool = new ListObjectPool<IARecordBuilder, ATypeTag>(
+            new RecordBuilderFactory());
+    private IObjectPool<IAsterixListBuilder, ATypeTag> listBuilderPool = new ListObjectPool<IAsterixListBuilder, ATypeTag>(
+            new ListBuilderFactory());
+    private IObjectPool<IMutableValueStorage, ATypeTag> abvsBuilderPool = new ListObjectPool<IMutableValueStorage, ATypeTag>(
+            new AbvsBuilderFactory());
 
     private String mismatchErrorMessage = "Mismatch Type, expecting a value of type ";
     private String mismatchErrorMessage2 = " got a value of type ";
@@ -95,6 +101,7 @@ public class ADMDataParser extends AbstractDataParser {
             this.column = column;
         }
 
+        @Override
         public String getMessage() {
             StringBuilder msg = new StringBuilder("Parse error");
             if (filename != null) {
@@ -122,7 +129,8 @@ public class ADMDataParser extends AbstractDataParser {
     @Override
     public boolean parse(DataOutput out) throws AsterixException {
         try {
-            return parseAdmInstance((IAType) recordType, datasetRec, out);
+            resetPools();
+            return parseAdmInstance(recordType, datasetRec, out);
         } catch (IOException e) {
             throw new ParseException(e, filename, admLexer.getLine(), admLexer.getColumn());
         } catch (AdmLexerException e) {
@@ -162,15 +170,17 @@ public class ADMDataParser extends AbstractDataParser {
             case AdmLexer.TOKEN_NULL_LITERAL: {
                 if (checkType(ATypeTag.NULL, objectType)) {
                     nullSerde.serialize(ANull.NULL, out);
-                } else
+                } else {
                     throw new ParseException("This field can not be null");
+                }
                 break;
             }
             case AdmLexer.TOKEN_TRUE_LITERAL: {
                 if (checkType(ATypeTag.BOOLEAN, objectType)) {
                     booleanSerde.serialize(ABoolean.TRUE, out);
-                } else
+                } else {
                     throw new ParseException(mismatchErrorMessage + objectType.getTypeName());
+                }
                 break;
             }
             case AdmLexer.TOKEN_BOOLEAN_CONS: {
@@ -180,8 +190,9 @@ public class ADMDataParser extends AbstractDataParser {
             case AdmLexer.TOKEN_FALSE_LITERAL: {
                 if (checkType(ATypeTag.BOOLEAN, objectType)) {
                     booleanSerde.serialize(ABoolean.FALSE, out);
-                } else
+                } else {
                     throw new ParseException(mismatchErrorMessage + objectType.getTypeName());
+                }
                 break;
             }
             case AdmLexer.TOKEN_DOUBLE_LITERAL: {
@@ -217,7 +228,8 @@ public class ADMDataParser extends AbstractDataParser {
                 break;
             }
             case AdmLexer.TOKEN_INT_LITERAL: {
-                parseToNumericTarget(ATypeTag.INT32, objectType, out);
+                // For an INT value without any suffix, we return it as INT64 type value since it is the default integer type.
+                parseAndCastNumeric(ATypeTag.INT64, objectType, out);
                 break;
             }
             case AdmLexer.TOKEN_INT32_LITERAL: {
@@ -242,13 +254,34 @@ public class ADMDataParser extends AbstractDataParser {
                             admLexer.getLastTokenImage().length() - 1);
                     aString.setValue(admLexer.containsEscapes() ? replaceEscapes(tokenImage) : tokenImage);
                     stringSerde.serialize(aString, out);
-                } else
+                } else if (checkType(ATypeTag.UUID, objectType)) {
+                    // Dealing with UUID type that is represented by a string
+                    final String tokenImage = admLexer.getLastTokenImage().substring(1,
+                            admLexer.getLastTokenImage().length() - 1);
+                    aUUID.fromStringToAMuatbleUUID(tokenImage);
+                    uuidSerde.serialize(aUUID, out);
+                } else {
                     throw new ParseException(mismatchErrorMessage + objectType.getTypeName());
+                }
                 break;
             }
             case AdmLexer.TOKEN_STRING_CONS: {
                 parseConstructor(ATypeTag.STRING, objectType, out);
                 break;
+            }
+            case AdmLexer.TOKEN_HEX_CONS:
+            case AdmLexer.TOKEN_BASE64_CONS: {
+                if (checkType(ATypeTag.BINARY, objectType)) {
+                    if (admLexer.next() == AdmLexer.TOKEN_CONSTRUCTOR_OPEN) {
+                        if (admLexer.next() == AdmLexer.TOKEN_STRING_LITERAL) {
+                            parseToBinaryTarget(token, admLexer.getLastTokenImage(), out);
+                            if (admLexer.next() == AdmLexer.TOKEN_CONSTRUCTOR_CLOSE) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                throw new ParseException(mismatchErrorMessage + objectType.getTypeName());
             }
             case AdmLexer.TOKEN_DATE_CONS: {
                 parseConstructor(ATypeTag.DATE, objectType, out);
@@ -344,8 +377,9 @@ public class ADMDataParser extends AbstractDataParser {
                 if (checkType(ATypeTag.UNORDEREDLIST, objectType)) {
                     objectType = getComplexType(objectType, ATypeTag.UNORDEREDLIST);
                     parseUnorderedList((AUnorderedListType) objectType, out);
-                } else
+                } else {
                     throw new ParseException(mismatchErrorMessage + objectType.getTypeTag());
+                }
                 break;
             }
 
@@ -353,16 +387,22 @@ public class ADMDataParser extends AbstractDataParser {
                 if (checkType(ATypeTag.ORDEREDLIST, objectType)) {
                     objectType = getComplexType(objectType, ATypeTag.ORDEREDLIST);
                     parseOrderedList((AOrderedListType) objectType, out);
-                } else
+                } else {
                     throw new ParseException(mismatchErrorMessage + objectType.getTypeTag());
+                }
                 break;
             }
             case AdmLexer.TOKEN_START_RECORD: {
                 if (checkType(ATypeTag.RECORD, objectType)) {
                     objectType = getComplexType(objectType, ATypeTag.RECORD);
                     parseRecord((ARecordType) objectType, out, datasetRec);
-                } else
+                } else {
                     throw new ParseException(mismatchErrorMessage + objectType.getTypeTag());
+                }
+                break;
+            }
+            case AdmLexer.TOKEN_UUID_CONS: {
+                parseConstructor(ATypeTag.UUID, objectType, out);
                 break;
             }
             case AdmLexer.TOKEN_EOF: {
@@ -372,29 +412,63 @@ public class ADMDataParser extends AbstractDataParser {
                 throw new ParseException("Unexpected ADM token kind: " + AdmLexer.tokenKindToString(token) + ".");
             }
         }
+
     }
 
     private String replaceEscapes(String tokenImage) throws ParseException {
         char[] chars = tokenImage.toCharArray();
         int len = chars.length;
-        int idx = 0;
-        while (idx < len) {
-            if (chars[idx] == '\\') {
-                switch (chars[idx + 1]) {
+        int readpos = 0;
+        int writepos = 0;
+        int movemarker = 0;
+        while (readpos < len) {
+            if (chars[readpos] == '\\') {
+                moveChars(chars, movemarker, readpos, readpos - writepos);
+                switch (chars[readpos + 1]) {
                     case '\\':
                     case '\"':
-                        for (int i = idx + 1; i < len; ++i) {
-                            chars[i - 1] = chars[i];
-                        }
-                        --len;
+                    case '/':
+                        chars[writepos] = chars[readpos + 1];
+                        break;
+                    case 'b':
+                        chars[writepos] = '\b';
+                        break;
+                    case 'f':
+                        chars[writepos] = '\f';
+                        break;
+                    case 'n':
+                        chars[writepos] = '\n';
+                        break;
+                    case 'r':
+                        chars[writepos] = '\r';
+                        break;
+                    case 't':
+                        chars[writepos] = '\t';
+                        break;
+                    case 'u':
+                        chars[writepos] = (char) Integer.parseInt(new String(chars, readpos + 2, 4), 16);
+                        readpos += 4;
                         break;
                     default:
-                        throw new ParseException("Illegal escape '\\" + chars[idx + 1] + "'");
+                        throw new ParseException("Illegal escape '\\" + chars[readpos + 1] + "'");
                 }
+                ++readpos;
+                movemarker = readpos + 1;
             }
-            ++idx;
+            ++writepos;
+            ++readpos;
         }
-        return new String(chars, 0, len);
+        moveChars(chars, movemarker, len, readpos - writepos);
+        return new String(chars, 0, len - (readpos - writepos));
+    }
+
+    private static void moveChars(final char[] chars, final int start, final int end, final int offset) {
+        if (offset == 0) {
+            return;
+        }
+        for (int i = start; i < end; ++i) {
+            chars[i - offset] = chars[i];
+        }
     }
 
     private IAType getComplexType(IAType aObjectType, ATypeTag tag) {
@@ -402,15 +476,17 @@ public class ADMDataParser extends AbstractDataParser {
             return null;
         }
 
-        if (aObjectType.getTypeTag() == tag)
+        if (aObjectType.getTypeTag() == tag) {
             return aObjectType;
+        }
 
         if (aObjectType.getTypeTag() == ATypeTag.UNION) {
             List<IAType> unionList = ((AUnionType) aObjectType).getUnionList();
-            for (int i = 0; i < unionList.size(); i++)
+            for (int i = 0; i < unionList.size(); i++) {
                 if (unionList.get(i).getTypeTag() == tag) {
                     return unionList.get(i);
                 }
+            }
         }
         return null; // wont get here
     }
@@ -421,12 +497,19 @@ public class ADMDataParser extends AbstractDataParser {
         }
         if (aObjectType.getTypeTag() != ATypeTag.UNION) {
             final ATypeTag typeTag = aObjectType.getTypeTag();
-            return ATypeHierarchy.canPromote(expectedTypeTag, typeTag) ? typeTag : null;
+            if (ATypeHierarchy.canPromote(expectedTypeTag, typeTag)
+                    || ATypeHierarchy.canDemote(expectedTypeTag, typeTag)) {
+                return typeTag;
+            } else {
+                return null;
+            }
+            //            return ATypeHierarchy.canPromote(expectedTypeTag, typeTag) ? typeTag : null;
         } else { // union
             List<IAType> unionList = ((AUnionType) aObjectType).getUnionList();
             for (IAType t : unionList) {
                 final ATypeTag typeTag = t.getTypeTag();
-                if (ATypeHierarchy.canPromote(expectedTypeTag, typeTag)) {
+                if (ATypeHierarchy.canPromote(expectedTypeTag, typeTag)
+                        || ATypeHierarchy.canDemote(expectedTypeTag, typeTag)) {
                     return typeTag;
                 }
             }
@@ -450,13 +533,15 @@ public class ADMDataParser extends AbstractDataParser {
             if (recType != null) {
                 nulls = new BitSet(recType.getFieldNames().length);
                 recBuilder.reset(recType);
-            } else
+            } else {
                 recBuilder.reset(null);
+            }
         } else if (recType != null) {
             nulls = new BitSet(recType.getFieldNames().length);
             recBuilder.reset(recType);
-        } else
+        } else {
             recBuilder.reset(null);
+        }
 
         recBuilder.init();
         int token;
@@ -519,13 +604,12 @@ public class ADMDataParser extends AbstractDataParser {
                     token = admLexer.next();
                     this.admFromLexerStream(token, fieldType, fieldValueBuffer.getDataOutput(), false);
                     if (openRecordField) {
-                        if (fieldValueBuffer.getByteArray()[0] != ATypeTag.NULL.serialize())
+                        if (fieldValueBuffer.getByteArray()[0] != ATypeTag.NULL.serialize()) {
                             recBuilder.addField(fieldNameBuffer, fieldValueBuffer);
-                    } else if (recType.getFieldTypes()[fieldId].getTypeTag() == ATypeTag.UNION) {
-                        if (NonTaggedFormatUtil.isOptionalField((AUnionType) recType.getFieldTypes()[fieldId])) {
-                            if (fieldValueBuffer.getByteArray()[0] != ATypeTag.NULL.serialize()) {
-                                recBuilder.addField(fieldId, fieldValueBuffer);
-                            }
+                        }
+                    } else if (NonTaggedFormatUtil.isOptional(recType)) {
+                        if (fieldValueBuffer.getByteArray()[0] != ATypeTag.NULL.serialize()) {
+                            recBuilder.addField(fieldId, fieldValueBuffer);
                         }
                     } else {
                         recBuilder.addField(fieldId, fieldValueBuffer);
@@ -553,34 +637,36 @@ public class ADMDataParser extends AbstractDataParser {
 
         if (recType != null) {
             nullableFieldId = checkNullConstraints(recType, nulls);
-            if (nullableFieldId != -1)
-                throw new ParseException("Field " + recType.getFieldNames()[nullableFieldId] + " can not be null");
+            if (nullableFieldId != -1) {
+                throw new ParseException("Field: " + recType.getFieldNames()[nullableFieldId] + " can not be null");
+            }
         }
         recBuilder.write(out, true);
-        returnRecordBuilder(recBuilder);
-        returnTempBuffer(fieldNameBuffer);
-        returnTempBuffer(fieldValueBuffer);
     }
 
     private int checkNullConstraints(ARecordType recType, BitSet nulls) {
         boolean isNull = false;
-        for (int i = 0; i < recType.getFieldTypes().length; i++)
+        for (int i = 0; i < recType.getFieldTypes().length; i++) {
             if (nulls.get(i) == false) {
                 IAType type = recType.getFieldTypes()[i];
-                if (type.getTypeTag() != ATypeTag.NULL && type.getTypeTag() != ATypeTag.UNION)
+                if (type.getTypeTag() != ATypeTag.NULL && type.getTypeTag() != ATypeTag.UNION) {
                     return i;
+                }
 
                 if (type.getTypeTag() == ATypeTag.UNION) { // union
                     List<IAType> unionList = ((AUnionType) type).getUnionList();
-                    for (int j = 0; j < unionList.size(); j++)
+                    for (int j = 0; j < unionList.size(); j++) {
                         if (unionList.get(j).getTypeTag() == ATypeTag.NULL) {
                             isNull = true;
                             break;
                         }
-                    if (!isNull)
+                    }
+                    if (!isNull) {
                         return i;
+                    }
                 }
             }
+        }
         return -1;
     }
 
@@ -590,8 +676,9 @@ public class ADMDataParser extends AbstractDataParser {
         OrderedListBuilder orderedListBuilder = (OrderedListBuilder) getOrderedListBuilder();
 
         IAType itemType = null;
-        if (oltype != null)
+        if (oltype != null) {
             itemType = oltype.getItemType();
+        }
         orderedListBuilder.reset(oltype);
 
         int token;
@@ -623,8 +710,6 @@ public class ADMDataParser extends AbstractDataParser {
             first = false;
         } while (inList);
         orderedListBuilder.write(out, true);
-        returnOrderedListBuilder(orderedListBuilder);
-        returnTempBuffer(itemBuffer);
     }
 
     private void parseUnorderedList(AUnorderedListType uoltype, DataOutput out) throws IOException, AsterixException,
@@ -634,8 +719,9 @@ public class ADMDataParser extends AbstractDataParser {
 
         IAType itemType = null;
 
-        if (uoltype != null)
+        if (uoltype != null) {
             itemType = uoltype.getItemType();
+        }
         unorderedListBuilder.reset(uoltype);
 
         int token;
@@ -671,57 +757,36 @@ public class ADMDataParser extends AbstractDataParser {
             first = false;
         } while (inList);
         unorderedListBuilder.write(out, true);
-        returnUnorderedListBuilder(unorderedListBuilder);
-        returnTempBuffer(itemBuffer);
     }
 
     private IARecordBuilder getRecordBuilder() {
-        RecordBuilder recBuilder = (RecordBuilder) recordBuilderPool.poll();
-        if (recBuilder != null)
-            return recBuilder;
-        else
-            return new RecordBuilder();
-    }
-
-    private void returnRecordBuilder(IARecordBuilder recBuilder) {
-        this.recordBuilderPool.add(recBuilder);
+        return recordBuilderPool.allocate(ATypeTag.RECORD);
     }
 
     private IAsterixListBuilder getOrderedListBuilder() {
-        OrderedListBuilder orderedListBuilder = (OrderedListBuilder) orderedListBuilderPool.poll();
-        if (orderedListBuilder != null)
-            return orderedListBuilder;
-        else
-            return new OrderedListBuilder();
-    }
-
-    private void returnOrderedListBuilder(IAsterixListBuilder orderedListBuilder) {
-        this.orderedListBuilderPool.add(orderedListBuilder);
+        return listBuilderPool.allocate(ATypeTag.ORDEREDLIST);
     }
 
     private IAsterixListBuilder getUnorderedListBuilder() {
-        UnorderedListBuilder unorderedListBuilder = (UnorderedListBuilder) unorderedListBuilderPool.poll();
-        if (unorderedListBuilder != null)
-            return unorderedListBuilder;
-        else
-            return new UnorderedListBuilder();
-    }
-
-    private void returnUnorderedListBuilder(IAsterixListBuilder unorderedListBuilder) {
-        this.unorderedListBuilderPool.add(unorderedListBuilder);
+        return listBuilderPool.allocate(ATypeTag.UNORDEREDLIST);
     }
 
     private ArrayBackedValueStorage getTempBuffer() {
-        ArrayBackedValueStorage tmpBaaos = baaosPool.poll();
-        if (tmpBaaos != null) {
-            return tmpBaaos;
-        } else {
-            return new ArrayBackedValueStorage();
-        }
+        return (ArrayBackedValueStorage) abvsBuilderPool.allocate(ATypeTag.BINARY);
     }
 
-    private void returnTempBuffer(ArrayBackedValueStorage tempBaaos) {
-        baaosPool.add(tempBaaos);
+    private void parseToBinaryTarget(int lexerToken, String tokenImage, DataOutput out) throws ParseException,
+            HyracksDataException {
+        switch (lexerToken) {
+            case AdmLexer.TOKEN_HEX_CONS: {
+                parseHexBinaryString(tokenImage.toCharArray(), 1, tokenImage.length() - 2, out);
+                break;
+            }
+            case AdmLexer.TOKEN_BASE64_CONS: {
+                parseBase64BinaryString(tokenImage.toCharArray(), 1, tokenImage.length() - 2, out);
+                break;
+            }
+        }
     }
 
     private void parseToNumericTarget(ATypeTag typeTag, IAType objectType, DataOutput out) throws AsterixException,
@@ -745,13 +810,27 @@ public class ADMDataParser extends AbstractDataParser {
             throw new ParseException(mismatchErrorMessage + objectType.getTypeName() + mismatchErrorMessage2 + typeTag);
         }
 
+        // If two type tags are not the same, either we try to promote or demote source type to the target type
         if (targetTypeTag != typeTag) {
-            ITypePromoteComputer promoteComputer = ATypeHierarchy.getTypePromoteComputer(typeTag, targetTypeTag);
-            // the availability if the promote computer should be consistent with the availability of a target type
-            assert promoteComputer != null;
-            // do the promotion; note that the type tag field should be skipped
-            promoteComputer.promote(castBuffer.getByteArray(), castBuffer.getStartOffset() + 1,
-                    castBuffer.getLength() - 1, out);
+            if (ATypeHierarchy.canPromote(typeTag, targetTypeTag)) {
+                // can promote typeTag to targetTypeTag
+                ITypeConvertComputer promoteComputer = ATypeHierarchy.getTypePromoteComputer(typeTag, targetTypeTag);
+                if (promoteComputer == null) {
+                    throw new AsterixException("Can't cast the " + typeTag + " type to the " + targetTypeTag + " type.");
+                }
+                // do the promotion; note that the type tag field should be skipped
+                promoteComputer.convertType(castBuffer.getByteArray(), castBuffer.getStartOffset() + 1,
+                        castBuffer.getLength() - 1, out);
+            } else if (ATypeHierarchy.canDemote(typeTag, targetTypeTag)) {
+                //can demote source type to the target type
+                ITypeConvertComputer demoteComputer = ATypeHierarchy.getTypeDemoteComputer(typeTag, targetTypeTag);
+                if (demoteComputer == null) {
+                    throw new AsterixException("Can't cast the " + typeTag + " type to the " + targetTypeTag + " type.");
+                }
+                // do the demotion; note that the type tag field should be skipped
+                demoteComputer.convertType(castBuffer.getByteArray(), castBuffer.getStartOffset() + 1,
+                        castBuffer.getLength() - 1, out);
+            }
         }
     }
 
@@ -777,12 +856,12 @@ public class ADMDataParser extends AbstractDataParser {
                     token = admLexer.next();
                     if (token == AdmLexer.TOKEN_CONSTRUCTOR_CLOSE) {
                         if (targetTypeTag != typeTag) {
-                            ITypePromoteComputer promoteComputer = ATypeHierarchy.getTypePromoteComputer(typeTag,
+                            ITypeConvertComputer promoteComputer = ATypeHierarchy.getTypePromoteComputer(typeTag,
                                     targetTypeTag);
                             // the availability if the promote computer should be consistent with the availability of a target type
                             assert promoteComputer != null;
                             // do the promotion; note that the type tag field should be skipped
-                            promoteComputer.promote(castBuffer.getByteArray(), castBuffer.getStartOffset() + 1,
+                            promoteComputer.convertType(castBuffer.getByteArray(), castBuffer.getStartOffset() + 1,
                                     castBuffer.getLength() - 1, out);
                         }
                         return;
@@ -859,6 +938,10 @@ public class ADMDataParser extends AbstractDataParser {
             case POLYGON:
                 APolygonSerializerDeserializer.parse(unquoted, out);
                 return true;
+            case UUID:
+                aUUID.fromStringToAMuatbleUUID(unquoted);
+                uuidSerde.serialize(aUUID, out);
+                return true;
             default:
                 return false;
         }
@@ -866,12 +949,13 @@ public class ADMDataParser extends AbstractDataParser {
 
     private void parseBoolean(String bool, DataOutput out) throws AsterixException, HyracksDataException {
         String errorMessage = "This can not be an instance of boolean";
-        if (bool.equals("true"))
+        if (bool.equals("true")) {
             booleanSerde.serialize(ABoolean.TRUE, out);
-        else if (bool.equals("false"))
+        } else if (bool.equals("false")) {
             booleanSerde.serialize(ABoolean.FALSE, out);
-        else
+        } else {
             throw new ParseException(errorMessage);
+        }
     }
 
     private void parseInt8(String int8, DataOutput out) throws AsterixException, HyracksDataException {
@@ -880,24 +964,27 @@ public class ADMDataParser extends AbstractDataParser {
         byte value = 0;
         int offset = 0;
 
-        if (int8.charAt(offset) == '+')
+        if (int8.charAt(offset) == '+') {
             offset++;
-        else if (int8.charAt(offset) == '-') {
+        } else if (int8.charAt(offset) == '-') {
             offset++;
             positive = false;
         }
         for (; offset < int8.length(); offset++) {
-            if (int8.charAt(offset) >= '0' && int8.charAt(offset) <= '9')
+            if (int8.charAt(offset) >= '0' && int8.charAt(offset) <= '9') {
                 value = (byte) (value * 10 + int8.charAt(offset) - '0');
-            else if (int8.charAt(offset) == 'i' && int8.charAt(offset + 1) == '8' && offset + 2 == int8.length())
+            } else if (int8.charAt(offset) == 'i' && int8.charAt(offset + 1) == '8' && offset + 2 == int8.length()) {
                 break;
-            else
+            } else {
                 throw new ParseException(errorMessage);
+            }
         }
-        if (value < 0)
+        if (value < 0) {
             throw new ParseException(errorMessage);
-        if (value > 0 && !positive)
+        }
+        if (value > 0 && !positive) {
             value *= -1;
+        }
         aInt8.setValue(value);
         int8Serde.serialize(aInt8, out);
     }
@@ -908,25 +995,28 @@ public class ADMDataParser extends AbstractDataParser {
         short value = 0;
         int offset = 0;
 
-        if (int16.charAt(offset) == '+')
+        if (int16.charAt(offset) == '+') {
             offset++;
-        else if (int16.charAt(offset) == '-') {
+        } else if (int16.charAt(offset) == '-') {
             offset++;
             positive = false;
         }
         for (; offset < int16.length(); offset++) {
-            if (int16.charAt(offset) >= '0' && int16.charAt(offset) <= '9')
+            if (int16.charAt(offset) >= '0' && int16.charAt(offset) <= '9') {
                 value = (short) (value * 10 + int16.charAt(offset) - '0');
-            else if (int16.charAt(offset) == 'i' && int16.charAt(offset + 1) == '1' && int16.charAt(offset + 2) == '6'
-                    && offset + 3 == int16.length())
+            } else if (int16.charAt(offset) == 'i' && int16.charAt(offset + 1) == '1'
+                    && int16.charAt(offset + 2) == '6' && offset + 3 == int16.length()) {
                 break;
-            else
+            } else {
                 throw new ParseException(errorMessage);
+            }
         }
-        if (value < 0)
+        if (value < 0) {
             throw new ParseException(errorMessage);
-        if (value > 0 && !positive)
+        }
+        if (value > 0 && !positive) {
             value *= -1;
+        }
         aInt16.setValue(value);
         int16Serde.serialize(aInt16, out);
     }
@@ -937,25 +1027,28 @@ public class ADMDataParser extends AbstractDataParser {
         int value = 0;
         int offset = 0;
 
-        if (int32.charAt(offset) == '+')
+        if (int32.charAt(offset) == '+') {
             offset++;
-        else if (int32.charAt(offset) == '-') {
+        } else if (int32.charAt(offset) == '-') {
             offset++;
             positive = false;
         }
         for (; offset < int32.length(); offset++) {
-            if (int32.charAt(offset) >= '0' && int32.charAt(offset) <= '9')
+            if (int32.charAt(offset) >= '0' && int32.charAt(offset) <= '9') {
                 value = (value * 10 + int32.charAt(offset) - '0');
-            else if (int32.charAt(offset) == 'i' && int32.charAt(offset + 1) == '3' && int32.charAt(offset + 2) == '2'
-                    && offset + 3 == int32.length())
+            } else if (int32.charAt(offset) == 'i' && int32.charAt(offset + 1) == '3'
+                    && int32.charAt(offset + 2) == '2' && offset + 3 == int32.length()) {
                 break;
-            else
+            } else {
                 throw new ParseException(errorMessage);
+            }
         }
-        if (value < 0)
+        if (value < 0) {
             throw new ParseException(errorMessage);
-        if (value > 0 && !positive)
+        }
+        if (value > 0 && !positive) {
             value *= -1;
+        }
 
         aInt32.setValue(value);
         int32Serde.serialize(aInt32, out);
@@ -967,27 +1060,40 @@ public class ADMDataParser extends AbstractDataParser {
         long value = 0;
         int offset = 0;
 
-        if (int64.charAt(offset) == '+')
+        if (int64.charAt(offset) == '+') {
             offset++;
-        else if (int64.charAt(offset) == '-') {
+        } else if (int64.charAt(offset) == '-') {
             offset++;
             positive = false;
         }
         for (; offset < int64.length(); offset++) {
-            if (int64.charAt(offset) >= '0' && int64.charAt(offset) <= '9')
+            if (int64.charAt(offset) >= '0' && int64.charAt(offset) <= '9') {
                 value = (value * 10 + int64.charAt(offset) - '0');
-            else if (int64.charAt(offset) == 'i' && int64.charAt(offset + 1) == '6' && int64.charAt(offset + 2) == '4'
-                    && offset + 3 == int64.length())
+            } else if (int64.charAt(offset) == 'i' && int64.charAt(offset + 1) == '6'
+                    && int64.charAt(offset + 2) == '4' && offset + 3 == int64.length()) {
                 break;
-            else
+            } else {
                 throw new ParseException(errorMessage);
+            }
         }
-        if (value < 0)
+        if (value < 0) {
             throw new ParseException(errorMessage);
-        if (value > 0 && !positive)
+        }
+        if (value > 0 && !positive) {
             value *= -1;
+        }
 
         aInt64.setValue(value);
         int64Serde.serialize(aInt64, out);
+    }
+
+    /**
+     * Resets the pools before parsing a top-level record.
+     * In this way the elements in those pools can be re-used.
+     */
+    private void resetPools() {
+        listBuilderPool.reset();
+        recordBuilderPool.reset();
+        abvsBuilderPool.reset();
     }
 }

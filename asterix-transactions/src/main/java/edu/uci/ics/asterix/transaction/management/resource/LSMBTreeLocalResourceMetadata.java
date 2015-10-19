@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -62,15 +62,23 @@ public class LSMBTreeLocalResourceMetadata extends AbstractLSMLocalResourceMetad
             int partition) {
         FileReference file = new FileReference(new File(filePath));
         List<IVirtualBufferCache> virtualBufferCaches = runtimeContextProvider.getVirtualBufferCaches(datasetID);
-        LSMBTree lsmBTree = LSMBTreeUtils.createLSMTree(virtualBufferCaches, file, runtimeContextProvider
-                .getBufferCache(), runtimeContextProvider.getFileMapManager(), typeTraits, cmpFactories,
-                bloomFilterKeyFields, runtimeContextProvider.getBloomFilterFalsePositiveRate(), mergePolicyFactory
-                        .createMergePolicy(mergePolicyProperties),
+        LSMBTree lsmBTree = LSMBTreeUtils.createLSMTree(
+                virtualBufferCaches,
+                file,
+                runtimeContextProvider.getBufferCache(),
+                runtimeContextProvider.getFileMapManager(),
+                typeTraits,
+                cmpFactories,
+                bloomFilterKeyFields,
+                runtimeContextProvider.getBloomFilterFalsePositiveRate(),
+                mergePolicyFactory.createMergePolicy(mergePolicyProperties,
+                        runtimeContextProvider.getIndexLifecycleManager()),
                 isPrimary ? runtimeContextProvider.getLSMBTreeOperationTracker(datasetID) : new BaseOperationTracker(
-                        (DatasetLifecycleManager) runtimeContextProvider.getIndexLifecycleManager(), datasetID),
-                runtimeContextProvider.getLSMIOScheduler(), LSMBTreeIOOperationCallbackFactory.INSTANCE
-                        .createIOOperationCallback(), isPrimary, filterTypeTraits, filterCmpFactories, btreeFields,
-                filterFields);
+                        (DatasetLifecycleManager) runtimeContextProvider.getIndexLifecycleManager(), datasetID,
+                        ((DatasetLifecycleManager) runtimeContextProvider.getIndexLifecycleManager())
+                                .getDatasetInfo(datasetID)), runtimeContextProvider.getLSMIOScheduler(),
+                LSMBTreeIOOperationCallbackFactory.INSTANCE.createIOOperationCallback(), isPrimary, filterTypeTraits,
+                filterCmpFactories, btreeFields, filterFields, true);
         return lsmBTree;
     }
 

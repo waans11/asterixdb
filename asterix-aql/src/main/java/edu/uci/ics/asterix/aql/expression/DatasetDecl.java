@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,21 +21,30 @@ import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlVisitorWithVoidReturn;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
 
 public class DatasetDecl implements Statement {
     protected final Identifier name;
     protected final Identifier dataverse;
     protected final Identifier itemTypeName;
+    protected final Identifier nodegroupName;
+    protected final String compactionPolicy;
+    protected final Map<String, String> compactionPolicyProperties;
     protected final DatasetType datasetType;
     protected final IDatasetDetailsDecl datasetDetailsDecl;
     protected final Map<String, String> hints;
     protected final boolean ifNotExists;
 
-    public DatasetDecl(Identifier dataverse, Identifier name, Identifier itemTypeName, Map<String, String> hints,
+    public DatasetDecl(Identifier dataverse, Identifier name, Identifier itemTypeName, Identifier nodeGroupName,
+            String compactionPolicy, Map<String, String> compactionPolicyProperties, Map<String, String> hints,
             DatasetType datasetType, IDatasetDetailsDecl idd, boolean ifNotExists) {
         this.dataverse = dataverse;
         this.name = name;
         this.itemTypeName = itemTypeName;
+        this.nodegroupName = nodeGroupName == null ? new Identifier(MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME)
+                : nodeGroupName;
+        this.compactionPolicy = compactionPolicy;
+        this.compactionPolicyProperties = compactionPolicyProperties;
         this.hints = hints;
         this.ifNotExists = ifNotExists;
         this.datasetType = datasetType;
@@ -56,6 +65,18 @@ public class DatasetDecl implements Statement {
 
     public Identifier getItemTypeName() {
         return itemTypeName;
+    }
+
+    public Identifier getNodegroupName() {
+        return nodegroupName;
+    }
+
+    public String getCompactionPolicy() {
+        return compactionPolicy;
+    }
+
+    public Map<String, String> getCompactionPolicyProperties() {
+        return compactionPolicyProperties;
     }
 
     public Map<String, String> getHints() {

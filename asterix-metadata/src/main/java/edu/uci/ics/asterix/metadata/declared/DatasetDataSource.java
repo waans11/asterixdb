@@ -1,3 +1,17 @@
+/*
+ * Copyright 2009-2013 by The Regents of the University of California
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * you may obtain a copy of the License from
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package edu.uci.ics.asterix.metadata.declared;
 
 import java.io.IOException;
@@ -10,7 +24,9 @@ import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.DefaultNodeGroupDomain;
+import edu.uci.ics.hyracks.algebricks.core.algebra.properties.ILocalStructuralProperty;
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.INodeDomain;
 
 public class DatasetDataSource extends AqlDataSource {
@@ -56,16 +72,16 @@ public class DatasetDataSource extends AqlDataSource {
         return dataset;
     }
 
-    private void initInternalDataset(IAType itemType) throws IOException {
-        List<String> partitioningKeys = DatasetUtils.getPartitioningKeys(dataset);
+    private void initInternalDataset(IAType itemType) throws IOException, AlgebricksException {
+        List<List<String>> partitioningKeys = DatasetUtils.getPartitioningKeys(dataset);
         ARecordType recordType = (ARecordType) itemType;
         int n = partitioningKeys.size();
         schemaTypes = new IAType[n + 1];
         for (int i = 0; i < n; i++) {
-            schemaTypes[i] = recordType.getFieldType(partitioningKeys.get(i));
+            schemaTypes[i] = recordType.getSubFieldType(partitioningKeys.get(i));
         }
         schemaTypes[n] = itemType;
-        domain = new DefaultNodeGroupDomain(DatasetUtils.getNodegroupName(dataset));
+        domain = new DefaultNodeGroupDomain(dataset.getNodeGroupName());
     }
 
     private void initExternalDataset(IAType itemType) {
@@ -93,6 +109,12 @@ public class DatasetDataSource extends AqlDataSource {
     @Override
     public INodeDomain getDomain() {
         return domain;
+    }
+
+    @Override
+    public void computeLocalStructuralProperties(List<ILocalStructuralProperty> localProps,
+            List<LogicalVariable> variables) {
+        // do nothing
     }
 
 }

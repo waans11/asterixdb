@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -46,15 +46,13 @@ public class Substring2TypeComputer implements IResultTypeComputer {
         }
 
         ATypeTag tag0, tag1;
-        if (t0.getTypeTag() == ATypeTag.UNION && NonTaggedFormatUtil.isOptionalField((AUnionType) t0))
-            tag0 = ((AUnionType) t0).getUnionList().get(NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST)
-                    .getTypeTag();
+        if (NonTaggedFormatUtil.isOptional(t0))
+            tag0 = ((AUnionType) t0).getNullableType().getTypeTag();
         else
             tag0 = t0.getTypeTag();
 
-        if (t1.getTypeTag() == ATypeTag.UNION && NonTaggedFormatUtil.isOptionalField((AUnionType) t1))
-            tag1 = ((AUnionType) t1).getUnionList().get(NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST)
-                    .getTypeTag();
+        if (NonTaggedFormatUtil.isOptional(t1))
+            tag1 = ((AUnionType) t1).getNullableType().getTypeTag();
         else
             tag1 = t1.getTypeTag();
 

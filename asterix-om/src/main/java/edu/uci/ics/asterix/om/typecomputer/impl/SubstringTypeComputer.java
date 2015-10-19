@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -48,23 +48,23 @@ public class SubstringTypeComputer implements IResultTypeComputer {
         }
 
         ATypeTag tag0, tag1, tag2;
-        if (t0.getTypeTag() == ATypeTag.UNION && NonTaggedFormatUtil.isOptionalField((AUnionType) t0))
-            tag0 = ((AUnionType) t0).getUnionList().get(NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST)
-                    .getTypeTag();
+        if (NonTaggedFormatUtil.isOptional(t0))
+            tag0 = ((AUnionType) t0).getNullableType().getTypeTag();
         else
             tag0 = t0.getTypeTag();
 
-        if (t1.getTypeTag() == ATypeTag.UNION && NonTaggedFormatUtil.isOptionalField((AUnionType) t1))
-            tag1 = ((AUnionType) t1).getUnionList().get(NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST)
-                    .getTypeTag();
+        if (NonTaggedFormatUtil.isOptional(t1))
+            tag1 = ((AUnionType) t1).getNullableType().getTypeTag();
         else
             tag1 = t1.getTypeTag();
 
-        if (t2.getTypeTag() == ATypeTag.UNION && NonTaggedFormatUtil.isOptionalField((AUnionType) t2))
-            tag2 = ((AUnionType) t2).getUnionList().get(NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST)
-                    .getTypeTag();
+        if (NonTaggedFormatUtil.isOptional(t2))
+            tag2 = ((AUnionType) t2).getNullableType().getTypeTag();
         else
             tag2 = t2.getTypeTag();
+
+        if (tag0 == ATypeTag.ANY || tag1 == ATypeTag.ANY || tag2 == ATypeTag.ANY)
+            return BuiltinType.ANY;
 
         if (tag0 != ATypeTag.NULL && tag0 != ATypeTag.STRING) {
             throw new AlgebricksException("First argument should be String Type.");

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,6 +19,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.io.Serializable;
 
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ABinarySerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ABooleanSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ACircleSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADateSerializerDeserializer;
@@ -44,9 +45,11 @@ import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ARectangleSerializerDes
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AStringSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ATimeSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AUUIDSerializerDeserializer;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AUUIDStringSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AUnorderedListSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AYearMonthDurationSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.SerializerDeserializerUtil;
+import edu.uci.ics.asterix.om.base.ANull;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
@@ -57,6 +60,7 @@ import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.data.ISerializerDeserializerProvider;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.dataflow.common.data.marshalling.ShortSerializerDeserializer;
 
 public class AqlSerializerDeserializerProvider implements ISerializerDeserializerProvider, Serializable {
 
@@ -126,6 +130,9 @@ public class AqlSerializerDeserializerProvider implements ISerializerDeserialize
             case STRING: {
                 return AStringSerializerDeserializer.INSTANCE;
             }
+            case BINARY: {
+                return ABinarySerializerDeserializer.INSTANCE;
+            }
             case TIME: {
                 return ATimeSerializerDeserializer.INSTANCE;
             }
@@ -165,6 +172,12 @@ public class AqlSerializerDeserializerProvider implements ISerializerDeserialize
             case UUID: {
                 return AUUIDSerializerDeserializer.INSTANCE;
             }
+            case UUID_STRING: {
+                return AUUIDStringSerializerDeserializer.INSTANCE;
+            }
+            case SHORTWITHOUTTYPEINFO: {
+                return ShortSerializerDeserializer.INSTANCE;
+            }
             default: {
                 throw new NotImplementedException("No serializer/deserializer implemented for type "
                         + aqlType.getTypeTag() + " .");
@@ -181,8 +194,10 @@ public class AqlSerializerDeserializerProvider implements ISerializerDeserialize
             @Override
             public IAObject deserialize(DataInput in) throws HyracksDataException {
                 try {
-                    //deserialize the tag to move the  input cursor forward 
-                    SerializerDeserializerUtil.deserializeTag(in);
+                    //deserialize the tag (move input cursor forward) and check if it's not NULL tag
+                    if (SerializerDeserializerUtil.deserializeTag(in) == ATypeTag.NULL) {
+                        return ANull.NULL;
+                    }
                 } catch (IOException e) {
                     throw new HyracksDataException(e);
                 }

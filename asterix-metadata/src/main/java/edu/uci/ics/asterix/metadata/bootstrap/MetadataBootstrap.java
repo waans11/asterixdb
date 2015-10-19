@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -57,9 +57,9 @@ import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails.FileStructur
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails.PartitioningStrategy;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
+import edu.uci.ics.asterix.metadata.external.IAdapterFactory;
 import edu.uci.ics.asterix.metadata.feeds.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.feeds.BuiltinFeedPolicies;
-import edu.uci.ics.asterix.metadata.feeds.IAdapterFactory;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.runtime.formats.NonTaggedDataFormat;
@@ -123,9 +123,8 @@ public class MetadataBootstrap {
                 MetadataPrimaryIndexes.INDEX_DATASET, MetadataPrimaryIndexes.NODE_DATASET,
                 MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET,
                 MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET, MetadataPrimaryIndexes.FEED_DATASET,
-                MetadataPrimaryIndexes.FEED_ACTIVITY_DATASET, MetadataPrimaryIndexes.FEED_POLICY_DATASET,
-                MetadataPrimaryIndexes.LIBRARY_DATASET, MetadataPrimaryIndexes.COMPACTION_POLICY_DATASET,
-                MetadataPrimaryIndexes.EXTERNAL_FILE_DATASET };
+                MetadataPrimaryIndexes.FEED_POLICY_DATASET, MetadataPrimaryIndexes.LIBRARY_DATASET,
+                MetadataPrimaryIndexes.COMPACTION_POLICY_DATASET, MetadataPrimaryIndexes.EXTERNAL_FILE_DATASET };
 
         secondaryIndexes = new IMetadataIndex[] { MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX,
@@ -237,12 +236,12 @@ public class MetadataBootstrap {
         for (int i = 0; i < primaryIndexes.length; i++) {
             IDatasetDetails id = new InternalDatasetDetails(FileStructure.BTREE, PartitioningStrategy.HASH,
                     primaryIndexes[i].getPartitioningExpr(), primaryIndexes[i].getPartitioningExpr(),
-                    primaryIndexes[i].getNodeGroupName(), false, GlobalConfig.DEFAULT_COMPACTION_POLICY_NAME,
-                    GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES, null);
+                    primaryIndexes[i].getPartitioningExprType(), false, null, false);
             MetadataManager.INSTANCE.addDataset(mdTxnCtx, new Dataset(primaryIndexes[i].getDataverseName(),
                     primaryIndexes[i].getIndexedDatasetName(), primaryIndexes[i].getPayloadRecordType().getTypeName(),
-                    id, new HashMap<String, String>(), DatasetType.INTERNAL, primaryIndexes[i].getDatasetId().getId(),
-                    IMetadataEntity.PENDING_NO_OP));
+                    primaryIndexes[i].getNodeGroupName(), GlobalConfig.DEFAULT_COMPACTION_POLICY_NAME,
+                    GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES, id, new HashMap<String, String>(),
+                    DatasetType.INTERNAL, primaryIndexes[i].getDatasetId().getId(), IMetadataEntity.PENDING_NO_OP));
         }
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Finished inserting initial datasets.");
@@ -279,7 +278,8 @@ public class MetadataBootstrap {
         for (int i = 0; i < secondaryIndexes.length; i++) {
             MetadataManager.INSTANCE.addIndex(mdTxnCtx, new Index(secondaryIndexes[i].getDataverseName(),
                     secondaryIndexes[i].getIndexedDatasetName(), secondaryIndexes[i].getIndexName(), IndexType.BTREE,
-                    secondaryIndexes[i].getPartitioningExpr(), false, IMetadataEntity.PENDING_NO_OP));
+                    secondaryIndexes[i].getPartitioningExpr(), secondaryIndexes[i].getPartitioningExprType(), false,
+                    false, IMetadataEntity.PENDING_NO_OP));
         }
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Finished inserting initial indexes.");
@@ -321,6 +321,7 @@ public class MetadataBootstrap {
                 "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory",
                 "edu.uci.ics.asterix.external.adapter.factory.HiveAdapterFactory",
                 "edu.uci.ics.asterix.external.adapter.factory.PullBasedTwitterAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.PushBasedTwitterAdapterFactory",
                 "edu.uci.ics.asterix.external.adapter.factory.RSSFeedAdapterFactory",
                 "edu.uci.ics.asterix.external.adapter.factory.CNNFeedAdapterFactory",
                 "edu.uci.ics.asterix.tools.external.data.RateControlledFileSystemBasedAdapterFactory",
@@ -349,7 +350,9 @@ public class MetadataBootstrap {
     private static void insertInitialCompactionPolicies(MetadataTransactionContext mdTxnCtx) throws Exception {
         String[] builtInCompactionPolicyClassNames = new String[] {
                 "edu.uci.ics.hyracks.storage.am.lsm.common.impls.ConstantMergePolicyFactory",
-                "edu.uci.ics.hyracks.storage.am.lsm.common.impls.PrefixMergePolicyFactory", };
+                "edu.uci.ics.hyracks.storage.am.lsm.common.impls.PrefixMergePolicyFactory",
+                "edu.uci.ics.hyracks.storage.am.lsm.common.impls.NoMergePolicyFactory",
+                "edu.uci.ics.asterix.common.context.CorrelatedPrefixMergePolicyFactory" };
         CompactionPolicy compactionPolicy;
         for (String policyClassName : builtInCompactionPolicyClassNames) {
             compactionPolicy = getCompactionPolicyEntity(policyClassName);
@@ -385,7 +388,8 @@ public class MetadataBootstrap {
         long resourceID = -1;
         ILSMOperationTracker opTracker = index.isPrimaryIndex() ? runtimeContext.getLSMBTreeOperationTracker(index
                 .getDatasetId().getId()) : new BaseOperationTracker((DatasetLifecycleManager) indexLifecycleManager,
-                index.getDatasetId().getId());
+                index.getDatasetId().getId(), ((DatasetLifecycleManager) indexLifecycleManager).getDatasetInfo(index
+                        .getDatasetId().getId()));
         final String path = file.getFile().getPath();
         if (create) {
             lsmBtree = LSMBTreeUtils.createLSMTree(
@@ -398,10 +402,10 @@ public class MetadataBootstrap {
                     bloomFilterKeyFields,
                     runtimeContext.getBloomFilterFalsePositiveRate(),
                     runtimeContext.getMetadataMergePolicyFactory().createMergePolicy(
-                            GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES), opTracker,
+                            GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES, indexLifecycleManager), opTracker,
                     runtimeContext.getLSMIOScheduler(),
                     LSMBTreeIOOperationCallbackFactory.INSTANCE.createIOOperationCallback(), index.isPrimaryIndex(),
-                    null, null, null, null);
+                    null, null, null, null, true);
             lsmBtree.create();
             resourceID = runtimeContext.getResourceIdFactory().createId();
             ILocalResourceMetadata localResourceMetadata = new LSMBTreeLocalResourceMetadata(typeTraits,
@@ -418,12 +422,19 @@ public class MetadataBootstrap {
             resourceID = resource.getResourceId();
             lsmBtree = (LSMBTree) indexLifecycleManager.getIndex(resourceID);
             if (lsmBtree == null) {
-                lsmBtree = LSMBTreeUtils.createLSMTree(virtualBufferCaches, file, bufferCache, fileMapProvider,
-                        typeTraits, comparatorFactories, bloomFilterKeyFields, runtimeContext
-                                .getBloomFilterFalsePositiveRate(), runtimeContext.getMetadataMergePolicyFactory()
-                                .createMergePolicy(GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES), opTracker,
+                lsmBtree = LSMBTreeUtils.createLSMTree(
+                        virtualBufferCaches,
+                        file,
+                        bufferCache,
+                        fileMapProvider,
+                        typeTraits,
+                        comparatorFactories,
+                        bloomFilterKeyFields,
+                        runtimeContext.getBloomFilterFalsePositiveRate(),
+                        runtimeContext.getMetadataMergePolicyFactory().createMergePolicy(
+                                GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES, indexLifecycleManager), opTracker,
                         runtimeContext.getLSMIOScheduler(), LSMBTreeIOOperationCallbackFactory.INSTANCE
-                                .createIOOperationCallback(), index.isPrimaryIndex(), null, null, null, null);
+                                .createIOOperationCallback(), index.isPrimaryIndex(), null, null, null, null, true);
                 indexLifecycleManager.register(resourceID, lsmBtree);
             }
         }

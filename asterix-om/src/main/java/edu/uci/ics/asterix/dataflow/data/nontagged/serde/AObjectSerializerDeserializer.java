@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,6 +18,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
+import edu.uci.ics.asterix.om.base.ABinary;
 import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.ACircle;
 import edu.uci.ics.asterix.om.base.ADate;
@@ -87,6 +88,9 @@ public class AObjectSerializerDeserializer implements ISerializerDeserializer<IA
             }
             case STRING: {
                 return AStringSerializerDeserializer.INSTANCE.deserialize(in);
+            }
+            case BINARY: {
+                return ABinarySerializerDeserializer.INSTANCE.deserialize(in);
             }
             case DATE: {
                 return ADateSerializerDeserializer.INSTANCE.deserialize(in);
@@ -190,6 +194,9 @@ public class AObjectSerializerDeserializer implements ISerializerDeserializer<IA
             case STRING: {
                 AStringSerializerDeserializer.INSTANCE.serialize((AString) instance, out);
                 break;
+            }
+            case BINARY: {
+                ABinarySerializerDeserializer.INSTANCE.serialize((ABinary) instance, out);
             }
             case DATE: {
                 ADateSerializerDeserializer.INSTANCE.serialize((ADate) instance, out);

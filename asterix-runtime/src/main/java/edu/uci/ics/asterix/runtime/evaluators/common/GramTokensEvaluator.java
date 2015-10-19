@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,14 +20,15 @@ import java.io.IOException;
 import edu.uci.ics.asterix.builders.OrderedListBuilder;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
+import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.primitive.BooleanPointable;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.BooleanSerializerDeserializer;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 import edu.uci.ics.hyracks.storage.am.lsm.invertedindex.tokenizers.IBinaryTokenizer;
 import edu.uci.ics.hyracks.storage.am.lsm.invertedindex.tokenizers.NGramUTF8StringBinaryTokenizer;
 
@@ -66,9 +67,16 @@ public class GramTokensEvaluator implements ICopyEvaluator {
         prePostEval.evaluate(tuple);
 
         byte[] bytes = argOut.getByteArray();
-        int gramLength = IntegerSerializerDeserializer.getInt(bytes, gramLengthOff + typeIndicatorSize);
+        int gramLength = 0;
+
+        try {
+            gramLength = ATypeHierarchy.getIntegerValue(bytes, gramLengthOff);
+        } catch (HyracksDataException e1) {
+            throw new AlgebricksException(e1);
+        }
+
         tokenizer.setGramlength(gramLength);
-        boolean prePost = BooleanSerializerDeserializer.getBoolean(bytes, prePostOff + typeIndicatorSize);
+        boolean prePost = BooleanPointable.getBoolean(bytes, prePostOff + typeIndicatorSize);
         tokenizer.setPrePost(prePost);
         tokenizer.reset(bytes, 0, gramLengthOff);
 

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,33 +20,42 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.http.ParseException;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import com.sun.el.parser.ParseException;
-
+import edu.uci.ics.asterix.api.common.SessionConfig;
+import edu.uci.ics.asterix.api.common.SessionConfig.OutputFormat;
 import edu.uci.ics.asterix.api.http.servlet.APIServlet;
+import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.api.comm.IFrame;
 import edu.uci.ics.hyracks.api.comm.IFrameTupleAccessor;
+import edu.uci.ics.hyracks.api.comm.VSizeFrame;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.control.nc.resources.memory.FrameManager;
 import edu.uci.ics.hyracks.dataflow.common.comm.util.ByteBufferInputStream;
 
 public class ResultUtils {
+    private static final Charset UTF_8 = Charset.forName("UTF-8");
+
     static Map<Character, String> HTML_ENTITIES = new HashMap<Character, String>();
-    
+
     static {
         HTML_ENTITIES.put('"', "&quot;");
         HTML_ENTITIES.put('&', "&amp;");
         HTML_ENTITIES.put('<', "&lt;");
         HTML_ENTITIES.put('>', "&gt;");
     }
-    
-    public static String escapeHTML(String s) {        
+
+    public static String escapeHTML(String s) {
         for (Character c : HTML_ENTITIES.keySet()) {
             if (s.indexOf(c) >= 0) {
                 s = s.replace(c.toString(), HTML_ENTITIES.get(c));
@@ -55,26 +64,116 @@ public class ResultUtils {
         return s;
     }
 
-    public static void getJSONFromBuffer(ByteBuffer buffer, IFrameTupleAccessor fta, JSONArray resultRecords)
+    public static void displayCSVHeader(ARecordType recordType, SessionConfig conf) {
+        // If HTML-ifying, we have to output this here before the header -
+        // pretty ugly
+        if (conf.is(SessionConfig.FORMAT_HTML)) {
+            conf.out().println("<h4>Results:</h4>");
+            conf.out().println("<pre>");
+        }
+
+        String[] fieldNames = recordType.getFieldNames();
+        boolean notfirst = false;
+        for (String name : fieldNames) {
+            if (notfirst) {
+                conf.out().print(',');
+            }
+            notfirst = true;
+            conf.out().print('"');
+            conf.out().print(name.replace("\"", "\"\""));
+            conf.out().print('"');
+        }
+        conf.out().print("\r\n");
+    }
+
+    public static FrameManager resultDisplayFrameMgr = new FrameManager(ResultReader.FRAME_SIZE);
+
+    public static void displayResults(ResultReader resultReader, SessionConfig conf)
             throws HyracksDataException {
+        IFrameTupleAccessor fta = resultReader.getFrameTupleAccessor();
+
+        IFrame frame = new VSizeFrame(resultDisplayFrameMgr);
+        int bytesRead = resultReader.read(frame);
         ByteBufferInputStream bbis = new ByteBufferInputStream();
 
-        try {
-            fta.reset(buffer);
-            for (int tIndex = 0; tIndex < fta.getTupleCount(); tIndex++) {
-                int start = fta.getTupleStartOffset(tIndex);
-                int length = fta.getTupleEndOffset(tIndex) - start;
-                bbis.setByteBuffer(buffer, start);
-                byte[] recordBytes = new byte[length];
-                bbis.read(recordBytes, 0, length);
-                resultRecords.put(new String(recordBytes, 0, length));
-            }
-        } finally {
-            try {
-                bbis.close();
-            } catch (IOException e) {
-                throw new HyracksDataException(e);
-            }
+        // Whether we need to separate top-level ADM instances with commas
+        boolean need_commas = true;
+        // Whether this is the first instance being output
+        boolean notfirst = false;
+
+        // If we're outputting CSV with a header, the HTML header was already
+        // output by displayCSVHeader(), so skip it here
+        if (conf.is(SessionConfig.FORMAT_HTML) &&
+            ! (conf.fmt() == OutputFormat.CSV && conf.is(SessionConfig.FORMAT_CSV_HEADER))) {
+            conf.out().println("<h4>Results:</h4>");
+            conf.out().println("<pre>");
+        }
+
+        switch (conf.fmt()) {
+            case CSV:
+                need_commas = false;
+                break;
+            case JSON:
+            case ADM:
+                // Conveniently, JSON and ADM have the same syntax for an
+                // "ordered list", and our representation of the result of a
+                // statement is an ordered list of instances.
+                conf.out().print("[ ");
+                break;
+        }
+
+        if (bytesRead > 0) {
+            do {
+                try {
+                    fta.reset(frame.getBuffer());
+                    int last = fta.getTupleCount();
+                    String result;
+                    for (int tIndex = 0; tIndex < last; tIndex++) {
+                        int start = fta.getTupleStartOffset(tIndex);
+                        int length = fta.getTupleEndOffset(tIndex) - start;
+                        bbis.setByteBuffer(frame.getBuffer(), start);
+                        byte[] recordBytes = new byte[length];
+                        int numread = bbis.read(recordBytes, 0, length);
+                        if (conf.fmt() == OutputFormat.CSV) {
+                            if ( (numread > 0) && (recordBytes[numread-1] == '\n') ) {
+                                numread--;
+                            }
+                        }
+                        result = new String(recordBytes, 0, numread, UTF_8);
+                        if (need_commas && notfirst) {
+                            conf.out().print(", ");
+                        }
+                        notfirst = true;
+                        conf.out().print(result);
+                        if (conf.fmt() == OutputFormat.CSV) {
+                            conf.out().print("\r\n");
+                        }
+                    }
+                    frame.getBuffer().clear();
+                } finally {
+                    try {
+                        bbis.close();
+                    } catch (IOException e) {
+                        throw new HyracksDataException(e);
+                    }
+                }
+            } while (resultReader.read(frame) > 0);
+        }
+
+        conf.out().flush();
+
+        switch (conf.fmt()) {
+            case JSON:
+            case ADM:
+                conf.out().println(" ]");
+                break;
+            case CSV:
+                // Nothing to do
+                break;
+        }
+
+        if (conf.is(SessionConfig.FORMAT_HTML)) {
+            conf.out().println("</pre>");
         }
     }
 
@@ -96,17 +195,6 @@ public class ResultUtils {
         return errorResp;
     }
 
-    public static void prettyPrintHTML(PrintWriter out, JSONObject jsonResultObj) {
-        try {
-            JSONArray resultsArray = jsonResultObj.getJSONArray("results");
-            for (int i = 0; i < resultsArray.length(); i++) {
-                out.print(resultsArray.getString(i));
-            }
-        } catch (JSONException e) {
-            // TODO(madhusudancs): Figure out what to do when JSONException occurs while building the results.
-        }
-    }
-
     public static void webUIErrorHandler(PrintWriter out, Exception e) {
         String errorTemplate = readTemplateFile("/webui/errortemplate.html", "%s\n%s\n%s");
 
@@ -114,7 +202,7 @@ public class ResultUtils {
                 escapeHTML(extractErrorSummary(e)), escapeHTML(extractFullStackTrace(e)));
         out.println(errorOutput);
     }
-    
+
     public static void webUIParseExceptionHandler(PrintWriter out, Throwable e, String query) {
         String errorTemplate = readTemplateFile("/webui/errortemplate_message.html", "<pre class=\"error\">%s\n</pre>");
 
@@ -142,17 +230,20 @@ public class ResultUtils {
         String message = e.getMessage();
         message = message.replace("<", "&lt");
         message = message.replace(">", "&gt");
-        errorMessage.append("SyntaxError:" + message + "\n");
+        errorMessage.append("SyntaxError: " + message + "\n");
         int pos = message.indexOf("line");
         if (pos > 0) {
-            int columnPos = message.indexOf(",", pos + 1 + "line".length());
-            int lineNo = Integer.parseInt(message.substring(pos + "line".length() + 1, columnPos));
-            String[] lines = query.split("\n");
-            if (lineNo >= lines.length) {
-                errorMessage.append("===> &ltBLANK LINE&gt \n");
-            } else {
-                String line = lines[lineNo - 1];
-                errorMessage.append("==> " + line);
+            Pattern p = Pattern.compile("\\d+");
+            Matcher m = p.matcher(message);
+            if (m.find(pos)) {
+                int lineNo = Integer.parseInt(message.substring(m.start(), m.end()));
+                String[] lines = query.split("\n");
+                if (lineNo > lines.length) {
+                    errorMessage.append("===> &ltBLANK LINE&gt \n");
+                } else {
+                    String line = lines[lineNo - 1];
+                    errorMessage.append("==> " + line);
+                }
             }
         }
         return errorMessage.toString();
@@ -169,31 +260,28 @@ public class ResultUtils {
 
     /**
      * Extract the message in the root cause of the stack trace:
-     * 
+     *
      * @param e
      * @return error message string.
      */
     private static String extractErrorMessage(Throwable e) {
         Throwable cause = getRootCause(e);
-
-        String exceptionClassName = "";
-        String[] messageSplits = cause.toString().split(":");
-        if (messageSplits.length > 1) {
-            String fullyQualifiedExceptionClassName = messageSplits[0];
-            System.out.println(fullyQualifiedExceptionClassName);
-            String[] hierarchySplits = fullyQualifiedExceptionClassName.split("\\.");
-            if (hierarchySplits.length > 0) {
-                exceptionClassName = hierarchySplits[hierarchySplits.length - 1];
-            }
+        String fullyQualifiedExceptionClassName = cause.getClass().getName();
+        String[] hierarchySplits = fullyQualifiedExceptionClassName.split("\\.");
+        //try returning the class without package qualification
+        String exceptionClassName = hierarchySplits[hierarchySplits.length - 1];
+        String localizedMessage = cause.getLocalizedMessage();
+        if(localizedMessage == null){
+            localizedMessage = "Internal error. Please check instance logs for further details.";
         }
-        return cause.getLocalizedMessage() + " [" + exceptionClassName + "]";
+        return localizedMessage + " [" + exceptionClassName + "]";
     }
 
     /**
      * Extract the meaningful part of a stack trace:
      * a. the causes in the stack trace hierarchy
      * b. the top exception for each cause
-     * 
+     *
      * @param e
      * @return the contacted message containing a and b.
      */
@@ -211,7 +299,7 @@ public class ResultUtils {
 
     /**
      * Extract the full stack trace:
-     * 
+     *
      * @param e
      * @return the string containing the full stack trace of the error.
      */
@@ -225,7 +313,7 @@ public class ResultUtils {
     /**
      * Read the template file which is stored as a resource and return its content. If the file does not exist or is
      * not readable return the default template string.
-     * 
+     *
      * @param path
      *            The path to the resource template file
      * @param defaultTemplate
