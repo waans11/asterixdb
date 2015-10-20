@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -67,12 +67,11 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
                 IAType t = recordType.getFieldTypes()[i];
                 IAType t2;
                 if (t.getTypeTag() == ATypeTag.UNION) {
-                    if (NonTaggedFormatUtil.isOptionalField((AUnionType) t)) {
-                        t2 = ((AUnionType) recordType.getFieldTypes()[i]).getUnionList().get(
-                                NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST);
+                    if (((AUnionType) t).isNullableType()) {
+                        t2 = ((AUnionType) recordType.getFieldTypes()[i]).getNullableType();
                         serializers[i] = AqlSerializerDeserializerProvider.INSTANCE
-                                .getSerializerDeserializer(((AUnionType) recordType.getFieldTypes()[i]).getUnionList()
-                                        .get(NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST));
+                                .getSerializerDeserializer(((AUnionType) recordType.getFieldTypes()[i])
+                                        .getNullableType());
                     } else {
                         // union .. the general case
                         throw new NotImplementedException();
@@ -102,7 +101,6 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
                 } else
                     isExpanded = false;
             }
-
             IAObject[] closedFields = null;
             if (numberOfSchemaFields > 0) {
                 in.readInt(); // read number of closed fields.
@@ -124,7 +122,9 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
                     }
                     closedFields[fieldId] = (IAObject) deserializers[fieldId].deserialize(in);
                 }
+
             }
+
             if (isExpanded) {
                 int numberOfOpenFields = in.readInt();
                 String[] fieldNames = new String[numberOfOpenFields];
@@ -182,14 +182,23 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
             fieldNames[i] = recType2.getFieldNames()[j];
             fieldTypes[i] = recType2.getFieldTypes()[j];
         }
-        return new ARecordType(null, fieldNames, fieldTypes, true);
+        try {
+            return new ARecordType(null, fieldNames, fieldTypes, true);
+        } catch (HyracksDataException e) {
+            throw new AsterixException(e);
+        }
+    }
+
+    @Override
+    public void serialize(ARecord instance, DataOutput out) throws HyracksDataException {
+        this.serialize(instance, out, false);
     }
 
     @SuppressWarnings("unchecked")
-    @Override
-    public void serialize(ARecord instance, DataOutput out) throws HyracksDataException {
+    public void serialize(ARecord instance, DataOutput out, boolean writeTypeTag) throws HyracksDataException {
         IARecordBuilder recordBuilder = new RecordBuilder();
         ArrayBackedValueStorage fieldValue = new ArrayBackedValueStorage();
+
         recordBuilder.reset(recordType);
         recordBuilder.init();
         if (recordType != null) {
@@ -199,7 +208,7 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
                 recordBuilder.addField(i, fieldValue);
             }
             try {
-                recordBuilder.write(out, false);
+                recordBuilder.write(out, writeTypeTag);
             } catch (IOException | AsterixException e) {
                 throw new HyracksDataException(e);
             }
@@ -212,57 +221,64 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
         return AInt32SerializerDeserializer.getInt(serRecord, offset);
     }
 
-    public static final int getFieldOffsetById(byte[] serRecord, int fieldId, int nullBitmapSize, boolean isOpen) {
-
+    public static final int getFieldOffsetById(byte[] serRecord, int offset, int fieldId, int nullBitmapSize,
+            boolean isOpen) {
         if (isOpen) {
-            if (serRecord[0] == ATypeTag.RECORD.serialize()) {
+            if (serRecord[0 + offset] == ATypeTag.RECORD.serialize()) {
                 // 5 is the index of the byte that determines whether the record
                 // is expanded or not, i.e. it has an open part.
-                if (serRecord[5] == 1) { // true
+                if (serRecord[5 + offset] == 1) { // true
                     if (nullBitmapSize > 0) {
                         // 14 = tag (1) + record Size (4) + isExpanded (1) +
                         // offset of openPart (4) + number of closed fields (4)
-                        if ((serRecord[14 + fieldId / 8] & (1 << (7 - (fieldId % 8)))) == 0)
+                        if ((serRecord[14 + offset + fieldId / 8] & (1 << (7 - (fieldId % 8)))) == 0)
                             // the field value is null
                             return 0;
                     }
-                    return AInt32SerializerDeserializer.getInt(serRecord, (int) (14 + nullBitmapSize + (4 * fieldId)));
+                    return AInt32SerializerDeserializer.getInt(serRecord,
+                            (int) (14 + offset + nullBitmapSize + (4 * fieldId)));
                 } else {
                     if (nullBitmapSize > 0) {
                         // 9 = tag (1) + record Size (4) + isExpanded (1) +
                         // number of closed fields (4)
-                        if ((serRecord[10 + fieldId / 8] & (1 << (7 - (fieldId % 8)))) == 0)
+                        if ((serRecord[10 + offset + fieldId / 8] & (1 << (7 - (fieldId % 8)))) == 0)
                             // the field value is null
                             return 0;
                     }
-                    return AInt32SerializerDeserializer.getInt(serRecord, (int) (10 + nullBitmapSize + (4 * fieldId)));
+                    return AInt32SerializerDeserializer.getInt(serRecord,
+                            (int) (10 + offset + nullBitmapSize + (4 * fieldId)));
                 }
             } else
                 return -1;
         } else {
-            if (serRecord[0] == ATypeTag.RECORD.serialize()) {
+            if (serRecord[0 + offset] == ATypeTag.RECORD.serialize()) {
                 if (nullBitmapSize > 0)
                     // 9 = tag (1) + record Size (4) + number of closed fields
                     // (4)
-                    if ((serRecord[9 + fieldId / 8] & (1 << (7 - (fieldId % 8)))) == 0)
+                    if ((serRecord[9 + offset + fieldId / 8] & (1 << (7 - (fieldId % 8)))) == 0)
                         // the field value is null
                         return 0;
-                return AInt32SerializerDeserializer.getInt(serRecord, (int) (9 + nullBitmapSize + (4 * fieldId)));
+                return AInt32SerializerDeserializer.getInt(serRecord,
+                        (int) (9 + offset + nullBitmapSize + (4 * fieldId)));
             } else
                 return -1;
         }
     }
 
-    public static final int getFieldOffsetByName(byte[] serRecord, byte[] fieldName) {
+    public static final int getFieldOffsetById(byte[] serRecord, int fieldId, int nullBitmapSize, boolean isOpen) {
+        return getFieldOffsetById(serRecord, 0, fieldId, nullBitmapSize, isOpen);
+    }
+
+    public static final int getFieldOffsetByName(byte[] serRecord, byte[] fieldName) throws HyracksDataException {
 
         int openPartOffset = 0;
         if (serRecord[0] == ATypeTag.RECORD.serialize())
             // 5 is the index of the byte that determines whether the record is
             // expanded or not, i.e. it has an open part.
-            if (serRecord[5] == 1) // true
+            if (serRecord[5] == 1) { // true
                 // 6 is the index of the first byte of the openPartOffset value.
                 openPartOffset = AInt32SerializerDeserializer.getInt(serRecord, 6);
-            else
+            } else
                 return -1; // this record does not have an open part
         else
             return -1; // this record does not have an open part

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,18 +24,19 @@ import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
+import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.primitive.BooleanPointable;
 import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.BooleanSerializerDeserializer;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
 /**
  * Checks whether a string with an edit distance threshold can be filtered with a lower bounding on number of common grams.
@@ -107,7 +108,7 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
             }
             int utf8Length = UTF8StringPointable.getUTFLength(argBuf.getByteArray(), 1);
             int pos = 3;
-            int strLen = 0;
+            long strLen = 0;
             int end = pos + utf8Length;
             while (pos < end) {
                 strLen++;
@@ -118,21 +119,26 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
             argBuf.reset();
             edThreshEval.evaluate(tuple);
             typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argBuf.getByteArray()[0]);
-            if (!typeTag.equals(ATypeTag.INT32)) {
-                throw new AlgebricksException(AsterixBuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE.getName()
-                        + ": expects input type INT32 as second argument, but got " + typeTag + ".");
+
+            long edThresh = 0;
+
+            try {
+                edThresh = ATypeHierarchy.getIntegerValue(argBuf.getByteArray(), 0);
+            } catch (HyracksDataException e1) {
+                throw new AlgebricksException(e1);
             }
-            int edThresh = IntegerSerializerDeserializer.getInt(argBuf.getByteArray(), 1);
 
             // Check type and extract gram length.
             argBuf.reset();
             gramLenEval.evaluate(tuple);
             typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argBuf.getByteArray()[0]);
-            if (!typeTag.equals(ATypeTag.INT32)) {
-                throw new AlgebricksException(AsterixBuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE.getName()
-                        + ": expects input type INT32 as third argument, but got " + typeTag + ".");
+
+            long gramLen = 0;
+            try {
+                gramLen = ATypeHierarchy.getIntegerValue(argBuf.getByteArray(), 0);
+            } catch (HyracksDataException e1) {
+                throw new AlgebricksException(e1);
             }
-            int gramLen = IntegerSerializerDeserializer.getInt(argBuf.getByteArray(), 1);
 
             // Check type and extract usePrePost flag.
             argBuf.reset();
@@ -142,11 +148,11 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
                 throw new AlgebricksException(AsterixBuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE.getName()
                         + ": expects input type BOOLEAN as fourth argument, but got " + typeTag + ".");
             }
-            boolean usePrePost = BooleanSerializerDeserializer.getBoolean(argBuf.getByteArray(), 1);
+            boolean usePrePost = BooleanPointable.getBoolean(argBuf.getByteArray(), 1);
 
             // Compute result.
-            int numGrams = (usePrePost) ? strLen + gramLen - 1 : strLen - gramLen + 1;
-            int lowerBound = numGrams - edThresh * gramLen;
+            long numGrams = (usePrePost) ? strLen + gramLen - 1 : strLen - gramLen + 1;
+            long lowerBound = numGrams - edThresh * gramLen;
             try {
                 if (lowerBound <= 0 || strLen == 0) {
                     booleanSerde.serialize(ABoolean.FALSE, output.getDataOutput());

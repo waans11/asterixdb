@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -56,7 +56,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
  * IVariableTypeEnvironment env) throws AlgebricksException, which only enforces the list type recursively.
  * 2. public static boolean rewriteFuncExpr(AbstractFunctionCallExpression funcExpr, IAType reqType, IAType inputType,
  * IVariableTypeEnvironment env) throws AlgebricksException, which enforces the list type and the record type recursively.
- * 
+ *
  * @author yingyib
  */
 public class StaticTypeCastUtil {
@@ -301,10 +301,8 @@ public class StaticTypeCastUtil {
                     }
 
                     // match the optional field
-                    if (reqFieldType.getTypeTag() == ATypeTag.UNION
-                            && NonTaggedFormatUtil.isOptionalField((AUnionType) reqFieldType)) {
-                        IAType itemType = ((AUnionType) reqFieldType).getUnionList().get(
-                                NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST);
+                    if (NonTaggedFormatUtil.isOptional(reqFieldType)) {
+                        IAType itemType = ((AUnionType) reqFieldType).getNullableType();
                         reqFieldType = itemType;
                         if (fieldType.equals(BuiltinType.ANULL) || fieldType.equals(itemType)) {
                             fieldPermutation[j] = i;
@@ -322,10 +320,8 @@ public class StaticTypeCastUtil {
 
                     // match the optional type input for a non-optional field
                     // delay that to runtime by calling the not-null function
-                    if (fieldType.getTypeTag() == ATypeTag.UNION
-                            && NonTaggedFormatUtil.isOptionalField((AUnionType) fieldType)) {
-                        IAType itemType = ((AUnionType) fieldType).getUnionList().get(
-                                NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST);
+                    if (NonTaggedFormatUtil.isOptional(fieldType)) {
+                        IAType itemType = ((AUnionType) fieldType).getNullableType();
                         if (reqFieldType.equals(itemType)) {
                             fieldPermutation[j] = i;
                             openFields[i] = false;
@@ -379,10 +375,8 @@ public class StaticTypeCastUtil {
                 }
 
                 // match the optional field
-                if (reqFieldType.getTypeTag() == ATypeTag.UNION
-                        && NonTaggedFormatUtil.isOptionalField((AUnionType) reqFieldType)) {
-                    IAType itemType = ((AUnionType) reqFieldType).getUnionList().get(
-                            NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST);
+                if (NonTaggedFormatUtil.isOptional(reqFieldType)) {
+                    IAType itemType = ((AUnionType) reqFieldType).getNullableType();
                     if (fieldType.equals(BuiltinType.ANULL) || fieldType.equals(itemType)) {
                         matched = true;
                         break;
@@ -392,8 +386,7 @@ public class StaticTypeCastUtil {
             if (matched)
                 continue;
 
-            if (reqFieldType.getTypeTag() == ATypeTag.UNION
-                    && NonTaggedFormatUtil.isOptionalField((AUnionType) reqFieldType)) {
+            if (NonTaggedFormatUtil.isOptional(reqFieldType)) {
                 // add a null field
                 nullFields[i] = true;
             } else {

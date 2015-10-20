@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,6 +27,7 @@ import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
+import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -37,7 +38,6 @@ import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
 public class GetItemDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
@@ -66,7 +66,6 @@ public class GetItemDescriptor extends AbstractScalarFunctionDynamicDescriptor {
         private ICopyEvaluatorFactory indexEvalFactory;
         private final static byte SER_ORDEREDLIST_TYPE_TAG = ATypeTag.ORDEREDLIST.serialize();
         private final static byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
-        private final static byte SER_INT32_TYPE_TAG = ATypeTag.INT32.serialize();
         private byte serItemTypeTag;
         private ATypeTag itemTag;
         private boolean selfDescList = false;
@@ -107,16 +106,18 @@ public class GetItemDescriptor extends AbstractScalarFunctionDynamicDescriptor {
                             return;
                         }
 
-                        if (serOrderedList[0] != SER_ORDEREDLIST_TYPE_TAG
-                                || outInputIdx.getByteArray()[0] != SER_INT32_TYPE_TAG) {
-                            throw new AlgebricksException(AsterixBuiltinFunctions.GET_ITEM.getName()
-                                    + ": expects input type (NULL/ORDEREDLIST, INT32), but got ("
-                                    + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(serOrderedList[0]) + ", "
-                                    + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(outInputIdx.getByteArray()[0])
-                                    + ").");
+                        if (serOrderedList[0] == SER_ORDEREDLIST_TYPE_TAG) {
+                            itemIndex = ATypeHierarchy.getIntegerValue(outInputIdx.getByteArray(), 0);
+                        } else {
+                            throw new AlgebricksException(
+                                    AsterixBuiltinFunctions.GET_ITEM.getName()
+                                            + ": expects input type (NULL/ORDEREDLIST, [INT8/16/32/64/FLOAT/DOUBLE]), but got ("
+                                            + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(serOrderedList[0])
+                                            + ", "
+                                            + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(outInputIdx
+                                                    .getByteArray()[0]) + ").");
                         }
 
-                        itemIndex = IntegerSerializerDeserializer.getInt(outInputIdx.getByteArray(), 1);
                         if (itemIndex >= AOrderedListSerializerDeserializer.getNumberOfItems(serOrderedList)) {
                             out.writeByte(SER_NULL_TYPE_TAG);
                             return;

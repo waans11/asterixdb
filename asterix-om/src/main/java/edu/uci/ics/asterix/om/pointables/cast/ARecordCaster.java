@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,8 +25,9 @@ import java.util.List;
 
 import edu.uci.ics.asterix.builders.RecordBuilder;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.common.exceptions.TypeException;
 import edu.uci.ics.asterix.dataflow.data.nontagged.AqlNullWriterFactory;
-import edu.uci.ics.asterix.om.pointables.ARecordPointable;
+import edu.uci.ics.asterix.om.pointables.ARecordVisitablePointable;
 import edu.uci.ics.asterix.om.pointables.PointableAllocator;
 import edu.uci.ics.asterix.om.pointables.base.DefaultOpenFieldType;
 import edu.uci.ics.asterix.om.pointables.base.IVisitablePointable;
@@ -43,6 +44,7 @@ import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparator;
 import edu.uci.ics.hyracks.api.dataflow.value.INullWriter;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
 import edu.uci.ics.hyracks.data.std.api.IValueReference;
 import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
@@ -106,26 +108,30 @@ class ARecordCaster {
         }
     }
 
-    public void castRecord(ARecordPointable recordAccessor, IVisitablePointable resultAccessor, ARecordType reqType,
-            ACastVisitor visitor) throws IOException, AsterixException {
+    public void castRecord(ARecordVisitablePointable recordAccessor, IVisitablePointable resultAccessor, ARecordType reqType,
+            ACastVisitor visitor) throws IOException, TypeException {
         List<IVisitablePointable> fieldNames = recordAccessor.getFieldNames();
         List<IVisitablePointable> fieldTypeTags = recordAccessor.getFieldTypeTags();
         List<IVisitablePointable> fieldValues = recordAccessor.getFieldValues();
         numInputFields = fieldNames.size();
 
-        if (openFields == null || numInputFields > openFields.length) {
-            openFields = new boolean[numInputFields];
-            fieldNamesSortedIndex = new int[numInputFields];
-        }
-        if (cachedReqType == null || !reqType.equals(cachedReqType)) {
-            loadRequiredType(reqType);
-        }
+        try {
+            if (openFields == null || numInputFields > openFields.length) {
+                openFields = new boolean[numInputFields];
+                fieldNamesSortedIndex = new int[numInputFields];
+            }
+            if (cachedReqType == null || !reqType.equals(cachedReqType)) {
+                loadRequiredType(reqType);
+            }
 
-        // clear the previous states
-        reset();
-        matchClosedPart(fieldNames, fieldTypeTags, fieldValues);
-        writeOutput(fieldNames, fieldTypeTags, fieldValues, outputDos, visitor);
-        resultAccessor.set(outputBos.getByteArray(), 0, outputBos.size());
+            // clear the previous states
+            reset();
+            matchClosedPart(fieldNames, fieldTypeTags, fieldValues);
+            writeOutput(fieldNames, fieldTypeTags, fieldValues, outputDos, visitor);
+            resultAccessor.set(outputBos.getByteArray(), 0, outputBos.size());
+        } catch (AsterixException e) {
+            throw new TypeException("Unable to cast record to " + reqType.getTypeName(), e);
+        }
     }
 
     private void reset() {
@@ -157,11 +163,9 @@ class ARecordCaster {
             String fname = fieldNames[i];
 
             // add type tag pointable
-            if (fieldTypes[i].getTypeTag() == ATypeTag.UNION
-                    && NonTaggedFormatUtil.isOptionalField((AUnionType) fieldTypes[i])) {
+            if (NonTaggedFormatUtil.isOptional(fieldTypes[i])) {
                 // optional field: add the embedded non-null type tag
-                ftypeTag = ((AUnionType) fieldTypes[i]).getUnionList()
-                        .get(NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST).getTypeTag();
+                ftypeTag = ((AUnionType) fieldTypes[i]).getNullableType().getTypeTag();
                 optionalFields[i] = true;
             }
             int tagStart = bos.size();
@@ -189,7 +193,7 @@ class ARecordCaster {
     }
 
     private void matchClosedPart(List<IVisitablePointable> fieldNames, List<IVisitablePointable> fieldTypeTags,
-            List<IVisitablePointable> fieldValues) throws AsterixException {
+            List<IVisitablePointable> fieldValues) throws AsterixException, HyracksDataException {
         // sort-merge based match
         quickSort(fieldNamesSortedIndex, fieldNames, 0, numInputFields - 1);
         int fnStart = 0;
@@ -213,7 +217,8 @@ class ARecordCaster {
                     ATypeTag requiredTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(reqFieldTypeTag
                             .getByteArray()[reqFieldTypeTag.getStartOffset()]);
 
-                    if (ATypeHierarchy.canPromote(inputTypeTag, requiredTypeTag)) {
+                    if (ATypeHierarchy.canPromote(inputTypeTag, requiredTypeTag)
+                            || ATypeHierarchy.canDemote(inputTypeTag, requiredTypeTag)) {
                         fieldPermutation[reqFnPos] = fnPos;
                         openFields[fnPos] = false;
                     }
@@ -259,9 +264,9 @@ class ARecordCaster {
         for (int i = 0; i < fieldPermutation.length; i++) {
             if (fieldPermutation[i] < 0) {
                 IAType t = cachedReqType.getFieldTypes()[i];
-                if (!(t.getTypeTag() == ATypeTag.UNION && NonTaggedFormatUtil.isOptionalField((AUnionType) t))) {
+                if (!NonTaggedFormatUtil.isOptional(t)) {
                     // no matched field in the input for a required closed field
-                    throw new IllegalStateException("type mismatch: miss a required closed field "
+                    throw new IllegalStateException("type mismatch: missing a required closed field "
                             + cachedReqType.getFieldNames()[i] + ":" + t.getTypeName());
                 }
             }
@@ -294,8 +299,7 @@ class ARecordCaster {
                     //the field is optional in the input record
                     nestedVisitorArg.second = ((AUnionType) fType).getUnionList().get(0);
                 } else {
-                    nestedVisitorArg.second = ((AUnionType) fType).getUnionList().get(
-                            NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST);
+                    nestedVisitorArg.second = ((AUnionType) fType).getNullableType();
                 }
             }
             field.accept(visitor, nestedVisitorArg);
@@ -319,7 +323,8 @@ class ARecordCaster {
         recBuilder.write(output, true);
     }
 
-    private void quickSort(int[] index, List<IVisitablePointable> names, int start, int end) {
+    private void quickSort(int[] index, List<IVisitablePointable> names, int start, int end)
+            throws HyracksDataException {
         if (end <= start)
             return;
         int i = partition(index, names, start, end);
@@ -327,7 +332,8 @@ class ARecordCaster {
         quickSort(index, names, i + 1, end);
     }
 
-    private int partition(int[] index, List<IVisitablePointable> names, int left, int right) {
+    private int partition(int[] index, List<IVisitablePointable> names, int left, int right)
+            throws HyracksDataException {
         int i = left - 1;
         int j = right;
         while (true) {
@@ -353,7 +359,7 @@ class ARecordCaster {
         array[j] = temp;
     }
 
-    private int compare(IValueReference a, IValueReference b) {
+    private int compare(IValueReference a, IValueReference b) throws HyracksDataException {
         // start+1 and len-1 due to the type tag
         return fieldNameComparator.compare(a.getByteArray(), a.getStartOffset() + 1, a.getLength() - 1,
                 b.getByteArray(), b.getStartOffset() + 1, b.getLength() - 1);

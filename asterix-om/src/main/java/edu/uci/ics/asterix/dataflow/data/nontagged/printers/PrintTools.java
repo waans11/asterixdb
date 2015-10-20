@@ -20,16 +20,39 @@ import java.io.OutputStream;
 import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
 
 public class PrintTools {
-    public static void writeUTF8StringWithEscapes(byte[] b, int s, int l, OutputStream os) throws IOException {
+    public static enum CASE {
+        LOWER_CASE,
+        UPPER_CASE,
+    }
+
+
+    public static void writeUTF8StringAsCSV(byte[] b, int s, int l, OutputStream os) throws IOException {
         int stringLength = UTF8StringPointable.getUTFLength(b, s);
         int position = s + 2; // skip 2 bytes containing string size
         int maxPosition = position + stringLength;
-        os.write('\"');
+        os.write('"');
+        while (position < maxPosition) {
+            char c = UTF8StringPointable.charAt(b, position);
+            int sz = UTF8StringPointable.charSize(b, position);
+            if (c == '"') {
+                os.write('"');
+            }
+            os.write(c);
+            position += sz;
+        }
+        os.write('"');
+    }
+
+    public static void writeUTF8StringAsJSON(byte[] b, int s, int l, OutputStream os) throws IOException {
+        int stringLength = UTF8StringPointable.getUTFLength(b, s);
+        int position = s + 2; // skip 2 bytes containing string size
+        int maxPosition = position + stringLength;
+        os.write('"');
         while (position < maxPosition) {
             char c = UTF8StringPointable.charAt(b, position);
             int sz = UTF8StringPointable.charSize(b, position);
             switch (c) {
-            // escape
+                // escape
                 case '\b':
                     os.write('\\');
                     os.write('b');
@@ -115,11 +138,18 @@ public class PrintTools {
         os.write('u');
         os.write('0');
         os.write('0');
-        os.write(hex((c >>> 4) & 0x0f));
-        os.write(hex(c & 0x0f));
+        os.write(hex((c >>> 4) & 0x0f, CASE.LOWER_CASE));
+        os.write(hex(c & 0x0f, CASE.LOWER_CASE));
     }
 
-    private static byte hex(int i) {
-        return (byte) (i < 10 ? i + '0' : i + ('a' - 10));
+    static byte hex(int i, CASE c) {
+        switch (c) {
+            case LOWER_CASE:
+                return (byte) (i < 10 ? i + '0' : i + ('a' - 10));
+            case UPPER_CASE:
+                return (byte) (i < 10 ? i + '0' : i + ('A' - 10));
+        }
+        return Byte.parseByte(null);
     }
+
 }

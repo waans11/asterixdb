@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -35,7 +35,7 @@ import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
  * This rule is to check if all the filter expression are of the boolean type or a possible (determined
  * at the runtime) boolean type.
  * If that is not the case, an exception should be thrown.
- * 
+ *
  * @author yingyib
  */
 public class CheckFilterExpressionTypeRule implements IAlgebraicRewriteRule {
@@ -71,8 +71,8 @@ public class CheckFilterExpressionTypeRule implements IAlgebraicRewriteRule {
      * @return true if it is; false otherwise.
      */
     private boolean isPossibleBoolean(IAType type) {
-        while (type.getTypeTag() == ATypeTag.UNION && NonTaggedFormatUtil.isOptionalField((AUnionType) type)) {
-            type = ((AUnionType) type).getUnionList().get(NonTaggedFormatUtil.OPTIONAL_TYPE_INDEX_IN_UNION_LIST);
+        while (NonTaggedFormatUtil.isOptional(type)) {
+            type = ((AUnionType) type).getNullableType();
             if (type.getTypeTag() == ATypeTag.BOOLEAN || type.getTypeTag() == ATypeTag.ANY) {
                 return true;
             }

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -13,9 +13,6 @@
  * limitations under the License.
  */
 package edu.uci.ics.asterix.om.typecomputer.impl;
-
-import java.util.ArrayList;
-import java.util.List;
 
 import edu.uci.ics.asterix.om.typecomputer.base.IResultTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.base.TypeComputerUtilities;
@@ -37,11 +34,8 @@ public class OptionalATimeTypeComputer implements IResultTypeComputer {
     @Override
     public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
             IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
-        if (TypeComputerUtilities.nullableType(expression, env)) {
-            List<IAType> unionList = new ArrayList<IAType>();
-            unionList.add(BuiltinType.ANULL);
-            unionList.add(BuiltinType.ATIME);
-            return new AUnionType(unionList, "OptionalTime");
+        if (TypeComputerUtilities.inputInferednullableType(expression, env)) {
+            return AUnionType.createNullableType(BuiltinType.ATIME, "OptionalTime");
         } else {
             return BuiltinType.ATIME;
         }

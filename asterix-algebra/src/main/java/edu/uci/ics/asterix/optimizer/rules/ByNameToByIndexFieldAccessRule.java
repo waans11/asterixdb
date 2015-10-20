@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -91,19 +91,21 @@ public class ByNameToByIndexFieldAccessRule implements IAlgebraicRewriteRule {
                 assign.getInputs().get(0).setValue(assignVar);
                 context.computeAndSetTypeEnvironmentForOperator(assignVar);
                 context.computeAndSetTypeEnvironmentForOperator(assign);
+                //access by name was not replaced to access by index, but the plan was altered, hence changed is true
+                changed = true;
             }
 
             IAType t = (IAType) env.getType(fce.getArguments().get(0).getValue());
             try {
                 switch (t.getTypeTag()) {
                     case ANY: {
-                        return false;
+                        return false || changed;
                     }
                     case RECORD: {
                         ARecordType recType = (ARecordType) t;
                         ILogicalExpression fai = createFieldAccessByIndex(recType, fce);
                         if (fai == null) {
-                            return false;
+                            return false || changed;
                         }
                         expressions.get(i).setValue(fai);
                         changed = true;
@@ -112,12 +114,12 @@ public class ByNameToByIndexFieldAccessRule implements IAlgebraicRewriteRule {
                     case UNION: {
                         AUnionType unionT = (AUnionType) t;
                         if (unionT.isNullableType()) {
-                            IAType t2 = unionT.getUnionList().get(1);
+                            IAType t2 = unionT.getNullableType();
                             if (t2.getTypeTag() == ATypeTag.RECORD) {
                                 ARecordType recType = (ARecordType) t2;
                                 ILogicalExpression fai = createFieldAccessByIndex(recType, fce);
                                 if (fai == null) {
-                                    return false;
+                                    return false || changed;
                                 }
                                 expressions.get(i).setValue(fai);
                                 changed = true;

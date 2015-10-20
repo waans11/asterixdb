@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,6 +16,7 @@ package edu.uci.ics.asterix.runtime.evaluators.comparisons;
 
 import java.io.DataOutput;
 
+import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.ABinaryComparator;
 import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.ACirclePartialBinaryComparatorFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.ADurationPartialBinaryComparatorFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.AIntervalPartialBinaryComparatorFactory;
@@ -40,12 +41,16 @@ import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
+import edu.uci.ics.hyracks.api.dataflow.value.BinaryComparatorConstant.ComparableResultCode;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparator;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
+import edu.uci.ics.hyracks.data.std.primitive.ByteArrayPointable;
+import edu.uci.ics.hyracks.data.std.primitive.FloatPointable;
+import edu.uci.ics.hyracks.data.std.primitive.IntegerPointable;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.FloatSerializerDeserializer;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
 public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
 
@@ -54,7 +59,9 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
         EQUAL,
         GREATER_THAN,
         UNKNOWN
-    };
+    }
+
+    ;
 
     protected DataOutput out;
     protected ArrayBackedValueStorage outLeft = new ArrayBackedValueStorage();
@@ -85,6 +92,8 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
             .createBinaryComparator();
     protected IBinaryComparator rectangleBinaryComparator = ARectanglePartialBinaryComparatorFactory.INSTANCE
             .createBinaryComparator();
+    protected final IBinaryComparator byteArrayComparator = new PointableBinaryComparatorFactory(
+            ByteArrayPointable.FACTORY).createBinaryComparator();
 
     public AbstractComparisonEvaluator(DataOutput out, ICopyEvaluatorFactory evalLeftFactory,
             ICopyEvaluatorFactory evalRightFactory) throws AlgebricksException {
@@ -100,7 +109,9 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
         evalRight.evaluate(tuple);
     }
 
-    protected void checkComparable() throws AlgebricksException {
+    // checks whether we can apply >, >=, <, and <= operations to the given type since
+    // these operations can not be defined for certain types.
+    protected void checkTotallyOrderable() throws AlgebricksException {
         if (outLeft.getLength() != 0) {
             ATypeTag typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(outLeft.getByteArray()[0]);
             switch (typeTag) {
@@ -112,11 +123,18 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
                 case POLYGON:
                 case CIRCLE:
                 case RECTANGLE:
-                    throw new AlgebricksException("Inequality comparison for " + typeTag + " is not defined.");
+                    throw new AlgebricksException("Comparison operations (GT, GE, LT, and LE) for the " + typeTag
+                            + " type are not defined.");
                 default:
                     return;
             }
         }
+    }
+
+    // checks whether two types are comparable
+    protected ComparableResultCode comparabilityCheck() {
+        // just check TypeTags
+        return ABinaryComparator.isComparable(outLeft.getByteArray(), 0, 1, outRight.getByteArray(), 0, 1);
     }
 
     protected ComparisonResult compareResults() throws AlgebricksException {
@@ -142,8 +160,9 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
             }
         }
 
-        if (isLeftNull || isRightNull)
+        if (isLeftNull || isRightNull) {
             return ComparisonResult.UNKNOWN;
+        }
 
         switch (typeTag1) {
             case INT8: {
@@ -184,59 +203,68 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
                     + actualTypeTag + ".");
         }
         int result = 0;
-        switch (actualTypeTag) {
-            case YEARMONTHDURATION:
-            case TIME:
-            case DATE:
-                result = Integer.compare(AInt32SerializerDeserializer.getInt(outLeft.getByteArray(), 1),
-                        AInt32SerializerDeserializer.getInt(outRight.getByteArray(), 1));
-                break;
-            case DAYTIMEDURATION:
-            case DATETIME:
-                result = Long.compare(AInt64SerializerDeserializer.getLong(outLeft.getByteArray(), 1),
-                        AInt64SerializerDeserializer.getLong(outRight.getByteArray(), 1));
-                break;
-            case CIRCLE:
-                result = circleBinaryComp.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                        outRight.getByteArray(), 1, outRight.getLength() - 1);
-                break;
-            case LINE:
-                result = lineBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                        outRight.getByteArray(), 1, outRight.getLength() - 1);
-                break;
-            case POINT:
-                result = pointBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                        outRight.getByteArray(), 1, outRight.getLength() - 1);
-                break;
-            case POINT3D:
-                result = point3DBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                        outRight.getByteArray(), 1, outRight.getLength() - 1);
-                break;
-            case POLYGON:
-                result = polygonBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                        outRight.getByteArray(), 1, outRight.getLength() - 1);
-                break;
-            case DURATION:
-                result = durationBinaryComp.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                        outRight.getByteArray(), 1, outRight.getLength() - 1);
-                break;
-            case INTERVAL:
-                result = intervalBinaryComp.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                        outRight.getByteArray(), 1, outRight.getLength() - 1);
-                break;
-            case RECTANGLE:
-                result = rectangleBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                        outRight.getByteArray(), 1, outRight.getLength() - 1);
-                break;
-            default:
-                throw new AlgebricksException("Comparison for " + actualTypeTag + " is not supported.");
+        try {
+            switch (actualTypeTag) {
+                case YEARMONTHDURATION:
+                case TIME:
+                case DATE:
+                    result = Integer.compare(AInt32SerializerDeserializer.getInt(outLeft.getByteArray(), 1),
+                            AInt32SerializerDeserializer.getInt(outRight.getByteArray(), 1));
+                    break;
+                case DAYTIMEDURATION:
+                case DATETIME:
+                    result = Long.compare(AInt64SerializerDeserializer.getLong(outLeft.getByteArray(), 1),
+                            AInt64SerializerDeserializer.getLong(outRight.getByteArray(), 1));
+                    break;
+                case CIRCLE:
+                    result = circleBinaryComp.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                case LINE:
+                    result = lineBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                case POINT:
+                    result = pointBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                case POINT3D:
+                    result = point3DBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                case POLYGON:
+                    result = polygonBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                case DURATION:
+                    result = durationBinaryComp.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                case INTERVAL:
+                    result = intervalBinaryComp.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                case RECTANGLE:
+                    result = rectangleBinaryComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                case BINARY:
+                    result = byteArrayComparator.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                            outRight.getByteArray(), 1, outRight.getLength() - 1);
+                    break;
+                default:
+                    throw new AlgebricksException("Comparison for " + actualTypeTag + " is not supported.");
+            }
+        } catch (HyracksDataException e) {
+            throw new AlgebricksException(e);
         }
-        if (result == 0)
+        if (result == 0) {
             return ComparisonResult.EQUAL;
-        else if (result < 0)
+        } else if (result < 0) {
             return ComparisonResult.LESS_THAN;
-        else
+        } else {
             return ComparisonResult.GREATER_THAN;
+        }
     }
 
     private ComparisonResult compareBooleanWithArg(ATypeTag typeTag2) throws AlgebricksException {
@@ -250,14 +278,20 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
 
     private ComparisonResult compareStringWithArg(ATypeTag typeTag2) throws AlgebricksException {
         if (typeTag2 == ATypeTag.STRING) {
-            int result = strBinaryComp.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
-                    outRight.getByteArray(), 1, outRight.getLength() - 1);
-            if (result == 0)
+            int result;
+            try {
+                result = strBinaryComp.compare(outLeft.getByteArray(), 1, outLeft.getLength() - 1,
+                        outRight.getByteArray(), 1, outRight.getLength() - 1);
+            } catch (HyracksDataException e) {
+                throw new AlgebricksException(e);
+            }
+            if (result == 0) {
                 return ComparisonResult.EQUAL;
-            else if (result < 0)
+            } else if (result < 0) {
                 return ComparisonResult.LESS_THAN;
-            else
+            } else {
                 return ComparisonResult.GREATER_THAN;
+            }
         }
         throw new AlgebricksException("Comparison is undefined between types AString and " + typeTag2 + " .");
     }
@@ -296,7 +330,7 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
     }
 
     private ComparisonResult compareFloatWithArg(ATypeTag typeTag2) throws AlgebricksException {
-        float s = FloatSerializerDeserializer.getFloat(outLeft.getByteArray(), 1);
+        float s = FloatPointable.getFloat(outLeft.getByteArray(), 1);
         switch (typeTag2) {
             case INT8: {
                 byte v2 = AInt8SerializerDeserializer.getByte(outRight.getByteArray(), 1);
@@ -362,7 +396,7 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
     }
 
     private ComparisonResult compareInt32WithArg(ATypeTag typeTag2) throws AlgebricksException {
-        int s = IntegerSerializerDeserializer.getInt(outLeft.getByteArray(), 1);
+        int s = IntegerPointable.getInteger(outLeft.getByteArray(), 1);
         switch (typeTag2) {
             case INT8: {
                 byte v2 = AInt8SerializerDeserializer.getByte(outRight.getByteArray(), 1);

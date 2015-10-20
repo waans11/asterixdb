@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,10 +21,12 @@ import edu.uci.ics.asterix.aql.base.Expression;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlVisitorWithVoidReturn;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.hyracks.dataflow.common.data.partition.range.IRangeMap;
 
 public class OrderbyClause implements Clause {
     private List<Expression> orderbyList;
     private List<OrderModifier> modifierList;
+    private IRangeMap rangeMap;
     private int numFrames = -1;
     private int numTuples = -1;
 
@@ -85,5 +87,13 @@ public class OrderbyClause implements Clause {
 
     public void setNumTuples(int numTuples) {
         this.numTuples = numTuples;
+    }
+
+    public IRangeMap getRangeMap() {
+        return rangeMap;
+    }
+
+    public void setRangeMap(IRangeMap rangeMap) {
+        this.rangeMap = rangeMap;
     }
 }

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,13 +26,22 @@ import org.apache.commons.lang3.StringUtils;
 import edu.uci.ics.asterix.aql.parser.ParseException;
 
 public class AQLTestSuite extends TestSuite {
-    private static String AQLTS_PATH = StringUtils.join(new String[] {"src", "test", 
-            "resources", "AQLTS", "queries" + File.separator}, File.separator);
+    private static String AQLTS_PATH = StringUtils.join(new String[] { "src", "test", "resources", "AQLTS",
+            "queries" + File.separator }, File.separator);
+    private static String AQLTS_SQL_LIKE_PATH = StringUtils.join(new String[] { "src", "test", "resources", "AQLTS",
+            "queries-sql-like" + File.separator }, File.separator);
 
     public static Test suite() throws ParseException, UnsupportedEncodingException, FileNotFoundException {
         File testData = new File(AQLTS_PATH);
         File[] queries = testData.listFiles();
         TestSuite testSuite = new TestSuite();
+        for (File file : queries) {
+            if (file.isFile()) {
+                testSuite.addTest(new AQLTestCase(file));
+            }
+        }
+        testData = new File(AQLTS_SQL_LIKE_PATH);
+        queries = testData.listFiles();
         for (File file : queries) {
             if (file.isFile()) {
                 testSuite.addTest(new AQLTestCase(file));

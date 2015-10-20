@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,6 +16,7 @@ package edu.uci.ics.asterix.optimizer.rules;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang3.mutable.Mutable;
@@ -24,6 +25,7 @@ import org.apache.commons.lang3.mutable.MutableObject;
 import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.ListSet;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalPlan;
@@ -46,19 +48,19 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.properties.UnpartitionedPrope
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 
 /*
- * 
+ *
  *  unnest $x [[ at $p ]] <- $y
  *    aggregate $y <- function-call: listify@1(unresolved), Args:[$z]
  *       Rest 
  *   
  * if $y is not used above these operators, 
  * the plan fragment becomes
- * 
+ *
  *  [[ runningaggregate $p <- tid]]
  *  assign $x <- $z
  *       Rest
  *  
- * 
+ *
  */
 
 public class RemoveRedundantListifyRule implements IAlgebraicRewriteRule {
@@ -81,9 +83,14 @@ public class RemoveRedundantListifyRule implements IAlgebraicRewriteRule {
     private boolean applyRuleDown(Mutable<ILogicalOperator> opRef, Set<LogicalVariable> varSet,
             IOptimizationContext context) throws AlgebricksException {
         boolean changed = applies(opRef, varSet, context);
+        changed |= appliesForReverseCase(opRef, varSet, context);
         AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
         VariableUtilities.getUsedVariables(op, varSet);
         if (op.hasNestedPlans()) {
+            // Variables used by the parent operators should be live at op.
+            Set<LogicalVariable> localLiveVars = new ListSet<LogicalVariable>();
+            VariableUtilities.getLiveVariables(op, localLiveVars);
+            varSet.retainAll(localLiveVars);
             AbstractOperatorWithNestedPlans aonp = (AbstractOperatorWithNestedPlans) op;
             for (ILogicalPlan p : aonp.getNestedPlans()) {
                 for (Mutable<ILogicalOperator> r : p.getRoots()) {
@@ -190,4 +197,58 @@ public class RemoveRedundantListifyRule implements IAlgebraicRewriteRule {
         return true;
     }
 
+    private boolean appliesForReverseCase(Mutable<ILogicalOperator> opRef, Set<LogicalVariable> varUsedAbove,
+            IOptimizationContext context) throws AlgebricksException {
+        AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef.getValue();
+        if (op1.getOperatorTag() != LogicalOperatorTag.AGGREGATE) {
+            return false;
+        }
+        AggregateOperator agg = (AggregateOperator) op1;
+        if (agg.getVariables().size() > 1 || agg.getVariables().size() <= 0) {
+            return false;
+        }
+        LogicalVariable aggVar = agg.getVariables().get(0);
+        ILogicalExpression aggFun = agg.getExpressions().get(0).getValue();
+        AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) aggFun;
+        if (!AsterixBuiltinFunctions.LISTIFY.equals(f.getFunctionIdentifier())) {
+            return false;
+        }
+        if (f.getArguments().size() != 1) {
+            return false;
+        }
+        ILogicalExpression arg0 = f.getArguments().get(0).getValue();
+        if (((AbstractLogicalExpression) arg0).getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+            return false;
+        }
+        LogicalVariable aggInputVar = ((VariableReferenceExpression) arg0).getVariableReference();
+
+        if (agg.getInputs().size() == 0) {
+            return false;
+        }
+        AbstractLogicalOperator op2 = (AbstractLogicalOperator) agg.getInputs().get(0).getValue();
+        if (op2.getOperatorTag() != LogicalOperatorTag.UNNEST) {
+            return false;
+        }
+        UnnestOperator unnest = (UnnestOperator) op2;
+        if (unnest.getPositionalVariable() != null) {
+            return false;
+        }
+        if (!unnest.getVariable().equals(aggInputVar)) {
+            return false;
+        }
+        List<LogicalVariable> unnestSource = new ArrayList<LogicalVariable>();
+        VariableUtilities.getUsedVariables(unnest, unnestSource);
+        if (unnestSource.size() > 1 || unnestSource.size() <= 0) {
+            return false;
+        }
+        ArrayList<LogicalVariable> assgnVars = new ArrayList<LogicalVariable>(1);
+        assgnVars.add(aggVar);
+        ArrayList<Mutable<ILogicalExpression>> assgnExprs = new ArrayList<Mutable<ILogicalExpression>>(1);
+        assgnExprs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(unnestSource.get(0))));
+        AssignOperator assign = new AssignOperator(assgnVars, assgnExprs);
+        assign.getInputs().add(unnest.getInputs().get(0));
+        context.computeAndSetTypeEnvironmentForOperator(assign);
+        opRef.setValue(assign);
+        return true;
+    }
 }

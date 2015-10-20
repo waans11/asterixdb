@@ -20,24 +20,27 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.http.ParseException;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import com.sun.el.parser.ParseException;
-
-import edu.uci.ics.asterix.api.common.APIFramework.DisplayFormat;
+import edu.uci.ics.asterix.api.common.SessionConfig;
+import edu.uci.ics.asterix.api.common.SessionConfig.OutputFormat;
 import edu.uci.ics.asterix.api.http.servlet.APIServlet;
+import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.api.comm.IFrame;
 import edu.uci.ics.hyracks.api.comm.IFrameTupleAccessor;
+import edu.uci.ics.hyracks.api.comm.VSizeFrame;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.control.nc.resources.memory.FrameManager;
 import edu.uci.ics.hyracks.dataflow.common.comm.util.ByteBufferInputStream;
 
 public class ResultUtils {
@@ -61,82 +64,116 @@ public class ResultUtils {
         return s;
     }
 
-    public static void displayResults(ResultReader resultReader, PrintWriter out, DisplayFormat pdf)
+    public static void displayCSVHeader(ARecordType recordType, SessionConfig conf) {
+        // If HTML-ifying, we have to output this here before the header -
+        // pretty ugly
+        if (conf.is(SessionConfig.FORMAT_HTML)) {
+            conf.out().println("<h4>Results:</h4>");
+            conf.out().println("<pre>");
+        }
+
+        String[] fieldNames = recordType.getFieldNames();
+        boolean notfirst = false;
+        for (String name : fieldNames) {
+            if (notfirst) {
+                conf.out().print(',');
+            }
+            notfirst = true;
+            conf.out().print('"');
+            conf.out().print(name.replace("\"", "\"\""));
+            conf.out().print('"');
+        }
+        conf.out().print("\r\n");
+    }
+
+    public static FrameManager resultDisplayFrameMgr = new FrameManager(ResultReader.FRAME_SIZE);
+
+    public static void displayResults(ResultReader resultReader, SessionConfig conf)
             throws HyracksDataException {
-        ByteBufferInputStream bbis = new ByteBufferInputStream();
         IFrameTupleAccessor fta = resultReader.getFrameTupleAccessor();
 
-        ByteBuffer buffer = ByteBuffer.allocate(ResultReader.FRAME_SIZE);
-        buffer.clear();
+        IFrame frame = new VSizeFrame(resultDisplayFrameMgr);
+        int bytesRead = resultReader.read(frame);
+        ByteBufferInputStream bbis = new ByteBufferInputStream();
 
-        JSONArray adm_results = null;
-        switch (pdf) {
-        case HTML:
-            out.println("<h4>Results:</h4>");
-            out.println("<pre>");
-            break;
-        case JSON:
-            out.print("[ ");
-            break;
-        case TEXT:
-            // For now, keep the outer "results" JSON object for ADM results
-            out.print("{ \"results\": ");
-            adm_results = new JSONArray();
-            break;
+        // Whether we need to separate top-level ADM instances with commas
+        boolean need_commas = true;
+        // Whether this is the first instance being output
+        boolean notfirst = false;
+
+        // If we're outputting CSV with a header, the HTML header was already
+        // output by displayCSVHeader(), so skip it here
+        if (conf.is(SessionConfig.FORMAT_HTML) &&
+            ! (conf.fmt() == OutputFormat.CSV && conf.is(SessionConfig.FORMAT_CSV_HEADER))) {
+            conf.out().println("<h4>Results:</h4>");
+            conf.out().println("<pre>");
         }
 
-        while (resultReader.read(buffer) > 0) {
-            try {
-                fta.reset(buffer);
-                int last = fta.getTupleCount();
-                String result;
-                for (int tIndex = 0; tIndex < last; tIndex++) {
-                    int start = fta.getTupleStartOffset(tIndex);
-                    int length = fta.getTupleEndOffset(tIndex) - start;
-                    bbis.setByteBuffer(buffer, start);
-                    byte[] recordBytes = new byte[length];
-                    bbis.read(recordBytes, 0, length);
-                    // Issue 796 - what if an instance from Hyracks exceeds
-                    // FRAME_SIZE?
-                    result = new String(recordBytes, 0, length, UTF_8);
-                    switch (pdf) {
-                    case JSON:
-                        if (tIndex != (last - 1)) {
-                            out.print(", ");
+        switch (conf.fmt()) {
+            case CSV:
+                need_commas = false;
+                break;
+            case JSON:
+            case ADM:
+                // Conveniently, JSON and ADM have the same syntax for an
+                // "ordered list", and our representation of the result of a
+                // statement is an ordered list of instances.
+                conf.out().print("[ ");
+                break;
+        }
+
+        if (bytesRead > 0) {
+            do {
+                try {
+                    fta.reset(frame.getBuffer());
+                    int last = fta.getTupleCount();
+                    String result;
+                    for (int tIndex = 0; tIndex < last; tIndex++) {
+                        int start = fta.getTupleStartOffset(tIndex);
+                        int length = fta.getTupleEndOffset(tIndex) - start;
+                        bbis.setByteBuffer(frame.getBuffer(), start);
+                        byte[] recordBytes = new byte[length];
+                        int numread = bbis.read(recordBytes, 0, length);
+                        if (conf.fmt() == OutputFormat.CSV) {
+                            if ( (numread > 0) && (recordBytes[numread-1] == '\n') ) {
+                                numread--;
+                            }
                         }
-                        // fall through to next case to output results
-                    case HTML:
-                        out.print(result);
-                        break;
-                    case TEXT:
-                        adm_results.put(result);
-                        break;
+                        result = new String(recordBytes, 0, numread, UTF_8);
+                        if (need_commas && notfirst) {
+                            conf.out().print(", ");
+                        }
+                        notfirst = true;
+                        conf.out().print(result);
+                        if (conf.fmt() == OutputFormat.CSV) {
+                            conf.out().print("\r\n");
+                        }
+                    }
+                    frame.getBuffer().clear();
+                } finally {
+                    try {
+                        bbis.close();
+                    } catch (IOException e) {
+                        throw new HyracksDataException(e);
                     }
                 }
-                buffer.clear();
-            } finally {
-                try {
-                    bbis.close();
-                } catch (IOException e) {
-                    throw new HyracksDataException(e);
-                }
-            }
+            } while (resultReader.read(frame) > 0);
         }
 
-        if (pdf == DisplayFormat.TEXT) {
-            out.print(adm_results);
-        }
-        out.flush();
+        conf.out().flush();
 
-        switch (pdf) {
-        case HTML:
-            out.println("</pre>");
-            break;
-        case JSON:
-            out.println(" ]");
-            break;
-        case TEXT:
-            out.println(" }");
+        switch (conf.fmt()) {
+            case JSON:
+            case ADM:
+                conf.out().println(" ]");
+                break;
+            case CSV:
+                // Nothing to do
+                break;
+        }
+
+        if (conf.is(SessionConfig.FORMAT_HTML)) {
+            conf.out().println("</pre>");
         }
     }
 
@@ -229,18 +266,15 @@ public class ResultUtils {
      */
     private static String extractErrorMessage(Throwable e) {
         Throwable cause = getRootCause(e);
-
-        String exceptionClassName = "";
-        String[] messageSplits = cause.toString().split(":");
-        if (messageSplits.length > 1) {
-            String fullyQualifiedExceptionClassName = messageSplits[0];
-            System.out.println(fullyQualifiedExceptionClassName);
-            String[] hierarchySplits = fullyQualifiedExceptionClassName.split("\\.");
-            if (hierarchySplits.length > 0) {
-                exceptionClassName = hierarchySplits[hierarchySplits.length - 1];
-            }
+        String fullyQualifiedExceptionClassName = cause.getClass().getName();
+        String[] hierarchySplits = fullyQualifiedExceptionClassName.split("\\.");
+        //try returning the class without package qualification
+        String exceptionClassName = hierarchySplits[hierarchySplits.length - 1];
+        String localizedMessage = cause.getLocalizedMessage();
+        if(localizedMessage == null){
+            localizedMessage = "Internal error. Please check instance logs for further details.";
         }
-        return cause.getLocalizedMessage() + " [" + exceptionClassName + "]";
+        return localizedMessage + " [" + exceptionClassName + "]";
     }
 
     /**

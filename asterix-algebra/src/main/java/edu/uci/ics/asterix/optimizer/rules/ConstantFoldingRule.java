@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -75,8 +75,9 @@ import edu.uci.ics.hyracks.dataflow.common.comm.util.ByteBufferInputStream;
 
 public class ConstantFoldingRule implements IAlgebraicRewriteRule {
 
-    private ConstantFoldingVisitor cfv = new ConstantFoldingVisitor();
+    private final ConstantFoldingVisitor cfv = new ConstantFoldingVisitor();
 
+    /** Throws exceptions in substituiteProducedVariable, setVarType, and one getVarType method. */
     private static final IVariableTypeEnvironment _emptyTypeEnv = new IVariableTypeEnvironment() {
 
         @Override
@@ -135,9 +136,9 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
     private class ConstantFoldingVisitor implements ILogicalExpressionVisitor<Pair<Boolean, ILogicalExpression>, Void>,
             ILogicalExpressionReferenceTransform {
 
-        private IPointable p = VoidPointable.FACTORY.createPointable();
-        private ByteBufferInputStream bbis = new ByteBufferInputStream();
-        private DataInputStream dis = new DataInputStream(bbis);
+        private final IPointable p = VoidPointable.FACTORY.createPointable();
+        private final ByteBufferInputStream bbis = new ByteBufferInputStream();
+        private final DataInputStream dis = new DataInputStream(bbis);
 
         @Override
         public boolean transform(Mutable<ILogicalExpression> exprRef) throws AlgebricksException {

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,6 +30,7 @@ public class AUnionType extends AbstractComplexType {
 
     private static final long serialVersionUID = 1L;
     private List<IAType> unionList;
+    public static final int OPTIONAL_TYPE_INDEX_IN_UNION_LIST = 1;
 
     public AUnionType(List<IAType> unionList, String typeName) {
         super(typeName);
@@ -46,6 +47,10 @@ public class AUnionType extends AbstractComplexType {
 
     public boolean isNullableType() {
         return unionList.size() == 2 && unionList.get(0).equals(BuiltinType.ANULL);
+    }
+
+    public IAType getNullableType() {
+        return unionList.get(AUnionType.OPTIONAL_TYPE_INDEX_IN_UNION_LIST);
     }
 
     @Override
@@ -84,12 +89,29 @@ public class AUnionType extends AbstractComplexType {
         return BuiltinType.ASTERIX_TYPE;
     }
 
-    public static AUnionType createNullableType(IAType t) {
+    public static AUnionType createNullableType(IAType type, String typeName) {
         List<IAType> unionList = new ArrayList<IAType>();
         unionList.add(BuiltinType.ANULL);
-        unionList.add(t);
-        String s = t.getDisplayName();
-        return new AUnionType(unionList, s == null ? null : s + "?");
+        unionList.add(type);
+        return new AUnionType(unionList, typeName);
+    }
+
+    public static AUnionType createNullableType(IAType t) {
+        String s = t != null ? t.getTypeName() : null;
+        return createNullableType(t, s == null ? null : s + "?");
+    }
+
+    @Override
+    public void generateNestedDerivedTypeNames() {
+        if (isNullableType()) {
+            IAType nullableType = getNullableType();
+            if (nullableType.getTypeTag().isDerivedType() && nullableType.getTypeName() == null) {
+                AbstractComplexType derivedType = (AbstractComplexType) nullableType;
+                derivedType.setTypeName(getTypeName());
+                derivedType.generateNestedDerivedTypeNames();
+            }
+
+        }
     }
 
     @Override
@@ -121,10 +143,9 @@ public class AUnionType extends AbstractComplexType {
     @Override
     public JSONObject toJSON() throws JSONException {
         JSONObject type = new JSONObject();
-        type.put("type", "UNION");
+        type.put("type", AUnionType.class.getName());
 
         JSONArray fields = new JSONArray();
-
         Iterator<IAType> iter = unionList.iterator();
         if (iter.hasNext()) {
             IAType t0 = iter.next();

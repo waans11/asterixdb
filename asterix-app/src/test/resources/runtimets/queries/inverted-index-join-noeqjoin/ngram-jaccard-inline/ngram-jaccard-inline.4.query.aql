@@ -11,7 +11,7 @@ set import-private-functions 'true';
 
 for $a in dataset('DBLP')
 for $b in dataset('CSX')
-let $jacc := similarity-jaccard(gram-tokens($a.title, 3, false), gram-tokens($b.title, 3, false))
+let $jacc := /*+ indexnl */ similarity-jaccard(gram-tokens($a.title, 3, false), gram-tokens($b.title, 3, false))
 where $jacc >= 0.5f and $a.id < $b.id
 order by $jacc, $a.id, $b.id
 return { "a": $a.title, "b": $b.title, "jacc": $jacc }

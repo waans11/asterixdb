@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,10 +42,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.properties.UnorderedPartition
 
 public abstract class AqlDataSource implements IDataSource<AqlSourceId> {
 
-    private AqlSourceId id;
-    private String datasourceDataverse;
-    private String datasourceName;
-    private AqlDataSourceType datasourceType;
+    private final AqlSourceId id;
+   private final IAType itemType;
+    private final AqlDataSourceType datasourceType;
     protected IAType[] schemaTypes;
     protected INodeDomain domain;
     private Map<String, Serializable> properties = new HashMap<String, Serializable>();
@@ -53,28 +52,34 @@ public abstract class AqlDataSource implements IDataSource<AqlSourceId> {
     public enum AqlDataSourceType {
         INTERNAL_DATASET,
         EXTERNAL_DATASET,
-        FEED
+        FEED,
+        LOADABLE
     }
 
-    public AqlDataSource(AqlSourceId id, String datasourceDataverse, String datasourceName, IAType itemType,
-            AqlDataSourceType datasourceType) throws AlgebricksException {
+    public AqlDataSource(AqlSourceId id, String datasourceDataverse, String datasourceName,
+            IAType itemType, AqlDataSourceType datasourceType) throws AlgebricksException {
         this.id = id;
-        this.datasourceDataverse = datasourceDataverse;
-        this.datasourceName = datasourceName;
+        this.itemType = itemType;
         this.datasourceType = datasourceType;
     }
 
     public String getDatasourceDataverse() {
-        return datasourceDataverse;
+        return id.getDataverseName();
     }
 
     public String getDatasourceName() {
-        return datasourceName;
+        return id.getDatasourceName();
     }
 
+    @Override
     public abstract IAType[] getSchemaTypes();
 
     public abstract INodeDomain getDomain();
+
+    public void computeLocalStructuralProperties(List<ILocalStructuralProperty> localProps,
+            List<LogicalVariable> variables) {
+        // do nothing
+    }
 
     @Override
     public AqlSourceId getId() {
@@ -88,9 +93,9 @@ public abstract class AqlDataSource implements IDataSource<AqlSourceId> {
 
     @Override
     public IDataSourcePropertiesProvider getPropertiesProvider() {
-        return new AqlDataSourcePartitioningProvider(datasourceType, domain);
+        return new AqlDataSourcePartitioningProvider(this, domain);
     }
-    
+
     @Override
     public void computeFDs(List<LogicalVariable> scanVariables, List<FunctionalDependency> fdList) {
         int n = scanVariables.size();
@@ -102,55 +107,35 @@ public abstract class AqlDataSource implements IDataSource<AqlSourceId> {
             fdList.add(fd);
         }
     }
-    
- 
+
     private static class AqlDataSourcePartitioningProvider implements IDataSourcePropertiesProvider {
 
-        private INodeDomain domain;
+        private final AqlDataSource ds;
 
-        private AqlDataSourceType aqlDataSourceType;
+        private final INodeDomain domain;
 
-        public AqlDataSourcePartitioningProvider(AqlDataSourceType datasetSourceType, INodeDomain domain) {
-            this.aqlDataSourceType = datasetSourceType;
+        public AqlDataSourcePartitioningProvider(AqlDataSource dataSource, INodeDomain domain) {
+            this.ds = dataSource;
             this.domain = domain;
         }
 
         @Override
         public IPhysicalPropertiesVector computePropertiesVector(List<LogicalVariable> scanVariables) {
             IPhysicalPropertiesVector propsVector = null;
-
-            switch (aqlDataSourceType) {
-                case EXTERNAL_DATASET: {
-                    IPartitioningProperty pp = new RandomPartitioningProperty(domain);
-                    List<ILocalStructuralProperty> propsLocal = new ArrayList<ILocalStructuralProperty>();
-                    propsVector = new StructuralPropertiesVector(pp, propsLocal);
-                }
-
-                case FEED: {
-                    int n = scanVariables.size();
-                    IPartitioningProperty pp;
-                    if (n < 2) {
-                        pp = new RandomPartitioningProperty(domain);
-                    } else {
-                        Set<LogicalVariable> pvars = new ListSet<LogicalVariable>();
-                        int i = 0;
-                        for (LogicalVariable v : scanVariables) {
-                            pvars.add(v);
-                            ++i;
-                            if (i >= n - 1) {
-                                break;
-                            }
-                        }
-                        pp = new UnorderedPartitionedProperty(pvars, domain);
-                    }
-                    List<ILocalStructuralProperty> propsLocal = new ArrayList<ILocalStructuralProperty>();
+            IPartitioningProperty pp;
+            List<ILocalStructuralProperty> propsLocal;
+            int n;
+            switch (ds.getDatasourceType()) {
+                case LOADABLE:
+                case EXTERNAL_DATASET:
+                    pp = new RandomPartitioningProperty(domain);
+                    propsLocal = new ArrayList<ILocalStructuralProperty>();
+                    ds.computeLocalStructuralProperties(propsLocal, scanVariables);
                     propsVector = new StructuralPropertiesVector(pp, propsLocal);
                     break;
-                }
 
-                case INTERNAL_DATASET: {
-                    int n = scanVariables.size();
-                    IPartitioningProperty pp;
+                case FEED:
+                    n = scanVariables.size();
                     if (n < 2) {
                         pp = new RandomPartitioningProperty(domain);
                     } else {
@@ -165,17 +150,37 @@ public abstract class AqlDataSource implements IDataSource<AqlSourceId> {
                         }
                         pp = new UnorderedPartitionedProperty(pvars, domain);
                     }
-                    List<ILocalStructuralProperty> propsLocal = new ArrayList<ILocalStructuralProperty>();
+                    propsLocal = new ArrayList<ILocalStructuralProperty>();
+                    propsVector = new StructuralPropertiesVector(pp, propsLocal);
+                    break;
+
+                case INTERNAL_DATASET:
+                    n = scanVariables.size();
+                    if (n < 2) {
+                        pp = new RandomPartitioningProperty(domain);
+                    } else {
+                        Set<LogicalVariable> pvars = new ListSet<LogicalVariable>();
+                        int i = 0;
+                        for (LogicalVariable v : scanVariables) {
+                            pvars.add(v);
+                            ++i;
+                            if (i >= n - 1) {
+                                break;
+                            }
+                        }
+                        pp = new UnorderedPartitionedProperty(pvars, domain);
+                    }
+                    propsLocal = new ArrayList<ILocalStructuralProperty>();
+                    List<OrderColumn> orderColumns = new ArrayList<OrderColumn>();
                     for (int i = 0; i < n - 1; i++) {
-                        propsLocal.add(new LocalOrderProperty(new OrderColumn(scanVariables.get(i), OrderKind.ASC)));
+                        orderColumns.add(new OrderColumn(scanVariables.get(i), OrderKind.ASC));
                     }
+                    propsLocal.add(new LocalOrderProperty(orderColumns));
                     propsVector = new StructuralPropertiesVector(pp, propsLocal);
-                }
                     break;
 
-                default: {
+                default:
                     throw new IllegalArgumentException();
-                }
             }
             return propsVector;
         }
@@ -189,7 +194,10 @@ public abstract class AqlDataSource implements IDataSource<AqlSourceId> {
     public Map<String, Serializable> getProperties() {
         return properties;
     }
-
+    
+    public IAType getItemType() {
+        return itemType;
+    }
     public void setProperties(Map<String, Serializable> properties) {
         this.properties = properties;
     }

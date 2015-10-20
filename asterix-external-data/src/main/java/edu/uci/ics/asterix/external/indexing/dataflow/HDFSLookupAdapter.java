@@ -24,6 +24,7 @@ import org.apache.hadoop.mapred.JobConf;
 
 import edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory;
 import edu.uci.ics.asterix.external.adapter.factory.HDFSIndexingAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.StreamBasedAdapterFactory;
 import edu.uci.ics.asterix.external.indexing.input.RCFileLookupReader;
 import edu.uci.ics.asterix.external.indexing.input.SequenceFileLookupInputStream;
 import edu.uci.ics.asterix.external.indexing.input.SequenceFileLookupReader;
@@ -34,6 +35,7 @@ import edu.uci.ics.asterix.metadata.external.IControlledAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.runtime.operators.file.ADMDataParser;
+import edu.uci.ics.asterix.runtime.operators.file.AsterixTupleParserFactory;
 import edu.uci.ics.asterix.runtime.operators.file.DelimitedDataParser;
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
@@ -41,7 +43,6 @@ import edu.uci.ics.hyracks.api.dataflow.value.INullWriterFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 
-@SuppressWarnings("deprecation")
 public class HDFSLookupAdapter implements IControlledAdapter, Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -81,7 +82,7 @@ public class HDFSLookupAdapter implements IControlledAdapter, Serializable {
         // Create the lookup reader and the controlled parser
         if (configuration.get(HDFSAdapterFactory.KEY_INPUT_FORMAT).equals(HDFSAdapterFactory.INPUT_FORMAT_RC)) {
             configureRCFile(jobConf, iNullWriterFactory);
-        } else if (configuration.get(HDFSAdapterFactory.KEY_FORMAT).equals(HDFSAdapterFactory.FORMAT_ADM)) {
+        } else if (configuration.get(AsterixTupleParserFactory.KEY_FORMAT).equals(AsterixTupleParserFactory.FORMAT_ADM)) {
             // create an adm parser
             ADMDataParser dataParser = new ADMDataParser();
             if (configuration.get(HDFSAdapterFactory.KEY_INPUT_FORMAT).equals(HDFSAdapterFactory.INPUT_FORMAT_TEXT)) {
@@ -95,10 +96,13 @@ public class HDFSLookupAdapter implements IControlledAdapter, Serializable {
                 parser = new AdmOrDelimitedControlledTupleParser(ctx, (ARecordType) atype, in, propagateInput,
                         inRecDesc, dataParser, propagatedFields, ridFields, retainNull, iNullWriterFactory);
             }
-        } else if (configuration.get(HDFSAdapterFactory.KEY_FORMAT).equals(HDFSAdapterFactory.FORMAT_DELIMITED_TEXT)) {
+        } else if (configuration.get(AsterixTupleParserFactory.KEY_FORMAT).equals(AsterixTupleParserFactory.FORMAT_DELIMITED_TEXT)) {
             // create a delimited text parser
-            DelimitedDataParser dataParser = HDFSIndexingAdapterFactory.getDilimitedDataParser((ARecordType) atype,
-                    (configuration.get(HDFSAdapterFactory.KEY_DELIMITER)).charAt(0));
+            char delimiter = AsterixTupleParserFactory.getDelimiter(configuration);
+            char quote = AsterixTupleParserFactory.getQuote(configuration, delimiter);
+
+            DelimitedDataParser dataParser = HDFSIndexingAdapterFactory.getDelimitedDataParser((ARecordType) atype,
+                    delimiter, quote);
             if (configuration.get(HDFSAdapterFactory.KEY_INPUT_FORMAT).equals(HDFSAdapterFactory.INPUT_FORMAT_TEXT)) {
                 // Text input format
                 TextFileLookupInputStream in = new TextFileLookupInputStream(fileIndexAccessor, jobConf);
@@ -144,7 +148,8 @@ public class HDFSLookupAdapter implements IControlledAdapter, Serializable {
         // Do nothing
     }
 
-    private void configureRCFile(Configuration jobConf, INullWriterFactory iNullWriterFactory) throws IOException, Exception {
+    private void configureRCFile(Configuration jobConf, INullWriterFactory iNullWriterFactory) throws IOException,
+            Exception {
         // RCFileLookupReader
         RCFileLookupReader reader = new RCFileLookupReader(fileIndexAccessor,
                 HDFSAdapterFactory.configureJobConf(configuration));

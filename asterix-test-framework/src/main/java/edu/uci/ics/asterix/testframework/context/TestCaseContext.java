@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,8 +34,10 @@ public class TestCaseContext {
      */
     public enum OutputFormat {
         NONE  ("", ""),
-        ADM   ("adm", "application/adm"),
-        JSON  ("json", "application/json");
+        ADM   ("adm", "application/x-adm"),
+        JSON  ("json", "application/json"),
+        CSV   ("csv", "text/csv"),
+        CSV_HEADER ("csv-header", "text/csv; header=present");
 
         private final String extension;
         private final String mimetype;
@@ -59,6 +61,10 @@ public class TestCaseContext {
                 return OutputFormat.ADM;
             case JSON:
                 return OutputFormat.JSON;
+            case CSV:
+                return OutputFormat.CSV;
+            case CSV_HEADER:
+                return OutputFormat.CSV_HEADER;
             case INSPECT:
             case IGNORE:
                 return OutputFormat.NONE;
@@ -70,6 +76,8 @@ public class TestCaseContext {
     };
 
     public static final String DEFAULT_TESTSUITE_XML_NAME = "testsuite.xml";
+    public static final String ONLY_TESTSUITE_XML_NAME = "only.xml";
+    public static final String DEFAULT_REPEADED_TESTSUITE_XML_NAME = "repeatedtestsuite.xml";
 
     private File tsRoot;
 
@@ -199,7 +207,7 @@ public class TestCaseContext {
                         // Check all compilation units for matching
                         // name. If ANY match, add the test.
                         for (TestCase.CompilationUnit cu : tc.getCompilationUnit()) {
-                            if (m_re.matcher(cu.getName()).matches()) {
+                            if (m_re.matcher(cu.getName()).find()) {
                                 matches = true;
                                 break;
                             }

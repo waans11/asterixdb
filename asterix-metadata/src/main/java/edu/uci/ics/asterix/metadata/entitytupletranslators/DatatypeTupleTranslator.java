@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,10 +20,7 @@ import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.rmi.RemoteException;
-import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.List;
 
 import edu.uci.ics.asterix.builders.IARecordBuilder;
 import edu.uci.ics.asterix.builders.OrderedListBuilder;
@@ -48,9 +45,9 @@ import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnionType;
 import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
-import edu.uci.ics.asterix.om.types.BuiltinType;
+import edu.uci.ics.asterix.om.types.AbstractComplexType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
+import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
@@ -70,9 +67,7 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
     public static final int DATATYPE_PAYLOAD_TUPLE_FIELD_INDEX = 2;
 
     public enum DerivedTypeTag {
-        ENUM,
         RECORD,
-        UNION,
         UNORDEREDLIST,
         ORDEREDLIST
     };
@@ -115,8 +110,6 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
             boolean isAnonymous = ((ABoolean) derivedTypeRecord
                     .getValueByPos(MetadataRecordTypes.DERIVEDTYPE_ARECORD_ISANONYMOUS_FIELD_INDEX)).getBoolean();
             switch (tag) {
-                case ENUM:
-                    throw new NotImplementedException("Enum type");
                 case RECORD: {
                     ARecord recordType = (ARecord) derivedTypeRecord
                             .getValueByPos(MetadataRecordTypes.DERIVEDTYPE_ARECORD_RECORD_FIELD_INDEX);
@@ -139,59 +132,41 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
                         fieldTypeName = ((AString) field
                                 .getValueByPos(MetadataRecordTypes.FIELD_ARECORD_FIELDTYPE_FIELD_INDEX))
                                 .getStringValue();
-                        fieldTypes[fieldId] = getTypeFromTypeName(dataverseName, fieldTypeName);
+                        boolean isNullable = ((ABoolean) field
+                                .getValueByPos(MetadataRecordTypes.FIELD_ARECORD_ISNULLABLE_FIELD_INDEX)).getBoolean()
+                                .booleanValue();
+                        fieldTypes[fieldId] = AsterixBuiltinTypeMap.getTypeFromTypeName(metadataNode, jobId,
+                                dataverseName, fieldTypeName, isNullable);
                         fieldId++;
                     }
                     try {
                         return new Datatype(dataverseName, datatypeName, new ARecordType(datatypeName, fieldNames,
                                 fieldTypes, isOpen), isAnonymous);
-                    } catch (AsterixException e) {
+                    } catch (AsterixException | HyracksDataException e) {
                         throw new MetadataException(e);
                     }
-                }
-                case UNION: {
-                    IACursor cursor = ((AOrderedList) derivedTypeRecord
-                            .getValueByPos(MetadataRecordTypes.DERIVEDTYPE_ARECORD_UNION_FIELD_INDEX)).getCursor();
-                    List<IAType> unionList = new ArrayList<IAType>();
-                    String itemTypeName;
-                    while (cursor.next()) {
-                        itemTypeName = ((AString) cursor.get()).getStringValue();
-                        unionList.add(getTypeFromTypeName(dataverseName, itemTypeName));
-                    }
-                    return new Datatype(dataverseName, datatypeName, new AUnionType(unionList, datatypeName),
-                            isAnonymous);
                 }
                 case UNORDEREDLIST: {
                     String unorderedlistTypeName = ((AString) derivedTypeRecord
                             .getValueByPos(MetadataRecordTypes.DERIVEDTYPE_ARECORD_UNORDEREDLIST_FIELD_INDEX))
                             .getStringValue();
-                    return new Datatype(dataverseName, datatypeName, new AUnorderedListType(getTypeFromTypeName(
-                            dataverseName, unorderedlistTypeName), datatypeName), isAnonymous);
+                    return new Datatype(dataverseName, datatypeName, new AUnorderedListType(
+                            AsterixBuiltinTypeMap.getTypeFromTypeName(metadataNode, jobId, dataverseName,
+                                    unorderedlistTypeName, false), datatypeName), isAnonymous);
                 }
                 case ORDEREDLIST: {
                     String orderedlistTypeName = ((AString) derivedTypeRecord
                             .getValueByPos(MetadataRecordTypes.DERIVEDTYPE_ARECORD_ORDEREDLIST_FIELD_INDEX))
                             .getStringValue();
-                    return new Datatype(dataverseName, datatypeName, new AOrderedListType(getTypeFromTypeName(
-                            dataverseName, orderedlistTypeName), datatypeName), isAnonymous);
+                    return new Datatype(dataverseName, datatypeName, new AOrderedListType(
+                            AsterixBuiltinTypeMap.getTypeFromTypeName(metadataNode, jobId, dataverseName,
+                                    orderedlistTypeName, false), datatypeName), isAnonymous);
                 }
                 default:
                     throw new UnsupportedOperationException("Unsupported derived type: " + tag);
             }
         }
         return new Datatype(dataverseName, datatypeName, type, false);
-    }
-
-    private IAType getTypeFromTypeName(String dataverseName, String typeName) throws MetadataException {
-        IAType type = AsterixBuiltinTypeMap.getBuiltinTypes().get(typeName);
-        if (type == null) {
-            try {
-                return metadataNode.getDatatype(jobId, dataverseName, typeName).getDatatype();
-            } catch (RemoteException e) {
-                throw new MetadataException(e);
-            }
-        }
-        return type;
     }
 
     @Override
@@ -220,19 +195,24 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
         stringSerde.serialize(aString, fieldValue.getDataOutput());
         recordBuilder.addField(MetadataRecordTypes.DATATYPE_ARECORD_DATATYPENAME_FIELD_INDEX, fieldValue);
 
-        // write field 2
-        ATypeTag tag = dataType.getDatatype().getTypeTag();
-        if (isDerivedType(tag)) {
+        IAType fieldType = dataType.getDatatype();
+        //unwrap nullable type out of the union
+        if (fieldType.getTypeTag() == ATypeTag.UNION) {
+            fieldType = ((AUnionType) dataType.getDatatype()).getNullableType();
+        }
+
+        // write field 3
+        if (fieldType.getTypeTag().isDerivedType()) {
             fieldValue.reset();
             try {
-                writeDerivedTypeRecord(dataType, fieldValue.getDataOutput());
+                writeDerivedTypeRecord(dataType, (AbstractComplexType) fieldType, fieldValue.getDataOutput());
             } catch (AsterixException e) {
                 throw new MetadataException(e);
             }
             recordBuilder.addField(MetadataRecordTypes.DATATYPE_ARECORD_DERIVED_FIELD_INDEX, fieldValue);
         }
 
-        // write field 3
+        // write field 4
         fieldValue.reset();
         aString.setValue(Calendar.getInstance().getTime().toString());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
@@ -250,14 +230,12 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
         return tuple;
     }
 
-    private void writeDerivedTypeRecord(Datatype type, DataOutput out) throws IOException, AsterixException {
-        DerivedTypeTag tag;
+    private void writeDerivedTypeRecord(Datatype type, AbstractComplexType derivedDatatype, DataOutput out)
+            throws IOException, AsterixException {
+        DerivedTypeTag tag = null;
         IARecordBuilder derivedRecordBuilder = new RecordBuilder();
         ArrayBackedValueStorage fieldValue = new ArrayBackedValueStorage();
-        switch (type.getDatatype().getTypeTag()) {
-            case UNION:
-                tag = DerivedTypeTag.UNION;
-                break;
+        switch (derivedDatatype.getTypeTag()) {
             case ORDEREDLIST:
                 tag = DerivedTypeTag.ORDEREDLIST;
                 break;
@@ -268,8 +246,8 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
                 tag = DerivedTypeTag.RECORD;
                 break;
             default:
-                throw new UnsupportedOperationException("No metadata record Type for"
-                        + type.getDatatype().getDisplayName());
+                throw new UnsupportedOperationException("No metadata record Type for "
+                        + derivedDatatype.getDisplayName());
         }
 
         derivedRecordBuilder.reset(MetadataRecordTypes.DERIVEDTYPE_RECORDTYPE);
@@ -286,27 +264,20 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
         derivedRecordBuilder.addField(MetadataRecordTypes.DERIVEDTYPE_ARECORD_ISANONYMOUS_FIELD_INDEX, fieldValue);
 
         switch (tag) {
-            case ENUM:
-                break;
             case RECORD:
                 fieldValue.reset();
-                writeRecordType(type, fieldValue.getDataOutput());
+                writeRecordType(type, derivedDatatype, fieldValue.getDataOutput());
                 derivedRecordBuilder.addField(MetadataRecordTypes.DERIVEDTYPE_ARECORD_RECORD_FIELD_INDEX, fieldValue);
-                break;
-            case UNION:
-                fieldValue.reset();
-                writeUnionType(type, fieldValue.getDataOutput());
-                derivedRecordBuilder.addField(MetadataRecordTypes.DERIVEDTYPE_ARECORD_UNION_FIELD_INDEX, fieldValue);
                 break;
             case UNORDEREDLIST:
                 fieldValue.reset();
-                writeCollectionType(type, fieldValue.getDataOutput());
+                writeCollectionType(type, derivedDatatype, fieldValue.getDataOutput());
                 derivedRecordBuilder.addField(MetadataRecordTypes.DERIVEDTYPE_ARECORD_UNORDEREDLIST_FIELD_INDEX,
                         fieldValue);
                 break;
             case ORDEREDLIST:
                 fieldValue.reset();
-                writeCollectionType(type, fieldValue.getDataOutput());
+                writeCollectionType(type, derivedDatatype, fieldValue.getDataOutput());
                 derivedRecordBuilder.addField(MetadataRecordTypes.DERIVEDTYPE_ARECORD_ORDEREDLIST_FIELD_INDEX,
                         fieldValue);
                 break;
@@ -314,78 +285,40 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
         derivedRecordBuilder.write(out, true);
     }
 
-    private void writeCollectionType(Datatype instance, DataOutput out) throws HyracksDataException {
-        AbstractCollectionType listType = (AbstractCollectionType) instance.getDatatype();
-        String itemTypeName = listType.getItemType().getTypeName();
-        if (isDerivedType(listType.getItemType().getTypeTag())) {
-            try {
-                itemTypeName = handleNestedDerivedType(itemTypeName, instance.getDatatypeName() + "_ItemType",
-                        listType.getItemType(), instance);
-            } catch (Exception e) {
-                // TODO: This should not be a HyracksDataException. Can't
-                // fix this currently because of BTree exception model whose
-                // fixes must get in.
-                throw new HyracksDataException(e);
-            }
-        }
-        aString.setValue(itemTypeName);
+    private void writeCollectionType(Datatype instance, AbstractComplexType type, DataOutput out)
+            throws HyracksDataException {
+        AbstractCollectionType listType = (AbstractCollectionType) type;
+        IAType itemType = listType.getItemType();
+        if (itemType.getTypeTag().isDerivedType())
+            handleNestedDerivedType(itemType.getTypeName(), (AbstractComplexType) itemType, instance,
+                    instance.getDataverseName(), instance.getDatatypeName());
+        aString.setValue(listType.getItemType().getTypeName());
         stringSerde.serialize(aString, out);
     }
 
-    private void writeUnionType(Datatype instance, DataOutput dataOutput) throws HyracksDataException {
-        List<IAType> unionList = ((AUnionType) instance.getDatatype()).getUnionList();
-        OrderedListBuilder listBuilder = new OrderedListBuilder();
-        listBuilder.reset(new AOrderedListType(BuiltinType.ASTRING, null));
-        ArrayBackedValueStorage itemValue = new ArrayBackedValueStorage();
-        String typeName = null;
-
-        int i = 0;
-        for (IAType t : unionList) {
-            typeName = t.getTypeName();
-            if (isDerivedType(t.getTypeTag())) {
-                try {
-                    typeName = handleNestedDerivedType(typeName,
-                            "Type_#" + i + "_UnionType_" + instance.getDatatypeName(), t, instance);
-                } catch (Exception e) {
-                    // TODO: This should not be a HyracksDataException. Can't
-                    // fix this currently because of BTree exception model whose
-                    // fixes must get in.
-                    throw new HyracksDataException(e);
-                }
-            }
-            itemValue.reset();
-            aString.setValue(typeName);
-            stringSerde.serialize(aString, itemValue.getDataOutput());
-            listBuilder.addItem(itemValue);
-            i++;
-        }
-        listBuilder.write(dataOutput, true);
-    }
-
-    private void writeRecordType(Datatype instance, DataOutput out) throws IOException, AsterixException {
+    private void writeRecordType(Datatype instance, AbstractComplexType type, DataOutput out) throws IOException,
+            AsterixException {
 
         ArrayBackedValueStorage fieldValue = new ArrayBackedValueStorage();
         ArrayBackedValueStorage itemValue = new ArrayBackedValueStorage();
         IARecordBuilder recordRecordBuilder = new RecordBuilder();
         IARecordBuilder fieldRecordBuilder = new RecordBuilder();
 
-        ARecordType recType = (ARecordType) instance.getDatatype();
+        ARecordType recType = (ARecordType) type;
         OrderedListBuilder listBuilder = new OrderedListBuilder();
         listBuilder.reset(new AOrderedListType(MetadataRecordTypes.FIELD_RECORDTYPE, null));
-        String fieldTypeName = null;
+        IAType fieldType = null;
+
         for (int i = 0; i < recType.getFieldNames().length; i++) {
-            fieldTypeName = recType.getFieldTypes()[i].getTypeName();
-            if (isDerivedType(recType.getFieldTypes()[i].getTypeTag())) {
-                try {
-                    fieldTypeName = handleNestedDerivedType(fieldTypeName, "Field_" + recType.getFieldNames()[i]
-                            + "_in_" + instance.getDatatypeName(), recType.getFieldTypes()[i], instance);
-                } catch (Exception e) {
-                    // TODO: This should not be a HyracksDataException. Can't
-                    // fix this currently because of BTree exception model whose
-                    // fixes must get in.
-                    throw new HyracksDataException(e);
-                }
+            fieldType = recType.getFieldTypes()[i];
+            boolean fieldIsNullable = false;
+            if (NonTaggedFormatUtil.isOptional(fieldType)) {
+                fieldIsNullable = true;
+                fieldType = ((AUnionType) fieldType).getNullableType();
             }
+            if (fieldType.getTypeTag().isDerivedType())
+                handleNestedDerivedType(fieldType.getTypeName(), (AbstractComplexType) fieldType, instance,
+                        instance.getDataverseName(), instance.getDatatypeName());
 
             itemValue.reset();
             fieldRecordBuilder.reset(MetadataRecordTypes.FIELD_RECORDTYPE);
@@ -398,9 +331,14 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
 
             // write field 1
             fieldValue.reset();
-            aString.setValue(fieldTypeName);
+            aString.setValue(fieldType.getTypeName());
             stringSerde.serialize(aString, fieldValue.getDataOutput());
             fieldRecordBuilder.addField(MetadataRecordTypes.FIELD_ARECORD_FIELDTYPE_FIELD_INDEX, fieldValue);
+
+            // write field 2
+            fieldValue.reset();
+            booleanSerde.serialize(fieldIsNullable ? ABoolean.TRUE : ABoolean.FALSE, fieldValue.getDataOutput());
+            fieldRecordBuilder.addField(MetadataRecordTypes.FIELD_ARECORD_ISNULLABLE_FIELD_INDEX, fieldValue);
 
             // write record
             fieldRecordBuilder.write(itemValue.getDataOutput(), true);
@@ -424,30 +362,22 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
         recordRecordBuilder.write(out, true);
     }
 
-    private String handleNestedDerivedType(String typeName, String suggestedTypeName, IAType nestedType,
-            Datatype topLevelType) throws Exception {
-        MetadataNode mn = MetadataNode.INSTANCE;
+    private String handleNestedDerivedType(String typeName, AbstractComplexType nestedType, Datatype topLevelType,
+            String dataverseName, String datatypeName) throws HyracksDataException {
         try {
-            if (typeName == null) {
-                typeName = suggestedTypeName;
-                metadataNode.addDatatype(jobId, new Datatype(topLevelType.getDataverseName(), typeName, nestedType,
-                        true));
+            metadataNode.addDatatype(jobId, new Datatype(dataverseName, typeName, nestedType, true));
 
-            }
-            mn.insertIntoDatatypeSecondaryIndex(jobId, topLevelType.getDataverseName(), typeName,
-                    topLevelType.getDatatypeName());
-
-        } catch (TreeIndexDuplicateKeyException e) {
-            // The key may have been inserted by a previous DDL statement or by
+        } catch (MetadataException e) {
+            // The nested record type may have been inserted by a previous DDL statement or by
             // a previous nested type.
+            if (!e.getCause().getClass().equals(TreeIndexDuplicateKeyException.class))
+                throw new HyracksDataException(e);
+        } catch (Exception e) {
+            // TODO: This should not be a HyracksDataException. Can't
+            // fix this currently because of BTree exception model whose
+            // fixes must get in.
+            throw new HyracksDataException(e);
         }
         return typeName;
-    }
-
-    private boolean isDerivedType(ATypeTag tag) {
-        if (tag == ATypeTag.RECORD || tag == ATypeTag.ORDEREDLIST || tag == ATypeTag.UNORDEREDLIST
-                || tag == ATypeTag.UNION)
-            return true;
-        return false;
     }
 }

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -185,6 +185,13 @@ public class ValidateCommand extends AbstractCommand {
             if (cluster.getLogDir() == null || cluster.getLogDir().length() == 0) {
                 valid = false;
                 LOGGER.fatal("log_dir not defined at cluster/node level for node: " + node.getId() + ERROR);
+            }
+        }
+
+        if (node.getTxnLogDir() == null || node.getTxnLogDir().length() == 0) {
+            if (cluster.getTxnLogDir() == null || cluster.getTxnLogDir().length() == 0) {
+                valid = false;
+                LOGGER.fatal("txn_log_dir not defined at cluster/node level for node: " + node.getId() + ERROR);
             }
         }
 

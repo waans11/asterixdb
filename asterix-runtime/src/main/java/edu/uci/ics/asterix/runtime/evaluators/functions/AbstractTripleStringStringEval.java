@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -76,22 +76,18 @@ public abstract class AbstractTripleStringStringEval implements ICopyEvaluator {
         eval2.evaluate(tuple);
 
         try {
-            // type-check: (string?, string, string)
-
-            if (array0.getByteArray()[0] == SER_NULL_TYPE_TAG) {
-                if (array1.getByteArray()[0] == SER_STRING_TYPE_TAG && array2.getByteArray()[0] == SER_STRING_TYPE_TAG) {
-                    nullSerde.serialize(ANull.NULL, dout);
-                    return;
-                }
-            }
-
-            if (array0.getByteArray()[0] != SER_STRING_TYPE_TAG || array1.getByteArray()[0] != SER_STRING_TYPE_TAG
+            if (array0.getByteArray()[0] == SER_NULL_TYPE_TAG || array1.getByteArray()[0] == SER_NULL_TYPE_TAG
+                    || array2.getByteArray()[0] == SER_NULL_TYPE_TAG) {
+                nullSerde.serialize(ANull.NULL, dout);
+                return;
+            } else if (array0.getByteArray()[0] != SER_STRING_TYPE_TAG
+                    || array1.getByteArray()[0] != SER_STRING_TYPE_TAG
                     || array2.getByteArray()[0] != SER_STRING_TYPE_TAG) {
                 throw new AlgebricksException(funcID.getName()
-                        + ": expects input type (STRING/NULL, STRING, STRING), but got ("
+                        + ": expects input type (STRING/NULL, STRING/NULL, STRING/NULL), but got ("
                         + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(array0.getByteArray()[0]) + ", "
                         + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(array1.getByteArray()[0]) + ", "
-                        + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(array2.getByteArray()[0]) + ").");
+                        + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(array2.getByteArray()[0]) + ".");
             }
         } catch (HyracksDataException e) {
             throw new AlgebricksException(e);

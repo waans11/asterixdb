@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -50,7 +50,7 @@ public class AOrderedListType extends AbstractCollectionType {
     public boolean equals(Object obj) {
         if (obj instanceof AOrderedListType) {
             AOrderedListType type = (AOrderedListType) obj;
-            return this.itemType == type.itemType;
+            return this.itemType.equals(type.itemType);
         }
         return false;
     }
@@ -73,7 +73,8 @@ public class AOrderedListType extends AbstractCollectionType {
     @Override
     public JSONObject toJSON() throws JSONException {
         JSONObject type = new JSONObject();
-        type.put("type", itemType);
+        type.put("type", AOrderedListType.class.getName());
+        type.put("item-type", itemType.toJSON());
         return type;
     }
 }

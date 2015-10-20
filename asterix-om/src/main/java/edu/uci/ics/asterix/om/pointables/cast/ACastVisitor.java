@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,14 +15,15 @@
 
 package edu.uci.ics.asterix.om.pointables.cast;
 
+import java.io.DataOutput;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.om.pointables.AFlatValuePointable;
-import edu.uci.ics.asterix.om.pointables.AListPointable;
-import edu.uci.ics.asterix.om.pointables.ARecordPointable;
+import edu.uci.ics.asterix.om.pointables.AListVisitablePointable;
+import edu.uci.ics.asterix.om.pointables.ARecordVisitablePointable;
 import edu.uci.ics.asterix.om.pointables.base.DefaultOpenFieldType;
 import edu.uci.ics.asterix.om.pointables.base.IVisitablePointable;
 import edu.uci.ics.asterix.om.pointables.visitor.IVisitablePointableVisitor;
@@ -32,7 +33,7 @@ import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
-import edu.uci.ics.asterix.om.types.hierachy.ITypePromoteComputer;
+import edu.uci.ics.asterix.om.types.hierachy.ITypeConvertComputer;
 import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 
@@ -53,7 +54,7 @@ public class ACastVisitor implements IVisitablePointableVisitor<Void, Triple<IVi
     private final Map<IVisitablePointable, AListCaster> laccessorToCaster = new HashMap<IVisitablePointable, AListCaster>();
 
     @Override
-    public Void visit(AListPointable accessor, Triple<IVisitablePointable, IAType, Boolean> arg)
+    public Void visit(AListVisitablePointable accessor, Triple<IVisitablePointable, IAType, Boolean> arg)
             throws AsterixException {
         AListCaster caster = laccessorToCaster.get(accessor);
         if (caster == null) {
@@ -72,7 +73,7 @@ public class ACastVisitor implements IVisitablePointableVisitor<Void, Triple<IVi
     }
 
     @Override
-    public Void visit(ARecordPointable accessor, Triple<IVisitablePointable, IAType, Boolean> arg)
+    public Void visit(ARecordVisitablePointable accessor, Triple<IVisitablePointable, IAType, Boolean> arg)
             throws AsterixException {
         ARecordCaster caster = raccessorToCaster.get(accessor);
         if (caster == null) {
@@ -83,7 +84,12 @@ public class ACastVisitor implements IVisitablePointableVisitor<Void, Triple<IVi
             if (arg.second.getTypeTag().equals(ATypeTag.ANY)) {
                 arg.second = DefaultOpenFieldType.NESTED_OPEN_RECORD_TYPE;
             }
-            caster.castRecord(accessor, arg.first, (ARecordType) arg.second, this);
+            ARecordType resultType = (ARecordType) arg.second;
+            //cloning result type to avoid race conditions during comparison\hash calculation
+            ARecordType clonedResultType = new ARecordType(resultType.getTypeName(), resultType.getFieldNames(),
+                    resultType.getFieldTypes(), resultType.isOpen());
+
+            caster.castRecord(accessor, arg.first, clonedResultType, this);
         } catch (Exception e) {
             throw new AsterixException(e);
         }
@@ -106,20 +112,16 @@ public class ACastVisitor implements IVisitablePointableVisitor<Void, Triple<IVi
             arg.first.set(accessor);
         } else {
             ArrayBackedValueStorage castBuffer = new ArrayBackedValueStorage();
-            ITypePromoteComputer promoteComputer = ATypeHierarchy.getTypePromoteComputer(inputTypeTag, reqTypeTag);
-            if (promoteComputer != null) {
 
-                try {
-                    // do the promotion; note that the type tag field should be skipped
-                    promoteComputer.promote(accessor.getByteArray(), accessor.getStartOffset() + 1,
-                            accessor.getLength() - 1, castBuffer.getDataOutput());
-                    arg.first.set(castBuffer);
-                } catch (IOException e) {
-                    throw new AsterixException(e);
-                }
-            } else {
-                throw new AsterixException("Type mismatch: cannot cast type " + inputTypeTag + " to " + reqTypeTag);
+            try {
+                ATypeHierarchy.convertNumericTypeByteArray(accessor.getByteArray(), accessor.getStartOffset(),
+                        accessor.getLength(), reqTypeTag, castBuffer.getDataOutput());
+                arg.first.set(castBuffer);
+            } catch (IOException e1) {
+                throw new AsterixException("Type mismatch: cannot cast the " + inputTypeTag + " type to the "
+                        + reqTypeTag + " type.");
             }
+
         }
 
         return null;

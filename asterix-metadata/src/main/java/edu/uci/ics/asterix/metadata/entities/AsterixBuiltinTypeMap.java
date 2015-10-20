@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,10 +15,16 @@
 
 package edu.uci.ics.asterix.metadata.entities;
 
+import java.rmi.RemoteException;
 import java.util.HashMap;
 import java.util.Map;
 
+import edu.uci.ics.asterix.common.transactions.JobId;
+import edu.uci.ics.asterix.metadata.MetadataException;
+import edu.uci.ics.asterix.metadata.MetadataNode;
+import edu.uci.ics.asterix.om.types.AUnionType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
+import edu.uci.ics.asterix.om.types.IAType;
 
 /**
  * Maps from a string representation of an Asterix type to an Asterix type.
@@ -36,6 +42,7 @@ public class AsterixBuiltinTypeMap {
         _builtinTypeMap.put("float", BuiltinType.AFLOAT);
         _builtinTypeMap.put("double", BuiltinType.ADOUBLE);
         _builtinTypeMap.put("string", BuiltinType.ASTRING);
+        _builtinTypeMap.put("binary", BuiltinType.ABINARY);
         _builtinTypeMap.put("date", BuiltinType.ADATE);
         _builtinTypeMap.put("time", BuiltinType.ATIME);
         _builtinTypeMap.put("datetime", BuiltinType.ADATETIME);
@@ -51,9 +58,26 @@ public class AsterixBuiltinTypeMap {
         _builtinTypeMap.put("rectangle", BuiltinType.ARECTANGLE);
         _builtinTypeMap.put("null", BuiltinType.ANULL);
         _builtinTypeMap.put("uuid", BuiltinType.AUUID);
+        _builtinTypeMap.put("shortwithouttypeinfo", BuiltinType.SHORTWITHOUTTYPEINFO);
     }
 
     public static Map<String, BuiltinType> getBuiltinTypes() {
         return _builtinTypeMap;
+    }
+
+    public static IAType getTypeFromTypeName(MetadataNode metadataNode, JobId jobId, String dataverseName,
+            String typeName, boolean isNullable) throws MetadataException {
+        IAType type = AsterixBuiltinTypeMap.getBuiltinTypes().get(typeName);
+        if (type == null) {
+            try {
+                Datatype dt = metadataNode.getDatatype(jobId, dataverseName, typeName);
+                type = dt.getDatatype();
+            } catch (RemoteException e) {
+                throw new MetadataException(e);
+            }
+        }
+        if (isNullable)
+            type = AUnionType.createNullableType(type);
+        return type;
     }
 }

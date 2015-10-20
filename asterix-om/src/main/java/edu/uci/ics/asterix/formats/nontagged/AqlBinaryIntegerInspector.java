@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,12 +14,14 @@
  */
 package edu.uci.ics.asterix.formats.nontagged;
 
+import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
 import edu.uci.ics.hyracks.algebricks.data.IBinaryIntegerInspector;
 import edu.uci.ics.hyracks.algebricks.data.IBinaryIntegerInspectorFactory;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 
 public class AqlBinaryIntegerInspector implements IBinaryIntegerInspector {
+
     public static final IBinaryIntegerInspectorFactory FACTORY = new IBinaryIntegerInspectorFactory() {
         private static final long serialVersionUID = 1L;
 
@@ -33,7 +35,7 @@ public class AqlBinaryIntegerInspector implements IBinaryIntegerInspector {
     }
 
     @Override
-    public int getIntegerValue(byte[] bytes, int offset, int length) {
-        return IntegerSerializerDeserializer.getInt(bytes, offset + 1);
+    public int getIntegerValue(byte[] bytes, int offset, int length) throws HyracksDataException {
+        return ATypeHierarchy.getIntegerValue(bytes, offset);
     }
 }

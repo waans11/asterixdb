@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,6 +28,7 @@ import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
+import edu.uci.ics.asterix.om.types.hierachy.ATypeHierarchy;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.runtime.unnestingfunctions.base.AbstractUnnestingFunctionDynamicDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -40,7 +41,6 @@ import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
 public class SubsetCollectionDescriptor extends AbstractUnnestingFunctionDynamicDescriptor {
 
@@ -88,11 +88,13 @@ public class SubsetCollectionDescriptor extends AbstractUnnestingFunctionDynamic
                         try {
                             inputVal.reset();
                             evalStart.evaluate(tuple);
-                            posStart = IntegerSerializerDeserializer.getInt(inputVal.getByteArray(), 1);
+
+                            posStart = ATypeHierarchy.getIntegerValue(inputVal.getByteArray(), 0);
 
                             inputVal.reset();
                             evalLen.evaluate(tuple);
-                            numItems = IntegerSerializerDeserializer.getInt(inputVal.getByteArray(), 1);
+
+                            numItems = ATypeHierarchy.getIntegerValue(inputVal.getByteArray(), 0);
 
                             inputVal.reset();
                             evalList.evaluate(tuple);

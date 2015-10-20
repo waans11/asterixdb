@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -93,6 +93,11 @@ public class StringConcatDescriptor extends AbstractScalarFunctionDynamicDescrip
                                 for (int i = 0; i < listAccessor.size(); i++) {
                                     int itemOffset = listAccessor.getItemOffset(i);
                                     ATypeTag itemType = listAccessor.getItemType(itemOffset);
+                                    // Increase the offset by 1 if the give list has heterogeneous elements,
+                                    // since the item itself has a typetag.
+                                    if (listAccessor.itemsAreSelfDescribing()) {
+                                        itemOffset += 1;
+                                    }
                                     if (itemType != ATypeTag.STRING) {
                                         if (itemType == ATypeTag.NULL) {
                                             nullSerde.serialize(ANull.NULL, out);
@@ -107,6 +112,9 @@ public class StringConcatDescriptor extends AbstractScalarFunctionDynamicDescrip
                                 StringUtils.writeUTF8Len(utf8Len, out);
                                 for (int i = 0; i < listAccessor.size(); i++) {
                                     int itemOffset = listAccessor.getItemOffset(i);
+                                    if (listAccessor.itemsAreSelfDescribing()) {
+                                        itemOffset += 1;
+                                    }
                                     utf8Len = UTF8StringPointable.getUTFLength(listBytes, itemOffset);
                                     for (int j = 0; j < utf8Len; j++) {
                                         out.writeByte(listBytes[2 + itemOffset + j]);

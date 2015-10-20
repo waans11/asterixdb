@@ -21,6 +21,15 @@
 	</parent>
 	<artifactId>asterix-runtime</artifactId>
 
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+      <comments>A business-friendly OSS license</comments>
+    </license>
+  </licenses>
+
 
 	<build>
 		<plugins>
@@ -160,8 +169,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
-			<artifactId>hadoop-core</artifactId>
-			<version>0.20.2</version>
+			<artifactId>hadoop-client</artifactId>
 			<type>jar</type>
 			<scope>compile</scope>
 		</dependency>
