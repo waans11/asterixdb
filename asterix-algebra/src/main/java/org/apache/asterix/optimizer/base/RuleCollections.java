@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package edu.uci.ics.asterix.optimizer.base;
+package org.apache.asterix.optimizer.base;
 
 import java.util.LinkedList;
 import java.util.List;
