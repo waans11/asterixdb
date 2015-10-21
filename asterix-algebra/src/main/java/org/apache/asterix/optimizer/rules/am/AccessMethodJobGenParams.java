@@ -135,12 +135,16 @@ public class AccessMethodJobGenParams {
         return requiresBroadcast;
     }
 
-    public boolean getIsIndexOnlyPlanEnabled() {
+    public boolean getRequireSplitValueForIndexOnlyPlan() {
         return requireSplitValueForIndexOnlyPlan;
     }
 
     public long getLimitNumberOfResult() {
         return limitNumberOfResult;
+    }
+
+    public void setLimitNumberOfResult(long limitNumberOfResult) {
+        this.limitNumberOfResult = limitNumberOfResult;
     }
 
     protected void writeVarList(List<LogicalVariable> varList, List<Mutable<ILogicalExpression>> funcArgs) {

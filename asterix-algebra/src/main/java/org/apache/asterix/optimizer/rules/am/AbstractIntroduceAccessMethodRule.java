@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.asterix.aql.util.FunctionUtils;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.dataflow.data.common.AqlExpressionTypeComputer;
 import org.apache.asterix.metadata.api.IMetadataEntity;
@@ -41,8 +42,10 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
+import org.apache.asterix.optimizer.base.AnalysisUtil;
 import org.apache.asterix.optimizer.rules.am.OptimizableOperatorSubTree.DataSourceType;
 import org.apache.commons.lang3.mutable.Mutable;
+import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -55,11 +58,17 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCa
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
+import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
+import org.apache.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 
@@ -69,7 +78,7 @@ import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
  */
 public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRewriteRule {
 
-    private AqlMetadataProvider metadataProvider;
+    protected AqlMetadataProvider metadataProvider;
 
     public abstract Map<FunctionIdentifier, List<IAccessMethod>> getAccessMethods();
 
@@ -881,6 +890,311 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             }
         }
         return null;
+    }
+
+    /**
+     * A helper Function that returns AccessMethodJobGenParams from an unnest-map
+     */
+    protected AccessMethodJobGenParams getAccessMethodJobGenParamsFromUnnestMap(UnnestMapOperator unnestMap) {
+        if (unnestMap == null) {
+            return null;
+        } else {
+            ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
+            if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                return null;
+            }
+
+            AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr;
+            FunctionIdentifier funcIdent = unnestFuncExpr.getFunctionIdentifier();
+            if (!funcIdent.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
+                return null;
+            }
+
+            // Read jobgen-params from the given functional expressions
+            AccessMethodJobGenParams jobGenParams = new AccessMethodJobGenParams();
+            jobGenParams.readFromFuncArgs(unnestFuncExpr.getArguments());
+
+            return jobGenParams;
+        }
+    }
+
+    /**
+     * A helper function that replaces the expression of the given unnest-map operator
+     */
+    protected UnnestMapOperator replaceExpressionOfUnnestMapOperator(AccessMethodJobGenParams newJobGenParams,
+            UnnestMapOperator oldOp) {
+        // The job gen parameters are transferred to the actual job gen
+        // via the UnnestMapOperator's function arguments.
+        ArrayList<Mutable<ILogicalExpression>> idxFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
+        newJobGenParams.writeToFuncArgs(idxFuncArgs);
+
+        // Create new expression for the given unnest-map.
+        // An index search is expressed as an unnest-map over an index-search function.
+        IFunctionInfo idxSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        UnnestingFunctionCallExpression idxSearchFunc = new UnnestingFunctionCallExpression(idxSearch, idxFuncArgs);
+
+        // Replace the current unnest-map with newly created expression.
+        return new UnnestMapOperator(oldOp.getVariables(), new MutableObject<ILogicalExpression>(idxSearchFunc),
+                new ArrayList<Object>(oldOp.getVariableTypes()), oldOp.propagatesInput());
+    }
+
+    /**
+     * Checks whether the first index-search or data-scan can generate the final results in that sub tree.
+     * If it does so, we pass LIMIT information to the given index-search
+     * so that it generates only certain number of results.
+     *
+     * @throws AlgebricksException
+     */
+    protected boolean checkAndPassLimitToIndexSearch(OptimizableOperatorSubTree subTree, long limitNumberOfResult)
+            throws AlgebricksException {
+
+        if (subTree.firstIdxSearchRef == null) {
+            return false;
+        } else {
+            ILogicalOperator firstIdxSearchOp = subTree.firstIdxSearchRef.getValue();
+
+            // UNNEST-MAP (index-search) case
+            if (firstIdxSearchOp.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+                UnnestMapOperator unnestMapOp = (UnnestMapOperator) firstIdxSearchOp;
+
+                AccessMethodJobGenParams jobGenParams = getAccessMethodJobGenParamsFromUnnestMap(unnestMapOp);
+
+                if (jobGenParams != null) {
+                    // Fetch the associated index
+                    Index idxUsedInUnnestMap = metadataProvider.getIndex(jobGenParams.getDataverseName(),
+                            jobGenParams.getDatasetName(), jobGenParams.getIndexName());
+
+                    if (idxUsedInUnnestMap != null) {
+                        // If this is primary index, we need to check whether an index-search itself can
+                        // generate the final results
+                        if (idxUsedInUnnestMap.isPrimaryIndex()) {
+                            // If there is one or more SELECT operators after the primary index-search,
+                            // the primary index-search alone can't generate trustworthy results since SELCT
+                            // operator(s) will verify the results of the index-search.
+                            if (subTree.selectRefs != null && subTree.selectRefs.size() > 0) {
+                                return false;
+                            } else {
+                                // Reset the number of search results for the given index
+                                jobGenParams.setLimitNumberOfResult(limitNumberOfResult);
+
+                                // Replace the expression of the current index-search
+                                UnnestMapOperator newUnnestMapOp = replaceExpressionOfUnnestMapOperator(jobGenParams,
+                                        unnestMapOp);
+                                subTree.firstIdxSearchRef.setValue(newUnnestMapOp);
+
+                                return true;
+                            }
+                        } else {
+                            // If this a secondary index-search, we check whether
+                            // this index-search is set to generate trustworthy results.
+                            // If requireSplitValueForIndexOnlyPlan variable is true, this means that
+                            // the given index-search will generate trustworthy results using tryLock on PK.
+                            boolean canGenerateTrustWorthyResults = jobGenParams.getRequireSplitValueForIndexOnlyPlan();
+
+                            if (!canGenerateTrustWorthyResults) {
+                                return false;
+                            } else {
+                                // Since we can produce trustworthy results,
+                                // we pass LIMIT information to the given index-search.
+
+                                // Reset the number of search results for the given index
+                                jobGenParams.setLimitNumberOfResult(limitNumberOfResult);
+
+                                // Replace the expression of the current index-search
+                                UnnestMapOperator newUnnestMapOp = replaceExpressionOfUnnestMapOperator(jobGenParams,
+                                        unnestMapOp);
+                                subTree.firstIdxSearchRef.setValue(newUnnestMapOp);
+
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } else if (firstIdxSearchOp.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
+                // If there is one or more SELECT operators after the primary index-search,
+                // the primary index-search alone can't generate trustworthy results since SELCT
+                // operator(s) will verify the results of the index-search.
+                if (subTree.selectRefs != null && subTree.selectRefs.size() > 0) {
+                    return false;
+                } else {
+                    DataSourceScanOperator newDataSourceScanOp = (DataSourceScanOperator) firstIdxSearchOp;
+                    // Reset the number of results for the given data-source scan
+                    newDataSourceScanOp.setLimitNumberOfResult(limitNumberOfResult);
+                    subTree.firstIdxSearchRef.setValue(newDataSourceScanOp);
+
+                    return true;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        // Control-flow will not reach here.
+        return false;
+    }
+
+    /**
+     * Checks whether the first index-search or data-scan can generate the final results in that sub tree.
+     *
+     * @throws AlgebricksException
+     */
+    protected boolean canFirstIndexSearchGenerateFinalResult(OptimizableOperatorSubTree subTree,
+            long limitNumberOfResult) throws AlgebricksException {
+
+        if (subTree.firstIdxSearchRef == null) {
+            return false;
+        } else {
+            ILogicalOperator firstIdxSearchOp = subTree.firstIdxSearchRef.getValue();
+
+            // UNNEST-MAP (index-search) case
+            if (firstIdxSearchOp.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+                UnnestMapOperator unnestMapOp = (UnnestMapOperator) firstIdxSearchOp;
+
+                AccessMethodJobGenParams jobGenParams = getAccessMethodJobGenParamsFromUnnestMap(unnestMapOp);
+
+                if (jobGenParams != null) {
+                    // Fetch the associated index
+                    Index idxUsedInUnnestMap = metadataProvider.getIndex(jobGenParams.getDataverseName(),
+                            jobGenParams.getDatasetName(), jobGenParams.getIndexName());
+
+                    if (idxUsedInUnnestMap != null) {
+                        // If this is primary index, we need to check whether an index-search itself can
+                        // generate the final results
+                        if (idxUsedInUnnestMap.isPrimaryIndex()) {
+                            // If there is one or more SELECT operators after the primary index-search,
+                            // the primary index-search alone can't generate trustworthy results since SELCT
+                            // operator(s) will verify the results of the index-search.
+                            if (subTree.selectRefs != null && subTree.selectRefs.size() > 0) {
+                                return false;
+                            } else {
+                                return true;
+                            }
+                        } else {
+                            // If this a secondary index-search, we check whether
+                            // this index-search is set to generate trustworthy results.
+                            // If requireSplitValueForIndexOnlyPlan variable is true, this means that
+                            // the given index-search will generate trustworthy results using tryLock on PK.
+                            return jobGenParams.getRequireSplitValueForIndexOnlyPlan();
+                        }
+                    }
+                }
+            } else if (firstIdxSearchOp.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
+                // If there is one or more SELECT operators after the primary index-search,
+                // the primary index-search alone can't generate trustworthy results since SELCT
+                // operator(s) will verify the results of the index-search.
+                if (subTree.selectRefs != null && subTree.selectRefs.size() > 0) {
+                    return false;
+                } else {
+                    return true;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        // Control-flow should not reach here.
+        return false;
+    }
+
+    /**
+     * Checks whether the attribute order in the given order-by clause and the given index is the same.
+     * This is required when passing LIMIT information to an index-search or data-scan.
+     *
+     * @return
+     * @throws AlgebricksException
+     */
+    protected boolean isAttrSequenceOfOrderByAndUnnestMapSame(OptimizableOperatorSubTree subTree,
+            List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions) throws AlgebricksException {
+        // Checks whether there is an unnest-map from the beginning.
+        boolean unnestMapFound = false;
+        if (subTree.assignsAndUnnests.size() > 0) {
+            for (int i = subTree.assignsAndUnnests.size() - 1; i > 0; i--) {
+                AbstractLogicalOperator lop = subTree.assignsAndUnnests.get(i);
+                if (lop.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+                    // We find an unnest-map. It should be an index-search.
+                    unnestMapFound = true;
+                    UnnestMapOperator unnestMapOp = (UnnestMapOperator) lop;
+
+                    AccessMethodJobGenParams jobGenParams = getAccessMethodJobGenParamsFromUnnestMap(unnestMapOp);
+
+                    if (jobGenParams != null) {
+                        // Fetch the index
+                        Index idxUsedInUnnestMap = metadataProvider.getIndex(jobGenParams.getDataverseName(),
+                                jobGenParams.getDatasetName(), jobGenParams.getIndexName());
+                        if (idxUsedInUnnestMap != null) {
+                            return isFieldNamesOfOrderByAndIndexSame(idxUsedInUnnestMap, subTree, orderByExpressions);
+                        }
+                    }
+
+                }
+                // If an unnest-map is found and the attribute order is consistent with order-by,
+                // the check is done.
+                if (unnestMapFound) {
+                    return true;
+                }
+            }
+        }
+
+        // If the control-flow reaches here, that means that there is no unnest-map.
+        // Thus, we need to check data-scan operator.
+        if (subTree.hasDataSourceScan()) {
+            DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) subTree.dataSourceRef.getValue();
+            Pair<String, String> datasetInfo = AnalysisUtil.getDatasetInfo(dataSourceScan);
+            String dataverseName = datasetInfo.first;
+            String datasetName = datasetInfo.second;
+
+            if (dataverseName == null || datasetName == null) {
+                return false;
+            }
+            // Find the primary index.
+            Index idxUsedInUnnestMap = metadataProvider.getIndex(dataverseName, datasetName, datasetName);
+            if (idxUsedInUnnestMap == null) {
+                return false;
+            } else {
+                return isFieldNamesOfOrderByAndIndexSame(idxUsedInUnnestMap, subTree, orderByExpressions);
+            }
+
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks whether the field names in order-by expression and index-search matches.
+     *
+     * @param idx
+     * @return
+     */
+    protected boolean isFieldNamesOfOrderByAndIndexSame(Index idx, OptimizableOperatorSubTree subTree,
+            List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions) {
+        int varOrder = 0;
+        List<List<String>> idxUsedInUnnestMapFieldNames = idx.getKeyFieldNames();
+
+        for (Pair<IOrder, Mutable<ILogicalExpression>> orderPair : orderByExpressions) {
+            // We don't yet support a complex ORDER BY clause to do the LIMIT push-down.
+            // So, the ORDER BY expression should only include variables.
+            if (orderPair.second.getValue().getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+                return false;
+            } else {
+                VariableReferenceExpression varRef = (VariableReferenceExpression) orderPair.second.getValue();
+                LogicalVariable var = varRef.getVariableReference();
+
+                // Try to match the attribute order in the ORDER BY to the attribute order in the index.
+                int sIndexIdx = idxUsedInUnnestMapFieldNames.indexOf(subTree.fieldNames.get(var));
+                if (sIndexIdx != varOrder || orderPair.first.getKind() != OrderKind.ASC) {
+                    // Either the attribute order doesn't match or
+                    // the attribute in the ORDER BY is not found on the index.
+                    // Also, for now, since we only support an ascending index, the ORDER BY should be ascending.
+                    return false;
+                } else {
+                    // Increase the index of the attribute in case of the composite indexes
+                    varOrder++;
+                }
+            }
+        }
+
+        return true;
+
     }
 
 }

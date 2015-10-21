@@ -92,7 +92,7 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> rtreeSearch = mp.buildRtreeRuntime(
                 builder.getJobSpec(), outputVars, opSchema, typeEnv, context, jobGenParams.getRetainInput(),
                 jobGenParams.getRetainNull(), dataset, jobGenParams.getIndexName(), keyIndexes, minFilterFieldIndexes,
-                maxFilterFieldIndexes, jobGenParams.getIsIndexOnlyPlanEnabled(), jobGenParams.getLimitNumberOfResult());
+                maxFilterFieldIndexes, jobGenParams.getRequireSplitValueForIndexOnlyPlan(), jobGenParams.getLimitNumberOfResult());
 
         builder.contributeHyracksOperator(unnestMap, rtreeSearch.first);
         builder.contributeAlgebricksPartitionConstraint(rtreeSearch.first, rtreeSearch.second);

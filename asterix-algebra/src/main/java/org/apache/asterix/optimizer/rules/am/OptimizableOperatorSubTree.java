@@ -39,6 +39,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractScanOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractUnnestOperator;
@@ -82,7 +83,13 @@ public class OptimizableOperatorSubTree {
     public List<ARecordType> ixJoinOuterAdditionalRecordTypes = null;
 
     // Order by expression in this subtree
-    List<Pair<IOrder, Mutable<ILogicalExpression>>> subTreeOrderByExpr = null;
+    public List<Pair<IOrder, Mutable<ILogicalExpression>>> subTreeOrderByExpr = null;
+
+    // First index-search or data-scan in this subtree
+    public Mutable<ILogicalOperator> firstIdxSearchRef = null;
+
+    // Contains SELECT operators
+    public final List<Mutable<ILogicalOperator>> selectRefs = new ArrayList<Mutable<ILogicalOperator>>();
 
     /**
      * Initialize assign, unnest and datasource information
@@ -103,6 +110,7 @@ public class OptimizableOperatorSubTree {
             }
             // Skip select operator.
             if (subTreeOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
+                selectRefs.add(subTreeOpRef);
                 subTreeOpRef = subTreeOp.getInputs().get(0);
                 subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
             }
@@ -349,6 +357,8 @@ public class OptimizableOperatorSubTree {
         ixJoinOuterAdditionalDatasets = null;
         recordType = null;
         ixJoinOuterAdditionalRecordTypes = null;
+        firstIdxSearchRef = null;
+        selectRefs.clear();
     }
 
     public void getPrimaryKeyVars(List<LogicalVariable> target) throws AlgebricksException {
@@ -414,5 +424,40 @@ public class OptimizableOperatorSubTree {
             ixJoinOuterAdditionalDatasets = new ArrayList<Dataset>();
             ixJoinOuterAdditionalRecordTypes = new ArrayList<ARecordType>();
         }
+    }
+
+    /**
+     * Find and set the first index-search or data-scan of this subTree
+     */
+    public boolean setFirstIndexSearchOrDataScan() {
+        // Checks whether there is an unnest-map from the beginning.
+        if (assignsAndUnnestsRefs.size() > 0) {
+            for (int i = assignsAndUnnestsRefs.size() - 1; i > 0; i--) {
+                AbstractLogicalOperator lop = (AbstractLogicalOperator) assignsAndUnnestsRefs.get(i).getValue();
+                if (lop.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+                    // We find an unnest-map. It should be an index-search.
+                    UnnestMapOperator unnestMap = (UnnestMapOperator) lop;
+                    ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
+                    if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                        continue;
+                    }
+
+                    AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr;
+                    FunctionIdentifier funcIdent = unnestFuncExpr.getFunctionIdentifier();
+                    if (!funcIdent.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
+                        continue;
+                    }
+
+                    firstIdxSearchRef = assignsAndUnnestsRefs.get(i);
+
+                    return true;
+                }
+            }
+        } else if (hasDataSourceScan()) {
+            firstIdxSearchRef = dataSourceRef;
+            return true;
+        }
+
+        return false;
     }
 }

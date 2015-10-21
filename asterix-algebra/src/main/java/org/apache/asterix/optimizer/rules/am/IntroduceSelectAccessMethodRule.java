@@ -36,7 +36,6 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.canDecreaseCardinalityCode;
@@ -44,7 +43,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LimitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
@@ -238,42 +236,9 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                                             limitNumberOfResult = -1;
                                             canPassLimitToIndexSearch = false;
                                         } else {
-                                            int varOrder = 0;
-                                            List<List<String>> chosenIndexFieldNames = chosenIndex.second
-                                                    .getKeyFieldNames();
-
-                                            // Check whether the variables in ORDER operator matches
-                                            // the attributes order in the chosen index.
-                                            for (Pair<IOrder, Mutable<ILogicalExpression>> orderPair : orderByExpressions) {
-                                                // We don't yet support a complex ORDER BY clause to do the LIMIT push-down.
-                                                // So, the ORDER BY expression should only include variables.
-                                                if (orderPair.second.getValue().getExpressionTag() != LogicalExpressionTag.VARIABLE) {
-                                                    limitNumberOfResult = -1;
-                                                    canPassLimitToIndexSearch = false;
-                                                    break;
-                                                } else {
-                                                    VariableReferenceExpression varRef = (VariableReferenceExpression) orderPair.second
-                                                            .getValue();
-                                                    LogicalVariable var = varRef.getVariableReference();
-
-                                                    // Try to match the attribute order in the ORDER BY to the attribute order in the index.
-                                                    int indexIdx = chosenIndexFieldNames.indexOf(subTree.fieldNames
-                                                            .get(var));
-                                                    if (indexIdx != varOrder
-                                                            || orderPair.first.getKind() != OrderKind.ASC) {
-                                                        // Either the attribute order doesn't match or
-                                                        // the attribute in the ORDER BY is not found on the index.
-                                                        // Also, for now, since we only support an ascending index,
-                                                        // the ORDER BY should be ascending.
-                                                        canPassLimitToIndexSearch = false;
-                                                        limitNumberOfResult = -1;
-                                                        break;
-                                                    } else {
-                                                        // Increase the index of the attribute in case of the composite indexes
-                                                        varOrder++;
-                                                    }
-                                                }
-                                            }
+                                            // Checks whether the attribute order in the index is same to that of order-by expression.
+                                            canPassLimitToIndexSearch = isFieldNamesOfOrderByAndIndexSame(
+                                                    chosenIndex.second, subTree, orderByExpressions);
                                         }
                                     }
 

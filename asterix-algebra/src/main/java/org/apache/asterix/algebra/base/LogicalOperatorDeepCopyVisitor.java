@@ -26,7 +26,6 @@ import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
-
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.Counter;
@@ -255,7 +254,7 @@ public class LogicalOperatorDeepCopyVisitor implements ILogicalOperatorVisitor<I
     public ILogicalOperator visitDataScanOperator(DataSourceScanOperator op, ILogicalOperator arg)
             throws AlgebricksException {
         DataSourceScanOperator opCopy = new DataSourceScanOperator(deepCopyVariableList(op.getVariables()),
-                op.getDataSource());
+                op.getDataSource(), op.getLimitNumberOfResult());
         deepCopyInputs(op, opCopy, arg);
         copyAnnotations(op, opCopy);
         opCopy.setExecutionMode(op.getExecutionMode());
@@ -382,8 +381,7 @@ public class LogicalOperatorDeepCopyVisitor implements ILogicalOperatorVisitor<I
     }
 
     @Override
-    public ILogicalOperator visitSplitOperator(SplitOperator op, ILogicalOperator arg)
-            throws AlgebricksException {
+    public ILogicalOperator visitSplitOperator(SplitOperator op, ILogicalOperator arg) throws AlgebricksException {
         throw new UnsupportedOperationException();
     }
 

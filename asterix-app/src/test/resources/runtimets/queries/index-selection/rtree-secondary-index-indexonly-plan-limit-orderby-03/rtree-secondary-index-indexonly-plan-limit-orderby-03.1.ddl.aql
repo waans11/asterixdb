@@ -27,8 +27,8 @@
  *                      ... -> unnest-map -> split -> union -> ...
  *                  : We also have a LIMIT. Each partition in the secondary index should only generate the number of tuples
  *                    that are equivalent to the LIMIT number. We call this "parameterizing the LIMIT".
- *					: In this plan, we have an order-by PK. Thus, parameterizing the LIMIT can't be applied
- *					: since the order of index search isn't equal to that of order-by.
+ *					: In this plan, we have an order-by SK field. However, the current R-Tree doesn't have a specific retrieval order.
+ *					: Thus, "parameterizing the LIMIT" can't be applied.
  *  Expected Result : Success
  *
 */

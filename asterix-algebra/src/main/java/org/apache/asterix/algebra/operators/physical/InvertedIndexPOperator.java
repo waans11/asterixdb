@@ -149,7 +149,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 jobGenParams.getRetainNull(), jobGenParams.getDatasetName(), dataset, jobGenParams.getIndexName(),
                 jobGenParams.getSearchKeyType(), keyIndexes, jobGenParams.getSearchModifierType(),
                 jobGenParams.getSimilarityThreshold(), minFilterFieldIndexes, maxFilterFieldIndexes,
-                jobGenParams.getIsIndexOnlyPlanEnabled(), jobGenParams.getLimitNumberOfResult());
+                jobGenParams.getRequireSplitValueForIndexOnlyPlan(), jobGenParams.getLimitNumberOfResult());
 
         // Contribute operator in hyracks job.
         builder.contributeHyracksOperator(unnestMapOp, invIndexSearch.first);

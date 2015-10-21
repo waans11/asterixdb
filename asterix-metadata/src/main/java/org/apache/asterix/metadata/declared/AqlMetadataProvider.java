@@ -337,9 +337,10 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     @Override
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> getScannerRuntime(
             IDataSource<AqlSourceId> dataSource, List<LogicalVariable> scanVariables,
-            List<LogicalVariable> projectVariables, boolean projectPushed, List<LogicalVariable> minFilterVars,
-            List<LogicalVariable> maxFilterVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,
-            JobGenContext context, JobSpecification jobSpec, Object implConfig) throws AlgebricksException {
+            List<LogicalVariable> projectVariables, long limitNumberOfResult, boolean projectPushed,
+            List<LogicalVariable> minFilterVars, List<LogicalVariable> maxFilterVars, IOperatorSchema opSchema,
+            IVariableTypeEnvironment typeEnv, JobGenContext context, JobSpecification jobSpec, Object implConfig)
+            throws AlgebricksException {
         try {
             switch (((AqlDataSource) dataSource).getDatasourceType()) {
                 case FEED:
@@ -347,7 +348,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 case INTERNAL_DATASET: {
                     // querying an internal dataset
                     return buildInternalDatasetScan(jobSpec, scanVariables, minFilterVars, maxFilterVars, opSchema,
-                            typeEnv, dataSource, context, implConfig);
+                            typeEnv, dataSource, context, implConfig, limitNumberOfResult);
                 }
                 case EXTERNAL_DATASET: {
                     // querying an external dataset
@@ -523,7 +524,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInternalDatasetScan(JobSpecification jobSpec,
             List<LogicalVariable> outputVars, List<LogicalVariable> minFilterVars, List<LogicalVariable> maxFilterVars,
             IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv, IDataSource<AqlSourceId> dataSource,
-            JobGenContext context, Object implConfig) throws AlgebricksException, MetadataException {
+            JobGenContext context, Object implConfig, long limitNumberOfResult) throws AlgebricksException,
+            MetadataException {
         AqlSourceId asid = dataSource.getId();
         String dataverseName = asid.getDataverseName();
         String datasetName = asid.getDatasourceName();
@@ -550,7 +552,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 
         return buildBtreeRuntime(jobSpec, outputVars, opSchema, typeEnv, context, true, false,
                 ((DatasetDataSource) dataSource).getDataset(), primaryIndex.getIndexName(), null, null, true, true,
-                implConfig, minFilterFieldIndexes, maxFilterFieldIndexes, false, -1);
+                implConfig, minFilterFieldIndexes, maxFilterFieldIndexes, false, limitNumberOfResult);
     }
 
     private IAdapterFactory getConfiguredAdapterFactory(Dataset dataset, String adapterName,
@@ -2374,6 +2376,14 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     public List<Index> getDatasetIndexes(String dataverseName, String datasetName) throws AlgebricksException {
         try {
             return MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataverseName, datasetName);
+        } catch (MetadataException e) {
+            throw new AlgebricksException(e);
+        }
+    }
+
+    public Index getIndex(String dataverseName, String datasetName, String indexName) throws AlgebricksException {
+        try {
+            return MetadataManager.INSTANCE.getIndex(mdTxnCtx, dataverseName, datasetName, indexName);
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
         }

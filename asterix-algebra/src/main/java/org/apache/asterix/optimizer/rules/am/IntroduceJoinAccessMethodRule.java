@@ -78,6 +78,18 @@ import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
  * Here, the primary key variable from datasourceScanOp replaces the introduced null placeholder variable.
  * If the primary key is composite key, then the first variable of the primary key variables becomes the
  * null place holder variable. This null placeholder variable works for all three types of indexes.
+ * Also, if there is a LIMIT and if an index-search in an index-nested-loop join can generate trustworthy tuples,
+ * we can parameterize the LIMIT information (pass LIMIT to index-search) if:
+ * 1) The given join plan should be transformed into an index-nested-loop join plan.
+ * 2) A secondary index search or a primary index search of INNER branch can cover the given condition in the given join operator.
+ * = no more verification is required after an index search assuming that we can get a trustworthy tuple from that index search.
+ * 3) For Left-outer join, the LIMIT information is applied in the OUTER branch.
+ * For inner join, the LIMIT information is applied in the INNER branch.
+ * 4) If an order by is used, it should be ascending order.
+ * 4-1) Also, the attribute order in the given "order by" should be consistent with the attribute order in the first index search
+ * or data scan of OUTER branch.
+ * However, the OUTER branch should generate tuples in the sorted order (index-only plan and reducing the number of verification
+ * plan are not applicable because of UNION operator in those plans in outer branch.)
  */
 public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethodRule {
 
@@ -93,7 +105,7 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
 
     // used for pushing-down LIMIT
     protected long limitNumberOfResult = -1;
-    protected boolean canPushDownLimit = true;
+    protected boolean canPushDownLimit = false;
     List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions = null;
 
     // Register access methods.
@@ -195,40 +207,47 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         AbstractBinaryJoinOperator joinOpFromThisOp = null;
 
         if (isInnerJoin) {
+            // Set join op.
             joinRef = opRef;
             joinOp = (InnerJoinOperator) op;
             joinRefFromThisOp = opRef;
             joinOpFromThisOp = (InnerJoinOperator) op;
         } else if (isLeftOuterJoin) {
+            // Set left-outer-join op.
             joinRef = op.getInputs().get(0);
             joinOp = (LeftOuterJoinOperator) joinRef.getValue();
             joinRefFromThisOp = op.getInputs().get(0);
             joinOpFromThisOp = (LeftOuterJoinOperator) joinRefFromThisOp.getValue();
         } else {
+            // Other ops: before traversing the descendants,
+            // we keep certain information such as LIMIT, order by.
             afterJoinRefs.add(opRef);
 
             if (op.getOperatorTag() == LogicalOperatorTag.LIMIT) {
                 canPushDownLimit = true;
 
-                // Reset orderby expression since the previous one (if any) can't be combined with this new LIMIT
+                // Reset order-by expression since the previous one (if any)
+                // can't be combined with this new LIMIT
                 orderByExpressions = null;
+
                 // Keep the limit number of Result
                 LimitOperator limitOp = (LimitOperator) op;
                 if (limitOp.getMaxObjects().getValue().getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+                    // Currently, we support LIMIT with a constant value.
                     limitNumberOfResult = AccessMethodUtils.getInt64Constant(limitOp.getMaxObjects());
                 } else {
                     canPushDownLimit = false;
                     limitNumberOfResult = -1;
                 }
             } else if (canPushDownLimit && op.getOperatorTag() == LogicalOperatorTag.ORDER) {
-                // Check the order by property
+                // Save the given order by expression
                 OrderOperator orderOp = (OrderOperator) op;
                 orderByExpressions = orderOp.getOrderExpressions();
             } else if (op.canDecreaseCardinality() != canDecreaseCardinalityCode.FALSE
                     || (orderByExpressions != null && op.canPreserveOrder() != canPreserveOrderCode.TRUE)) {
                 // If the given operator can decrease the input cardinality or
-                // cannot preserve the input order when there is an order by, we can't pass the LIMIT information to
-                // the index-search. We need to find another LIMIT.
+                // cannot preserve the input order when there is an order by,
+                // we can't pass the LIMIT information to the index-search. We need to find another LIMIT.
                 canPushDownLimit = false;
                 limitNumberOfResult = -1;
             }
@@ -251,14 +270,14 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
             joinRef = joinRefFromThisOp;
             joinOp = joinOpFromThisOp;
 
-            // Already checked? If not, this operator can be optimized.
+            // Already checked? If not, this operator may be optimized.
             if (!context.checkIfInDontApplySet(this, joinOp)) {
                 Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
 
                 // Check the condition of JOIN operator is a function call and initialize operator members.
                 if (checkJoinOperatorCondition()) {
 
-                    // Analyze condition on those optimizable subtrees that have a datasource scan.
+                    // Analyze condition on those optimizable subtrees that has a datasource scan.
                     boolean matchInLeftSubTree = false;
                     boolean matchInRightSubTree = false;
                     if (leftSubTree.hasDataSource()) {
@@ -349,25 +368,49 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                 // There is a LIMIT operator in the plan and we can push down this to the secondary index search.
                                 if (canPushDownLimit && limitNumberOfResult > -1) {
 
+                                    // Set the first index-search (data-scan) of the given sub trees
+                                    leftSubTree.setFirstIndexSearchOrDataScan();
+                                    rightSubTree.setFirstIndexSearchOrDataScan();
+
                                     // If this is LEFT-OUTER-JOIN,
-                                    // and outer branch has an UNNEST-MAP (index-search),
-                                    // and the order of its index attribute is the same as the attributes
+                                    // and outer branch has an UNNEST-MAP (index-search) or a data-scan,
+                                    // and the order of its index (data-scan) attribute is the same as the attributes
                                     // in the order by expressions, then, we can pass LIMIT information
-                                    // to the index-search of the inner branch (index subtree).
-                                    // If not, we can't pass LIMIT information.
+                                    // to the index-search of the OUTER branch (index subtree).
                                     if (isLeftOuterJoin) {
                                         if (orderByExpressions != null) {
+                                            canPushDownLimit = isAttrSequenceOfOrderByAndUnnestMapSame(leftSubTree,
+                                                    orderByExpressions);
+
+                                            // If so, pass LIMIT into the first index-search or data-scan
+                                            if (canPushDownLimit) {
+                                                canPushDownLimit = checkAndPassLimitToIndexSearch(leftSubTree,
+                                                        limitNumberOfResult);
+                                            } else {
+                                                limitNumberOfResult = -1;
+                                            }
+                                        } else {
+                                            // If there is no order-by, then we need to check whether
+                                            // the first index-search can generate the trustworthy results.
+                                            // Case 1) a secondary index-search: an index-only plan or
+                                            //         reducing the number of verification plan is applicable.
+                                            //         If it's not an index-only plan, then we check the primary index-search.
+                                            // Case 2) a primary index-search: a primary index search with no additional
+                                            //         SELECT operator is applicable since the given primary-index search can
+                                            //         generate trustworthy results.
+
+                                            // If so, pass LIMIT into the first index-search or data-scan
+                                            canPushDownLimit = checkAndPassLimitToIndexSearch(leftSubTree,
+                                                    limitNumberOfResult);
 
                                         }
                                     } else {
-                                        // Can't push-down LIMIT in case of inner-join
+                                        // inner-join case: we pass limit and
                                         canPushDownLimit = false;
                                         limitNumberOfResult = -1;
                                     }
 
-                                    // We don't support pushing down LIMIT when there is an order-by in join case, yet.
-                                    if (orderByExpressions != null) {
-                                        canPushDownLimit = false;
+                                    if (!canPushDownLimit) {
                                         limitNumberOfResult = -1;
                                     } else {
                                         analysisCtx.setLimitNumberOfResult(limitNumberOfResult);
