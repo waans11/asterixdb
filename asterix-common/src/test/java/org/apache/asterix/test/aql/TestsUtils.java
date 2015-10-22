@@ -1,16 +1,20 @@
 /*
- * Copyright 2009-2013 by The Regents of the University of California
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * you may obtain a copy of the License from
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 package org.apache.asterix.test.aql;
 
@@ -31,11 +35,7 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.commons.httpclient.DefaultHttpMethodRetryHandler;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.HttpMethod;
-import org.apache.commons.httpclient.HttpStatus;
-import org.apache.commons.httpclient.NameValuePair;
+import org.apache.commons.httpclient.*;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.methods.StringRequestEntity;
@@ -52,6 +52,8 @@ import org.apache.asterix.testframework.xml.TestCase.CompilationUnit;
 public class TestsUtils {
 
     private static final Logger LOGGER = Logger.getLogger(TestsUtils.class.getName());
+    //see https://stackoverflow.com/questions/417142/what-is-the-maximum-length-of-a-url-in-different-browsers/417184
+    private static final long MAX_URL_LENGTH = 2000l;
     private static Method managixExecuteMethod = null;
 
     /**
@@ -217,11 +219,20 @@ public class TestsUtils {
     public static InputStream executeQuery(String str, OutputFormat fmt) throws Exception {
         final String url = "http://localhost:19002/query";
 
-        // Create a method instance.
-        GetMethod method = new GetMethod(url);
-        method.setQueryString(new NameValuePair[] { new NameValuePair("query", str) });
-        method.setRequestHeader("Accept", fmt.mimeType());
+        HttpMethodBase method = null;
+        if(str.length() + url.length() < MAX_URL_LENGTH ){
+            //Use GET for small-ish queries
+            method = new GetMethod(url);
+            method.setQueryString(new NameValuePair[] { new NameValuePair("query", str) });
+        }
+        else{
+            //Use POST for bigger ones to avoid 413 FULL_HEAD
+            method = new PostMethod(url);
+            ((PostMethod)method).setRequestEntity(new StringRequestEntity(str));
+        }
 
+        //Set accepted output response type
+        method.setRequestHeader("Accept", fmt.mimeType());
         // Provide custom retry handler is necessary
         method.getParams().setParameter(HttpMethodParams.RETRY_HANDLER, new DefaultHttpMethodRetryHandler(3, false));
         executeHttpMethod(method);
@@ -425,7 +436,7 @@ public class TestsUtils {
                                 resultStream = executeAnyAQLAsync(statement, true, fmt);
 
                             if (queryCount >= expectedResultFileCtxs.size()) {
-                                throw new IllegalStateException("no result file for " + testFile.toString());
+                                throw new IllegalStateException("no result file for " + testFile.toString() + "; queryCount: " + queryCount + ", filectxs.size: " + expectedResultFileCtxs.size());
                             }
                             expectedResultFile = expectedResultFileCtxs.get(queryCount).getFile();
 

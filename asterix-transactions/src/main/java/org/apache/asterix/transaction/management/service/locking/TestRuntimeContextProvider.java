@@ -1,16 +1,20 @@
 /*
- * Copyright 2014 by The Regents of the University of California
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * you may obtain a copy of the License from
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 package org.apache.asterix.transaction.management.service.locking;
 
@@ -35,9 +39,9 @@ import org.apache.hyracks.storage.common.file.ResourceIdFactory;
 
 class TestRuntimeContextProvider implements IAsterixAppRuntimeContextProvider {
 
-    AsterixThreadExecutor ate = new AsterixThreadExecutor(Executors.defaultThreadFactory());    
+    AsterixThreadExecutor ate = new AsterixThreadExecutor(Executors.defaultThreadFactory());
     IIndexLifecycleManager ilm = new IndexLifecycleManager();
-    
+
     @Override
     public AsterixThreadExecutor getThreadExecutor() {
         return ate;
@@ -104,36 +108,39 @@ class TestRuntimeContextProvider implements IAsterixAppRuntimeContextProvider {
     }
 
     static class IndexLifecycleManager implements IIndexLifecycleManager {
-
-        @Override
-        public IIndex getIndex(long resourceID) throws HyracksDataException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void register(long resourceID, IIndex index) throws HyracksDataException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void unregister(long resourceID) throws HyracksDataException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void open(long resourceID) throws HyracksDataException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void close(long resourceID) throws HyracksDataException {
-            throw new UnsupportedOperationException();
-        }
-
         @Override
         public List<IIndex> getOpenIndexes() {
             throw new UnsupportedOperationException();
         }
-        
+
+        @Override
+        public void register(String resourceName, IIndex index) throws HyracksDataException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void open(String resourceName) throws HyracksDataException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void close(String resourceName) throws HyracksDataException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public IIndex getIndex(String resourceName) throws HyracksDataException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void unregister(String resourceName) throws HyracksDataException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public IIndex getIndex(int datasetID, long resourceID) throws HyracksDataException {
+            throw new UnsupportedOperationException();
+        }
     }
 }
