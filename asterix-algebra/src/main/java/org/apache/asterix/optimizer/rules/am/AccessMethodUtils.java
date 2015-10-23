@@ -22,8 +22,10 @@ package org.apache.asterix.optimizer.rules.am;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.asterix.algebra.operators.physical.ExternalDataLookupPOperator;
 import org.apache.asterix.aql.util.FunctionUtils;
@@ -63,7 +65,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import org.apache.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
+import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
@@ -146,34 +148,48 @@ public class AccessMethodUtils {
     // Analyzes the given function expression
     // One arg: constant, the other arg: variable
     public static boolean analyzeFuncExprArgsForOneConstAndVar(AbstractFunctionCallExpression funcExpr,
-            AccessMethodAnalysisContext analysisCtx) {
-        IAlgebricksConstantValue constFilterVal = null;
+            AccessMethodAnalysisContext analysisCtx, IOptimizationContext context,
+            IVariableTypeEnvironment typeEnvironment) throws AlgebricksException {
+        ILogicalExpression constExpression = null;
+        IAType constantExpressionType = null;
         LogicalVariable fieldVar = null;
         ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
         ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
-        // One of the arguments must be a constant, and the other argument must be a variable.
-        if (arg1.getExpressionTag() == LogicalExpressionTag.CONSTANT
+        // One of the args must be a runtime constant, and the other arg must be a variable.
+        if (arg1.getExpressionTag() == LogicalExpressionTag.VARIABLE
                 && arg2.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-            // The arguments of contains-substring() function or contains text() are asymmetrical.
-            // We can only use index if the variable is on the first argument
+            return false;
+        }
+        if (arg2.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+            // The arguments of contains() function are asymmetrical, we can only use index if it is on the first argument
             if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING
                     || funcExpr.getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
                 return false;
             }
-            ConstantExpression constExpr = (ConstantExpression) arg1;
-            constFilterVal = constExpr.getValue();
+            IAType expressionType = constantRuntimeResultType(arg1, context, typeEnvironment);
+            if (expressionType == null) {
+                //Not constant at runtime
+                return false;
+            }
+            constantExpressionType = expressionType;
+            constExpression = arg1;
             VariableReferenceExpression varExpr = (VariableReferenceExpression) arg2;
             fieldVar = varExpr.getVariableReference();
-        } else if (arg1.getExpressionTag() == LogicalExpressionTag.VARIABLE
-                && arg2.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
-            ConstantExpression constExpr = (ConstantExpression) arg2;
-            constFilterVal = constExpr.getValue();
+        } else if (arg1.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+            IAType expressionType = constantRuntimeResultType(arg2, context, typeEnvironment);
+            if (expressionType == null) {
+                //Not constant at runtime
+                return false;
+            }
+            constantExpressionType = expressionType;
+            constExpression = arg2;
             VariableReferenceExpression varExpr = (VariableReferenceExpression) arg1;
             fieldVar = varExpr.getVariableReference();
         } else {
             return false;
         }
-        OptimizableFuncExpr newOptFuncExpr = new OptimizableFuncExpr(funcExpr, fieldVar, constFilterVal);
+        OptimizableFuncExpr newOptFuncExpr = new OptimizableFuncExpr(funcExpr, fieldVar, constExpression,
+                constantExpressionType);
         for (IOptimizableFuncExpr optFuncExpr : analysisCtx.matchedFuncExprs) {
             //avoid additional optFuncExpressions in case of a join
             if (optFuncExpr.getFuncExpr().equals(funcExpr))
@@ -197,7 +213,7 @@ public class AccessMethodUtils {
             return false;
         }
         OptimizableFuncExpr newOptFuncExpr = new OptimizableFuncExpr(funcExpr, new LogicalVariable[] { fieldVar1,
-                fieldVar2 }, null);
+                fieldVar2 }, new ILogicalExpression[0], new IAType[0]);
         for (IOptimizableFuncExpr optFuncExpr : analysisCtx.matchedFuncExprs) {
             //avoid additional optFuncExpressions in case of a join
             if (optFuncExpr.getFuncExpr().equals(funcExpr))
@@ -398,8 +414,17 @@ public class AccessMethodUtils {
             // We are optimizing a selection query. Search key is a constant.
             // Type Checking and type promotion is done here
             IAType fieldType = optFuncExpr.getFieldType(0);
-            IAObject constantObj = ((AsterixConstantValue) optFuncExpr.getConstantVal(0)).getObject();
-            ATypeTag constantValueTag = constantObj.getType().getTypeTag();
+            ILogicalExpression constantAtRuntimeExpression = null;
+            AsterixConstantValue constantValue = null;
+            ATypeTag constantValueTag = null;
+
+            constantAtRuntimeExpression = optFuncExpr.getConstantAtRuntimeExpr(0);
+
+            if (constantAtRuntimeExpression.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+                constantValue = (AsterixConstantValue) ((ConstantExpression) constantAtRuntimeExpression).getValue();
+            }
+
+            constantValueTag = optFuncExpr.getConstantType(0).getTypeTag();
 
             // type casting applied?
             boolean typeCastingApplied = false;
@@ -410,7 +435,13 @@ public class AccessMethodUtils {
             AsterixConstantValue replacedConstantValue2 = null;
 
             // if the constant type and target type does not match, we do a type conversion
-            if (constantValueTag != fieldType.getTypeTag()) {
+            if (constantValueTag != fieldType.getTypeTag() && constantValue != null) {
+                replacedConstantValue = ATypeHierarchy.getAsterixConstantValueFromNumericTypeObject(
+                        constantValue.getObject(), fieldType.getTypeTag());
+                if (replacedConstantValue != null) {
+                    typeCastingApplied = true;
+                }
+
                 // To check whether the constant is REAL values, and target field is an INT type field.
                 // In this case, we need to change the search parameter. Refer to the caller section for the detail.
                 switch (constantValueTag) {
@@ -471,13 +502,13 @@ public class AccessMethodUtils {
                 }
 
                 if (mathFunction != mathFunctionType.CEIL_FLOOR) {
-                    replacedConstantValue = ATypeHierarchy.getAsterixConstantValueFromNumericTypeObject(constantObj,
-                            fieldType.getTypeTag(), mathFunction);
+                    replacedConstantValue = ATypeHierarchy.getAsterixConstantValueFromNumericTypeObject(
+                            constantValue.getObject(), fieldType.getTypeTag(), mathFunction);
                 } else {
-                    replacedConstantValue = ATypeHierarchy.getAsterixConstantValueFromNumericTypeObject(constantObj,
-                            fieldType.getTypeTag(), mathFunctionType.FLOOR);
-                    replacedConstantValue2 = ATypeHierarchy.getAsterixConstantValueFromNumericTypeObject(constantObj,
-                            fieldType.getTypeTag(), mathFunctionType.CEIL);
+                    replacedConstantValue = ATypeHierarchy.getAsterixConstantValueFromNumericTypeObject(
+                            constantValue.getObject(), fieldType.getTypeTag(), mathFunctionType.FLOOR);
+                    replacedConstantValue2 = ATypeHierarchy.getAsterixConstantValueFromNumericTypeObject(
+                            constantValue.getObject(), fieldType.getTypeTag(), mathFunctionType.CEIL);
                 }
                 if (replacedConstantValue != null) {
                     typeCastingApplied = true;
@@ -494,8 +525,7 @@ public class AccessMethodUtils {
                             replacedConstantValue), null);
                 }
             } else {
-                return new Pair<ILogicalExpression, ILogicalExpression>(new ConstantExpression(
-                        optFuncExpr.getConstantVal(0)), null);
+                return new Pair<ILogicalExpression, ILogicalExpression>(optFuncExpr.getConstantAtRuntimeExpr(0), null);
             }
         } else {
             // We are optimizing a join query. Determine which variable feeds the secondary index.
@@ -1902,6 +1932,17 @@ public class AccessMethodUtils {
         }
 
         return false;
+    }
 
+    //If the expression is constant at runtime, runturn the type
+    public static IAType constantRuntimeResultType(ILogicalExpression expr, IOptimizationContext context,
+            IVariableTypeEnvironment typeEnvironment) throws AlgebricksException {
+        Set<LogicalVariable> usedVariables = new HashSet<LogicalVariable>();
+        expr.getUsedVariables(usedVariables);
+        if (usedVariables.size() > 0) {
+            return null;
+        }
+        return (IAType) context.getExpressionTypeComputer().getType(expr, context.getMetadataProvider(),
+                typeEnvironment);
     }
 }

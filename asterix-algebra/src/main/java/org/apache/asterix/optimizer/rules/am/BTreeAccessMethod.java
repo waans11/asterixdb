@@ -49,6 +49,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IndexedNLJoinExpressionAnnotation;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
@@ -103,8 +104,10 @@ public class BTreeAccessMethod implements IAccessMethod {
 
     @Override
     public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr,
-            List<AbstractLogicalOperator> assignsAndUnnests, AccessMethodAnalysisContext analysisCtx) {
-        boolean matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
+            List<AbstractLogicalOperator> assignsAndUnnests, AccessMethodAnalysisContext analysisCtx,
+            IOptimizationContext context, IVariableTypeEnvironment typeEnvironment) throws AlgebricksException {
+        boolean matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx, context,
+                typeEnvironment);
         if (!matches) {
             matches = AccessMethodUtils.analyzeFuncExprArgsForTwoVars(funcExpr, analysisCtx);
         }
@@ -591,6 +594,8 @@ public class BTreeAccessMethod implements IAccessMethod {
         LimitType[] highKeyLimits = new LimitType[numSecondaryKeys];
         boolean[] lowKeyInclusive = new boolean[numSecondaryKeys];
         boolean[] highKeyInclusive = new boolean[numSecondaryKeys];
+        ILogicalExpression[] constantAtRuntimeExpressions = new ILogicalExpression[numSecondaryKeys];
+        LogicalVariable[] constAtRuntimeExprVars = new LogicalVariable[numSecondaryKeys];
 
         // TODO: For now we don't do any sophisticated analysis of the func exprs to come up with "the best" range predicate.
         // If we can't figure out how to integrate a certain funcExpr into the current predicate, we just bail by setting this flag.
@@ -630,6 +635,13 @@ public class BTreeAccessMethod implements IAccessMethod {
                     optFuncExpr, indexSubTree, probeSubTree);
             ILogicalExpression searchKeyExpr = returnedSearchKeyExpr.first;
             ILogicalExpression searchKeyExpr2 = null;
+            if (searchKeyExpr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+                constantAtRuntimeExpressions[keyPos] = searchKeyExpr;
+                constAtRuntimeExprVars[keyPos] = context.newVar();
+                searchKeyExpr = new VariableReferenceExpression(constAtRuntimeExprVars[keyPos]);
+
+            }
+            //            realTypeConvertedToIntegerType = returnedSearchKeyExpr.second;
 
             // the given search predicate = EQ and we have two type-casted values from FLOAT or DOUBLE to INT constant.
             if (limit == LimitType.EQUAL && returnedSearchKeyExpr.second != null) {
@@ -820,9 +832,9 @@ public class BTreeAccessMethod implements IAccessMethod {
         ArrayList<LogicalVariable> assignKeyVarList = new ArrayList<LogicalVariable>();
         ArrayList<Mutable<ILogicalExpression>> assignKeyExprList = new ArrayList<Mutable<ILogicalExpression>>();
         int numLowKeys = createKeyVarsAndExprs(numSecondaryKeys, lowKeyLimits, lowKeyExprs, assignKeyVarList,
-                assignKeyExprList, keyVarList, context);
+                assignKeyExprList, keyVarList, context, constantAtRuntimeExpressions, constAtRuntimeExprVars);
         int numHighKeys = createKeyVarsAndExprs(numSecondaryKeys, highKeyLimits, highKeyExprs, assignKeyVarList,
-                assignKeyExprList, keyVarList, context);
+                assignKeyExprList, keyVarList, context, constantAtRuntimeExpressions, constAtRuntimeExprVars);
 
         BTreeJobGenParams jobGenParams = new BTreeJobGenParams(chosenIndex.getIndexName(), IndexType.BTREE,
                 dataset.getDataverseName(), dataset.getDatasetName(), retainInput, retainNull, requiresBroadcast,
@@ -975,12 +987,14 @@ public class BTreeAccessMethod implements IAccessMethod {
 
     private int createKeyVarsAndExprs(int numKeys, LimitType[] keyLimits, ILogicalExpression[] searchKeyExprs,
             ArrayList<LogicalVariable> assignKeyVarList, ArrayList<Mutable<ILogicalExpression>> assignKeyExprList,
-            ArrayList<LogicalVariable> keyVarList, IOptimizationContext context) {
+            ArrayList<LogicalVariable> keyVarList, IOptimizationContext context, ILogicalExpression[] constExpressions,
+            LogicalVariable[] constExprVars) {
         if (keyLimits[0] == null) {
             return 0;
         }
         for (int i = 0; i < numKeys; i++) {
             ILogicalExpression searchKeyExpr = searchKeyExprs[i];
+            ILogicalExpression constExpression = constExpressions[i];
             LogicalVariable keyVar = null;
             if (searchKeyExpr.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
                 keyVar = context.newVar();
@@ -988,6 +1002,10 @@ public class BTreeAccessMethod implements IAccessMethod {
                 assignKeyVarList.add(keyVar);
             } else {
                 keyVar = ((VariableReferenceExpression) searchKeyExpr).getVariableReference();
+                if (constExpression != null) {
+                    assignKeyExprList.add(new MutableObject<ILogicalExpression>(constExpression));
+                    assignKeyVarList.add(constExprVars[i]);
+                }
             }
             keyVarList.add(keyVar);
         }
@@ -1079,7 +1097,7 @@ public class BTreeAccessMethod implements IAccessMethod {
     private boolean probeIsOnLhs(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree probeSubTree) {
         if (probeSubTree == null) {
             // We are optimizing a selection query. Search key is a constant. Return true if constant is on lhs.
-            return optFuncExpr.getFuncExpr().getArguments().get(0) == optFuncExpr.getConstantVal(0);
+            return optFuncExpr.getFuncExpr().getArguments().get(0) == optFuncExpr.getConstantAtRuntimeExpr(0);
         } else {
             // We are optimizing a join query. Determine whether the feeding variable is on the lhs.
             return (optFuncExpr.getOperatorSubTree(0) == null || optFuncExpr.getOperatorSubTree(0) == probeSubTree);

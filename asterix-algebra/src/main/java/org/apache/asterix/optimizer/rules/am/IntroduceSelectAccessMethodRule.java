@@ -36,6 +36,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.canDecreaseCardinalityCode;
@@ -91,6 +92,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
     protected Mutable<ILogicalOperator> selectRef = null;
     protected SelectOperator selectOp = null;
     protected AbstractFunctionCallExpression selectCond = null;
+    protected IVariableTypeEnvironment typeEnvironment = null;
     protected final OptimizableOperatorSubTree subTree = new OptimizableOperatorSubTree();
     protected IOptimizationContext context = null;
 
@@ -157,6 +159,8 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         // Set and analyze select.
         // Check that the SELECT condition is a function call.
         ILogicalExpression condExpr = selectOp.getCondition().getValue();
+        typeEnvironment = context.getOutputTypeEnvironment(selectOp);
+        // Check that the select's condition is a function call.
         if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             return false;
         }
@@ -186,7 +190,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                 if (checkSelectOperatorCondition()) {
 
                     // Analyze the condition of SELECT operator.
-                    if (analyzeCondition(selectCond, subTree.assignsAndUnnests, analyzedAMs)) {
+                    if (analyzeCondition(selectCond, subTree.assignsAndUnnests, analyzedAMs, context, typeEnvironment)) {
 
                         // Set dataset and type metadata.
                         if (subTree.setDatasetAndTypeMetadata((AqlMetadataProvider) context.getMetadataProvider())) {
@@ -195,7 +199,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                             fillSubTreeIndexExprs(subTree, analyzedAMs, context);
 
                             // Prune the access methods if there is no applicable index for them.
-                            pruneIndexCandidates(analyzedAMs);
+                            pruneIndexCandidates(analyzedAMs, context, typeEnvironment);
 
                             // Choose index to be applied.
                             Pair<IAccessMethod, Index> chosenIndex = chooseIndex(analyzedAMs);
