@@ -25,13 +25,13 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.algebra.base.LogicalOperatorDeepCopyVisitor;
-import org.apache.asterix.aql.util.FunctionUtils;
 import org.apache.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.dataflow.data.common.AqlExpressionTypeComputer;
 import org.apache.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
+import org.apache.asterix.lang.aql.util.FunctionUtils;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.om.base.AFloat;
@@ -119,12 +119,10 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
 
     // These function identifiers are matched in this AM's analyzeFuncExprArgs(),
     // and are not visible to the outside driver.
-
     // Second boolean value means that this function can produce false positive results if it is set to false.
     // That is, an index-search alone cannot replace SELECT condition and
     // SELECT condition needs to be applied after that index-search to get the correct results.
     private static List<Pair<FunctionIdentifier, Boolean>> secondLevelFuncIdents = new ArrayList<Pair<FunctionIdentifier, Boolean>>();
-
     static {
         secondLevelFuncIdents.add(new Pair<FunctionIdentifier, Boolean>(
                 AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK, false));

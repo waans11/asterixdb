@@ -28,10 +28,10 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.asterix.algebra.operators.physical.ExternalDataLookupPOperator;
-import org.apache.asterix.aql.util.FunctionUtils;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.lang.aql.util.FunctionUtils;
 import org.apache.asterix.metadata.declared.AqlSourceId;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;

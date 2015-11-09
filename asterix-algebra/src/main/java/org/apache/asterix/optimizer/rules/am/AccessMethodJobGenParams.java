@@ -148,8 +148,8 @@ public class AccessMethodJobGenParams {
     }
 
     protected void writeVarList(List<LogicalVariable> varList, List<Mutable<ILogicalExpression>> funcArgs) {
-        Mutable<ILogicalExpression> numKeysRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
-                new AsterixConstantValue(new AInt32(varList.size()))));
+        Mutable<ILogicalExpression> numKeysRef = new MutableObject<ILogicalExpression>(
+                new ConstantExpression(new AsterixConstantValue(new AInt32(varList.size()))));
         funcArgs.add(numKeysRef);
         for (LogicalVariable keyVar : varList) {
             Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(

@@ -25,9 +25,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.asterix.aql.util.FunctionUtils;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.dataflow.data.common.AqlExpressionTypeComputer;
+import org.apache.asterix.lang.aql.util.FunctionUtils;
 import org.apache.asterix.metadata.api.IMetadataEntity;
 import org.apache.asterix.metadata.bootstrap.MetadataConstants;
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;

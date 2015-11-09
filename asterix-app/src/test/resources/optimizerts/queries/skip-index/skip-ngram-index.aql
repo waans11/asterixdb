@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 /*
  * Description  : Notice the query hint to avoid using any secondary index to evaluate the predicate in the where clause
  * Expected Res : Success

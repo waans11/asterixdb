@@ -25,10 +25,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Stack;
 
-import org.apache.asterix.aql.util.FunctionUtils;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.lang.aql.util.FunctionUtils;
 import org.apache.asterix.metadata.declared.AqlDataSource;
 import org.apache.asterix.metadata.declared.AqlIndex;
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;

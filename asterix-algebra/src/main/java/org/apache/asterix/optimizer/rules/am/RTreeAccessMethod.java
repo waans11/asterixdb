@@ -21,10 +21,10 @@ package org.apache.asterix.optimizer.rules.am;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.asterix.aql.util.FunctionUtils;
 import org.apache.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
+import org.apache.asterix.lang.aql.util.FunctionUtils;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.om.base.AInt32;

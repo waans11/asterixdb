@@ -28,10 +28,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.asterix.aql.util.FunctionUtils;
 import org.apache.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
+import org.apache.asterix.lang.aql.util.FunctionUtils;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
@@ -587,7 +587,6 @@ public class BTreeAccessMethod implements IAccessMethod {
             boolean verificationAfterSIdxSearchRequired, boolean secondaryKeyFieldUsedInSelectCondition,
             boolean secondaryKeyFieldUsedAfterSelectOp, boolean noFalsePositiveResultsFromSIdxSearch)
             throws AlgebricksException {
-
         Dataset dataset = indexSubTree.dataset;
         ARecordType recordType = indexSubTree.recordType;
         // we made sure indexSubTree has datasource scan

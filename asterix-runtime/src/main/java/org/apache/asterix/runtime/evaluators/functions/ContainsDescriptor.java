@@ -51,41 +51,13 @@ public class ContainsDescriptor extends AbstractScalarFunctionDynamicDescriptor 
 
                 DataOutput dout = output.getDataOutput();
 
-                return new AbstractStringContainsEval(dout, args[0], args[1], AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
-
+                return new AbstractBinaryStringBoolEval(dout, args[0], args[1],
+                        AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
                     @Override
-                    protected boolean findMatch(byte[] strBytes, byte[] patternBytes) {
-                        int utflen1 = UTF8StringPointable.getUTFLength(strBytes, 1);
-                        int utflen2 = UTF8StringPointable.getUTFLength(patternBytes, 1);
-
-                        int s1Start = 3;
-                        int s2Start = 3;
-
-                        boolean matches = false;
-                        int maxStart = utflen1 - utflen2;
-                        int startMatch = 0;
-                        while (startMatch <= maxStart) {
-                            int c1 = startMatch;
-                            int c2 = 0;
-                            while (c1 < utflen1 && c2 < utflen2) {
-                                char ch1 = UTF8StringPointable.charAt(strBytes, s1Start + c1);
-                                char ch2 = UTF8StringPointable.charAt(patternBytes, s2Start + c2);
-
-                                if (ch1 != ch2) {
-                                    break;
-                                }
-                                c1 += UTF8StringPointable.charSize(strBytes, s1Start + c1);
-                                c2 += UTF8StringPointable.charSize(patternBytes, s2Start + c2);
-                            }
-                            if (c2 == utflen2) {
-                                matches = true;
-                                break;
-                            }
-                            startMatch += UTF8StringPointable.charSize(strBytes, s1Start + startMatch);
-                        }
-                        return matches;
+                    protected boolean compute(UTF8StringPointable left, UTF8StringPointable right)
+                            throws AlgebricksException {
+                        return UTF8StringPointable.contains(left, right, false);
                     }
-
                 };
             }
         };

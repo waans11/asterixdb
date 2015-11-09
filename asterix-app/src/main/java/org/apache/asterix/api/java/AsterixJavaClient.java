@@ -20,23 +20,18 @@ package org.apache.asterix.api.java;
 
 import java.io.PrintWriter;
 import java.io.Reader;
-import java.text.SimpleDateFormat;
 import java.util.List;
 
 import org.apache.asterix.api.common.APIFramework;
 import org.apache.asterix.api.common.Job;
 import org.apache.asterix.api.common.SessionConfig;
 import org.apache.asterix.api.common.SessionConfig.OutputFormat;
-import org.apache.asterix.aql.base.Statement;
-import org.apache.asterix.aql.parser.AQLParser;
-import org.apache.asterix.aql.parser.ParseException;
 import org.apache.asterix.aql.translator.AqlTranslator;
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.job.JobSpecification;
-import org.apache.hyracks.api.util.ExecutionTimeProfiler;
-import org.apache.hyracks.api.util.OperatorExecutionTimeProfiler;
 
 public class AsterixJavaClient {
     private IHyracksClientConnection hcc;
@@ -75,7 +70,6 @@ public class AsterixJavaClient {
             builder.append((char) ch);
         }
         AQLParser parser = new AQLParser(builder.toString());
-
         List<Statement> aqlStatements;
         try {
             aqlStatements = parser.parse();
@@ -85,8 +79,7 @@ public class AsterixJavaClient {
         MetadataManager.INSTANCE.init();
 
         SessionConfig conf = new SessionConfig(writer, OutputFormat.ADM, optimize, true, generateBinaryRuntime);
-        conf.setOOBData(false, printRewrittenExpressions, printLogicalPlan,
-                        printOptimizedPlan, printJob);
+        conf.setOOBData(false, printRewrittenExpressions, printLogicalPlan, printOptimizedPlan, printJob);
         if (printPhysicalOpsOnly) {
             conf.set(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS, true);
         }
