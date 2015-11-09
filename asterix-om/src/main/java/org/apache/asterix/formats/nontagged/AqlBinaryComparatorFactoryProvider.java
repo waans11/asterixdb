@@ -50,6 +50,7 @@ import org.apache.hyracks.data.std.primitive.LongPointable;
 import org.apache.hyracks.data.std.primitive.RawUTF8StringPointable;
 import org.apache.hyracks.data.std.primitive.ShortPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringLowercasePointable;
+import org.apache.hyracks.data.std.primitive.UTF8StringWithoutLengthByteLowercasePointable;
 
 public class AqlBinaryComparatorFactoryProvider implements IBinaryComparatorFactoryProvider, Serializable {
 
@@ -72,6 +73,10 @@ public class AqlBinaryComparatorFactoryProvider implements IBinaryComparatorFact
     // Equivalent to UTF8STRING_POINTABLE_INSTANCE but all characters are considered lower case to implement case-insensitive comparisons.
     public static final PointableBinaryComparatorFactory UTF8STRING_LOWERCASE_POINTABLE_INSTANCE = new PointableBinaryComparatorFactory(
             UTF8StringLowercasePointable.FACTORY);
+    // Equivalent to UTF8STRING_POINTABLE_INSTANCE but all characters are considered lower case to implement case-insensitive comparisons.
+    // Also, this pointable type does not store the length information in the beginning since it receives the length information by a parameter.
+    public static final PointableBinaryComparatorFactory UTF8STRING_WITHOUT_LENGTH_BYTE_LOWERCASE_POINTABLE_INSTANCE = new PointableBinaryComparatorFactory(
+            UTF8StringWithoutLengthByteLowercasePointable.FACTORY);
     public static final PointableBinaryComparatorFactory BINARY_POINTABLE_INSTANCE = new PointableBinaryComparatorFactory(
             ByteArrayPointable.FACTORY);
 

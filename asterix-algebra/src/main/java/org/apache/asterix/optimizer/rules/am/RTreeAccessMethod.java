@@ -39,6 +39,7 @@ import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Quintuple;
+import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -57,6 +58,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
@@ -225,9 +227,9 @@ public class RTreeAccessMethod implements IAccessMethod {
         }
 
         if (isIndexOnlyPlanPossible) {
-            analysisCtx.setIndexOnlyPlanEnabled(true);
+            analysisCtx.setIsIndexOnlyPlan(true);
         } else {
-            analysisCtx.setIndexOnlyPlanEnabled(false);
+            analysisCtx.setIsIndexOnlyPlan(false);
         }
 
         // R-Tree specific: if the verification after a SIdx search is required, then
@@ -379,9 +381,9 @@ public class RTreeAccessMethod implements IAccessMethod {
         }
 
         if (isIndexOnlyPlanPossible) {
-            analysisCtx.setIndexOnlyPlanEnabled(true);
+            analysisCtx.setIsIndexOnlyPlan(true);
         } else {
-            analysisCtx.setIndexOnlyPlanEnabled(false);
+            analysisCtx.setIsIndexOnlyPlan(false);
         }
 
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(aboveJoinRefs, joinRef, conditionRef,
@@ -396,6 +398,20 @@ public class RTreeAccessMethod implements IAccessMethod {
         if (isLeftOuterJoin && hasGroupBy) {
             //reset the null place holder variable
             AccessMethodUtils.resetLOJNullPlaceholderVariableInGroupByOp(analysisCtx, newNullPlaceHolderVar, context);
+
+            // For the index-only plan or reducing the number of select operations plan,
+            // if newNullPlaceHolderVar is not in the variable map of the union operator,
+            // we need to add this variable to the map.
+            if (primaryIndexUnnestOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
+                List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> varMap = ((UnionAllOperator) primaryIndexUnnestOp)
+                        .getVariableMappings();
+                varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(newNullPlaceHolderVar,
+                        newNullPlaceHolderVar, newNullPlaceHolderVar));
+                UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
+                unionAllOp.getInputs().addAll(((UnionAllOperator) primaryIndexUnnestOp).getInputs());
+                context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
+                primaryIndexUnnestOp = unionAllOp;
+            }
         }
 
         indexSubTree.dataSourceRef.setValue(primaryIndexUnnestOp);
@@ -404,7 +420,7 @@ public class RTreeAccessMethod implements IAccessMethod {
             if (assignBeforeJoinOp != null) {
                 // If a tryLock() on PK optimization is possible,
                 // the whole plan is changed. Replace the current path with the new plan.
-                if (analysisCtx.isIndexOnlyPlanEnabled() && dataset.getDatasetType() == DatasetType.INTERNAL) {
+                if (analysisCtx.getIsIndexOnlyPlan() && dataset.getDatasetType() == DatasetType.INTERNAL) {
                     // Get the revised dataSourceRef operator - unnest-map (PK, record)
                     // Right now, the order of operators is: union <- select <- assign <- unnest-map (primary index look-up)
                     ILogicalOperator dataSourceRefOp = (ILogicalOperator) primaryIndexUnnestOp.getInputs().get(0)
@@ -459,22 +475,31 @@ public class RTreeAccessMethod implements IAccessMethod {
                 } else {
                     // Index-only optimization and reducing the number of SELECT optimization are not possible.
                     // Right now, the order of operators is: select <- assign <- unnest-map (primary index look-up)
-                    joinOp.getInputs().clear();
+                    //                    joinOp.getInputs().clear();
                     indexSubTree.dataSourceRef.setValue(primaryIndexUnnestOp);
-                    joinOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeJoinOp));
+                    //                    joinOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeJoinOp));
+                    // Change join into a select with the same condition.
+                    SelectOperator topSelect = new SelectOperator(joinOp.getCondition(), isLeftOuterJoin,
+                            newNullPlaceHolderVar);
+                    topSelect.getInputs().add(indexSubTree.rootRef);
+                    topSelect.setExecutionMode(ExecutionMode.LOCAL);
+                    context.computeAndSetTypeEnvironmentForOperator(topSelect);
+                    // Replace the original join with the new subtree rooted at the select op.
+                    joinRef.setValue(topSelect);
                 }
             }
 
             // SELECT condition needs to be applied to non-index only plan that cannot benefit from
             // no false positive results from the secondary index or no verification after secondary index search.
-            if (!isIndexOnlyPlanPossible
-                    && (!noFalsePositiveResultsFromSIdxSearch || verificationAfterSIdxSearchRequired)) {
-                SelectOperator topSelect = new SelectOperator(conditionRef, isLeftOuterJoin, newNullPlaceHolderVar);
-                topSelect.getInputs().add(indexSubTree.rootRef);
-                topSelect.setExecutionMode(ExecutionMode.LOCAL);
-                context.computeAndSetTypeEnvironmentForOperator(topSelect);
-                joinRef.setValue(topSelect);
-            }
+
+            //            if (!isIndexOnlyPlanPossible
+            //                    && (!noFalsePositiveResultsFromSIdxSearch || verificationAfterSIdxSearchRequired)) {
+            //                SelectOperator topSelect = new SelectOperator(conditionRef, isLeftOuterJoin, newNullPlaceHolderVar);
+            //                topSelect.getInputs().add(indexSubTree.rootRef);
+            //                topSelect.setExecutionMode(ExecutionMode.LOCAL);
+            //                context.computeAndSetTypeEnvironmentForOperator(topSelect);
+            //                joinRef.setValue(topSelect);
+            //            }
         } else {
             // Replace the original join with the new subtree rooted at the select op.
             if (primaryIndexUnnestOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
@@ -516,20 +541,27 @@ public class RTreeAccessMethod implements IAccessMethod {
         IAType spatialType = keyPairType.first;
         int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
         int numSecondaryKeys = numDimensions * 2;
-        boolean isIndexOnlyPlanEnabled = analysisCtx.isIndexOnlyPlanEnabled();
+        boolean isIndexOnlyPlanEnabled = analysisCtx.getIsIndexOnlyPlan();
 
         // Set the LIMIT push-down if it is possible.
         long limitNumberOfResult = -1;
 
-        if (noFalsePositiveResultsFromSIdxSearch) {
+        if (noFalsePositiveResultsFromSIdxSearch && dataset.getDatasetType() == DatasetType.INTERNAL) {
             limitNumberOfResult = analysisCtx.getLimitNumberOfResult();
+        }
+
+        // We apply index-only plan or reducing the number of SELECT verification plan only for an internal dataset.
+        boolean generateTrylockResultFromIndexSearch = false;
+        if (dataset.getDatasetType() == DatasetType.INTERNAL
+                && (isIndexOnlyPlanEnabled || noFalsePositiveResultsFromSIdxSearch)) {
+            generateTrylockResultFromIndexSearch = true;
         }
 
         // we made sure indexSubTree has datasource scan
         AbstractDataSourceOperator dataSourceOp = (AbstractDataSourceOperator) indexSubTree.dataSourceRef.getValue();
         RTreeJobGenParams jobGenParams = new RTreeJobGenParams(chosenIndex.getIndexName(), IndexType.RTREE,
                 dataset.getDataverseName(), dataset.getDatasetName(), retainInput, retainNull, requiresBroadcast,
-                isIndexOnlyPlanEnabled || noFalsePositiveResultsFromSIdxSearch, limitNumberOfResult);
+                generateTrylockResultFromIndexSearch, limitNumberOfResult);
         // A spatial object is serialized in the constant of the func expr we are optimizing.
         // The R-Tree expects as input an MBR represented with 1 field per dimension.
         // Here we generate vars and funcs for extracting MBR fields from the constant into fields of a tuple (as the R-Tree expects them).
@@ -579,8 +611,7 @@ public class RTreeAccessMethod implements IAccessMethod {
 
         boolean outputPrimaryKeysOnlyFromSIdxSearch = false;
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
-                chosenIndex, assignSearchKeys, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput,
-                isIndexOnlyPlanEnabled, noFalsePositiveResultsFromSIdxSearch);
+                chosenIndex, assignSearchKeys, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         if (dataset.getDatasetType() == DatasetType.EXTERNAL) {

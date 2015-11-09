@@ -49,18 +49,20 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterJoi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LimitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
+import org.apache.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
+import org.apache.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
 /**
  * This rule optimizes a join with secondary indexes into an indexed nested-loop join.
  * Matches the following operator pattern:
- * (join) <-- (select)? <-- (assign | unnest)+ <-- (datasource scan)
- * ...... <-- (select)? <-- (assign | unnest)+ <-- (datasource scan | unnest-map)
+ * (join) <-- (limit)* <-- (order)* <-- (select)? <-- (assign | unnest)+ <-- (datasource scan)
+ * <-- (limit)* <-- (order)* <-- (select)? <-- (assign | unnest)+ <-- (datasource scan | unnest-map)
  * The order of the join inputs matters (left-outer relation, right-inner relation).
  * This rule tries to utilize an index on the inner relation first.
  * If that's not possible, it tries to use an index on the outer relation.
  * Replaces the above pattern with the following simplified plan:
- * (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign) <-- (datasource scan | unnest-map)
+ * (limit)* <-- (order)* <-- (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign) <-- (datasource scan | unnest-map)
  * The sort is optional, and some access methods may choose not to sort.
  * Note that for some index-based optimizations we do not remove the triggering
  * condition from the join, since the secondary index may only act as a filter, and the
@@ -152,10 +154,10 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         if (!planTransformed) {
             return false;
         } else {
-            //            StringBuilder sb = new StringBuilder();
-            //            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
-            //            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) opRef.getValue(), sb, pvisitor, 0);
-            //            System.out.println("\n" + sb.toString());
+            StringBuilder sb = new StringBuilder();
+            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();
+            PlanPrettyPrinter.printOperator((AbstractLogicalOperator) opRef.getValue(), sb, pvisitor, 0);
+            System.out.println("\n" + sb.toString());
             OperatorPropertiesUtil.typeOpRec(opRef, context);
         }
 
@@ -202,24 +204,34 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         boolean joinFoundAndOptimizationApplied = false;
 
         // Check the operator pattern to see whether it is JOIN or not.
-        boolean isInnerJoin = isInnerJoin(op);
+        boolean isThisOpInnerJoin = isInnerJoin(op);
         isLeftOuterJoin = isLeftOuterJoin(op);
+        boolean isThisOpLeftOuterJoin = isLeftOuterJoin;
+        boolean isParentOpGroupBy = hasGroupBy;
+        boolean canPushDownLimitForThisOp = canPushDownLimit;
+        long limitNumberOfResultForThisOp = limitNumberOfResult;
+        List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressionsForThisOp = orderByExpressions;
 
         Mutable<ILogicalOperator> joinRefFromThisOp = null;
         AbstractBinaryJoinOperator joinOpFromThisOp = null;
 
-        if (isInnerJoin) {
+        if (isThisOpInnerJoin) {
             // Set join op.
             joinRef = opRef;
             joinOp = (InnerJoinOperator) op;
             joinRefFromThisOp = opRef;
             joinOpFromThisOp = (InnerJoinOperator) op;
-        } else if (isLeftOuterJoin) {
+        } else if (isThisOpLeftOuterJoin) {
             // Set left-outer-join op.
             joinRef = op.getInputs().get(0);
             joinOp = (LeftOuterJoinOperator) joinRef.getValue();
             joinRefFromThisOp = op.getInputs().get(0);
             joinOpFromThisOp = (LeftOuterJoinOperator) joinRefFromThisOp.getValue();
+
+            // Since the child of the current operator is left-outer-join,
+            // we need to add the current operator to the operators list that contains
+            // all operators after join operator.
+            afterJoinRefs.add(opRef);
         } else {
             // Other ops: before traversing the descendants,
             // we keep certain information such as LIMIT, order by.
@@ -265,12 +277,17 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         }
 
         // For JOIN case, try to transform the given plan.
-        if (isInnerJoin || isLeftOuterJoin) {
+        if (isThisOpInnerJoin || isThisOpLeftOuterJoin) {
 
-            // Restore the join operator from this operator since it might be set to null
+            // Restore the information from this operator since it might be set to null
             // if there are other join operators in the earlier path.
             joinRef = joinRefFromThisOp;
             joinOp = joinOpFromThisOp;
+            isLeftOuterJoin = isThisOpLeftOuterJoin;
+            hasGroupBy = isParentOpGroupBy;
+            canPushDownLimit = canPushDownLimitForThisOp;
+            limitNumberOfResult = limitNumberOfResultForThisOp;
+            orderByExpressions = orderByExpressionsForThisOp;
 
             // Already checked? If not, this operator may be optimized.
             if (!context.checkIfInDontApplySet(this, joinOp)) {
@@ -341,7 +358,7 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                 AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
 
                                 //For LOJ with GroupBy, prepare objects to reset LOJ nullPlaceHolderVariable in GroupByOp
-                                if (isLeftOuterJoin && hasGroupBy) {
+                                if (isThisOpLeftOuterJoin && isParentOpGroupBy) {
                                     analysisCtx.setLOJGroupbyOpRef(opRef);
                                     ScalarFunctionCallExpression isNullFuncExpr = AccessMethodUtils
                                             .findLOJIsNullFuncInGroupBy((GroupByOperator) opRef.getValue());
@@ -351,12 +368,16 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                 // Determine if the index is applicable on the left or right side (if both, we prefer the right (inner) side).
                                 Dataset indexDataset = analysisCtx.indexDatasetMap.get(chosenIndex.second);
                                 OptimizableOperatorSubTree indexSubTree = null;
+                                OptimizableOperatorSubTree probeSubTree = null;
+
                                 boolean isRightTreeIndexSubTree = AccessMethodUtils.isRightTreeIndexSubTree(
-                                        indexDataset, isLeftOuterJoin, leftSubTree, rightSubTree);
+                                        indexDataset, isThisOpLeftOuterJoin, leftSubTree, rightSubTree);
                                 if (isRightTreeIndexSubTree) {
                                     indexSubTree = rightSubTree;
+                                    probeSubTree = leftSubTree;
                                 } else {
                                     indexSubTree = leftSubTree;
+                                    probeSubTree = rightSubTree;
                                 }
 
                                 // If the chosen index is the primary index - add variable:name to subTree.fieldNames
@@ -377,41 +398,36 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                     rightSubTree.setFirstIndexSearchOrDataScan();
 
                                     // If this is LEFT-OUTER-JOIN,
-                                    // and outer branch has an UNNEST-MAP (index-search) or a data-scan,
-                                    // and the order of its index (data-scan) attribute is the same as the attributes
-                                    // in the order by expressions, then, we can pass LIMIT information
-                                    // to the index-search of the OUTER branch (index subtree).
-                                    if (isLeftOuterJoin) {
-                                        if (orderByExpressions != null) {
-                                            canPushDownLimit = isAttrSequenceOfOrderByAndUnnestMapSame(leftSubTree,
-                                                    orderByExpressions);
+                                    // we can pass LIMIT information to the first index-search of outer branch under:
+                                    // 1) outer branch has an UNNEST-MAP (index-search) or a data-scan.
+                                    // 2) This index-search can generate the final results (trustworthy results in the outer branch).
+                                    // 3) the order of attribute from its index-search (data-scan) is the same as the attributes
+                                    //    in the order by expressions
+                                    // If it is the case, the index-search of the OUTER branch can generate just enough number of results
+                                    // indicated by LIMIT operator in the plan.
 
-                                            // If so, pass LIMIT into the first index-search or data-scan
-                                            if (canPushDownLimit) {
-                                                canPushDownLimit = checkAndPassLimitToIndexSearch(leftSubTree,
-                                                        limitNumberOfResult);
-                                            } else {
-                                                limitNumberOfResult = -1;
-                                            }
+                                    // INNER-JOIN case: we pass limit to inner branch since we can't count the final results
+                                    // from the outer branch. Thus, lIMIT will be applied on the secondary index-search
+                                    // or primary-index search of the inner branch. And the index should cover all join conditions,
+                                    // meaning that it needs to generate trustworthy results.
+
+                                    if (orderByExpressions != null) {
+                                        // Check the attributes order between the index-search and order by expressions.
+                                        canPushDownLimit = isAttrSequenceOfOrderByAndUnnestMapSame(probeSubTree,
+                                                orderByExpressions, !isLeftOuterJoin);
+                                    }
+
+                                    // Now, we pass LIMIT information to the index-search.
+                                    // For OUTER JOIN, limit will be applied on outer branch.
+                                    // For INNER JOIN, limit will be applied on inner branch.
+                                    if (canPushDownLimit) {
+                                        if (isLeftOuterJoin) {
+                                            canPushDownLimit = checkAndPassLimitToIndexSearch(probeSubTree,
+                                                    limitNumberOfResult, false);
                                         } else {
-                                            // If there is no order-by, then we need to check whether
-                                            // the first index-search can generate the trustworthy results.
-                                            // Case 1) a secondary index-search: an index-only plan or
-                                            //         reducing the number of verification plan is applicable.
-                                            //         If it's not an index-only plan, then we check the primary index-search.
-                                            // Case 2) a primary index-search: a primary index search with no additional
-                                            //         SELECT operator is applicable since the given primary-index search can
-                                            //         generate trustworthy results.
-
-                                            // If so, pass LIMIT into the first index-search or data-scan
-                                            canPushDownLimit = checkAndPassLimitToIndexSearch(leftSubTree,
-                                                    limitNumberOfResult);
-
+                                            canPushDownLimit = checkAndPassLimitToIndexSearch(indexSubTree,
+                                                    limitNumberOfResult, true);
                                         }
-                                    } else {
-                                        // inner-join case: we pass limit and
-                                        canPushDownLimit = false;
-                                        limitNumberOfResult = -1;
                                     }
 
                                     if (!canPushDownLimit) {

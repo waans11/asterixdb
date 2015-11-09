@@ -51,7 +51,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOpe
 
 /**
  * Operator subtree that matches the following patterns, and provides convenient access to its nodes:
- * (select)? <-- (assign | unnest)* <-- (datasource scan | unnest-map)*
+ * (limit)* <-- (orderby)* <-- (select)? <-- (assign | unnest)* <-- (datasource scan | unnest-map)*
  */
 public class OptimizableOperatorSubTree {
 
@@ -85,6 +85,9 @@ public class OptimizableOperatorSubTree {
     // Order by expression in this subtree
     public List<Pair<IOrder, Mutable<ILogicalExpression>>> subTreeOrderByExpr = null;
 
+    // Limit information in this subtree
+    public Mutable<ILogicalOperator> limitRef = null;
+
     // First index-search or data-scan in this subtree
     public Mutable<ILogicalOperator> firstIdxSearchRef = null;
 
@@ -101,6 +104,12 @@ public class OptimizableOperatorSubTree {
         // Examine the op's children to match the expected patterns.
         AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
         do {
+            // Keep limit information if one is present
+            if (subTreeOp.getOperatorTag() == LogicalOperatorTag.LIMIT) {
+                limitRef = subTreeOpRef;
+                subTreeOpRef = subTreeOp.getInputs().get(0);
+                subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+            }
             // Keep Order by information if one is present
             if (subTreeOp.getOperatorTag() == LogicalOperatorTag.ORDER) {
                 OrderOperator orderOp = (OrderOperator) subTreeOp;

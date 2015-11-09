@@ -435,21 +435,27 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) indexSubTree.dataSourceRef.getValue();
 
         // index-only plan enabled?
-        boolean isIndexOnlyPlan = analysisCtx.isIndexOnlyPlanEnabled();
+        boolean isIndexOnlyPlan = analysisCtx.getIsIndexOnlyPlan();
 
         // Set the LIMIT push-down if it is possible.
         long limitNumberOfResult = -1;
 
-        if (noFalsePositiveResultsFromSIdxSearch) {
+        if (noFalsePositiveResultsFromSIdxSearch && dataset.getDatasetType() == DatasetType.INTERNAL) {
             limitNumberOfResult = analysisCtx.getLimitNumberOfResult();
+        }
+
+        // We apply index-only plan or reducing the number of SELECT verification plan only for an internal dataset.
+        boolean generateTrylockResultFromIndexSearch = false;
+        if (dataset.getDatasetType() == DatasetType.INTERNAL
+                && (isIndexOnlyPlan || noFalsePositiveResultsFromSIdxSearch)) {
+            generateTrylockResultFromIndexSearch = true;
         }
 
         // For the case A and B, we need to generate the result of tryLock on a PK during the secondary index search.
         // The last parameter ensures that variable will be generated.
         InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams(chosenIndex.getIndexName(),
                 chosenIndex.getIndexType(), dataset.getDataverseName(), dataset.getDatasetName(), retainInput,
-                retainNull, requiresBroadcast, isIndexOnlyPlan || noFalsePositiveResultsFromSIdxSearch,
-                limitNumberOfResult);
+                retainNull, requiresBroadcast, generateTrylockResultFromIndexSearch, limitNumberOfResult);
         // Add function-specific args such as search modifier, and possibly a similarity threshold.
         addFunctionSpecificArgs(optFuncExpr, jobGenParams);
         // Add the type of search key from the optFuncExpr.
@@ -481,8 +487,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // By default, we don't generate SK output.
         boolean outputPrimaryKeysOnlyFromSIdxSearch = true;
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
-                chosenIndex, inputOp, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput,
-                isIndexOnlyPlan, noFalsePositiveResultsFromSIdxSearch);
+                chosenIndex, inputOp, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput);
 
         // If an index-only plan is not possible and there is no false positive results from this secondary index search,
         // then the tryLock on a PK during the secondary index search should be maintained after the primary index look-up
@@ -667,9 +672,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // an index-only plan is not possible if the original secondary key field value is used after SELECT operator.
 
         if (isIndexOnlyPlanPossible && !secondaryKeyFieldUsedAfterSelectOp) {
-            analysisCtx.setIndexOnlyPlanEnabled(true);
+            analysisCtx.setIsIndexOnlyPlan(true);
         } else {
-            analysisCtx.setIndexOnlyPlanEnabled(false);
+            analysisCtx.setIsIndexOnlyPlan(false);
         }
 
         SelectOperator selectOp = (SelectOperator) selectRef.getValue();
@@ -688,7 +693,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             //            select.getInputs().clear();
             if (assignBeforeSelectOp != null) {
                 // If a tryLock() on PK optimization is possible, we don't need to use select operator.
-                if (analysisCtx.isIndexOnlyPlanEnabled() && noFalsePositiveResultsFromSIdxSearch
+                if (analysisCtx.getIsIndexOnlyPlan() && noFalsePositiveResultsFromSIdxSearch
                         && dataset.getDatasetType() == DatasetType.INTERNAL) {
                     // Get dataSourceRef operator - unnest-map (PK, record)
                     // Right now, the order of opertors is: union -> select -> assign -> unnest-map
@@ -707,7 +712,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             } else {
                 // If a tryLock() on PK is possible, we don't need to use select operator.
                 if (dataset.getDatasetType() == DatasetType.INTERNAL
-                        && (analysisCtx.isIndexOnlyPlanEnabled() || noFalsePositiveResultsFromSIdxSearch)) {
+                        && (analysisCtx.getIsIndexOnlyPlan() || noFalsePositiveResultsFromSIdxSearch)) {
                     selectRef.setValue(indexPlanRootOp);
                 } else {
                     subTree.dataSourceRef.setValue(indexPlanRootOp);
@@ -890,9 +895,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         }
 
         if (isIndexOnlyPlan) {
-            analysisCtx.setIndexOnlyPlanEnabled(true);
+            analysisCtx.setIsIndexOnlyPlan(true);
         } else {
-            analysisCtx.setIndexOnlyPlanEnabled(false);
+            analysisCtx.setIsIndexOnlyPlan(false);
         }
 
         // Clone the original join condition because we may have to modify it (and we also need the original).
@@ -999,7 +1004,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 if (assignBeforeJoinOp != null) {
                     // If a tryLock() on PK optimization is possible,
                     // the whole plan is changed. replace the current path with the new plan.
-                    if (analysisCtx.isIndexOnlyPlanEnabled()) {
+                    if (analysisCtx.getIsIndexOnlyPlan()) {
                         // Get the revised dataSourceRef operator - unnest-map (PK, record)
                         // Right now, the order of operators is: union <- select <- assign <- unnest-map (primary index look-up)
                         ILogicalOperator dataSourceRefOp = (ILogicalOperator) indexPlanRootOp.getInputs().get(0)

@@ -42,6 +42,7 @@ import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Quintuple;
+import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -65,6 +66,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 
 /**
@@ -220,9 +222,9 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         // Set the result of index-only plan check
         if (isIndexOnlyPlan) {
-            analysisCtx.setIndexOnlyPlanEnabled(true);
+            analysisCtx.setIsIndexOnlyPlan(true);
         } else {
-            analysisCtx.setIndexOnlyPlanEnabled(false);
+            analysisCtx.setIsIndexOnlyPlan(false);
         }
 
         // Transform the current path to the path that is utilizing the corresponding indexes
@@ -299,7 +301,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 }
             } else {
                 // If a tryLock() on PK is possible, we don't need to use select operator.
-                if (analysisCtx.isIndexOnlyPlanEnabled()) {
+                if (analysisCtx.getIsIndexOnlyPlan()) {
                     ILogicalOperator dataSourceRefOp = (ILogicalOperator) primaryIndexUnnestOp.getInputs().get(0)
                             .getValue(); // select
                     dataSourceRefOp = (ILogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
@@ -449,9 +451,9 @@ public class BTreeAccessMethod implements IAccessMethod {
         }
 
         if (isIndexOnlyPlanPossible) {
-            analysisCtx.setIndexOnlyPlanEnabled(true);
+            analysisCtx.setIsIndexOnlyPlan(true);
         } else {
-            analysisCtx.setIndexOnlyPlanEnabled(false);
+            analysisCtx.setIsIndexOnlyPlan(false);
         }
 
         ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(aboveJoinRefs, joinRef, conditionRef,
@@ -466,6 +468,20 @@ public class BTreeAccessMethod implements IAccessMethod {
         if (isLeftOuterJoin && hasGroupBy) {
             //reset the null place holder variable
             AccessMethodUtils.resetLOJNullPlaceholderVariableInGroupByOp(analysisCtx, newNullPlaceHolderVar, context);
+
+            // For the index-only plan or reducing the number of select operations plan,
+            // if newNullPlaceHolderVar is not in the variable map of the union operator,
+            // we need to add this variable to the map.
+            if (primaryIndexUnnestOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
+                List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> varMap = ((UnionAllOperator) primaryIndexUnnestOp)
+                        .getVariableMappings();
+                varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(newNullPlaceHolderVar,
+                        newNullPlaceHolderVar, newNullPlaceHolderVar));
+                UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
+                unionAllOp.getInputs().addAll(((UnionAllOperator) primaryIndexUnnestOp).getInputs());
+                context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
+                primaryIndexUnnestOp = unionAllOp;
+            }
         }
 
         // If there are conditions left, add a new select operator on top.
@@ -474,7 +490,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             if (assignBeforeJoinOp != null) {
                 // If a tryLock() on PK optimization is possible,
                 // the whole plan is changed. replace the current path with the new plan.
-                if (analysisCtx.isIndexOnlyPlanEnabled()) {
+                if (isIndexOnlyPlanPossible) {
                     // Get the revised dataSourceRef operator - unnest-map (PK, record)
                     // Right now, the order of operators is: union <- select <- assign <- unnest-map (primary index look-up)
                     ILogicalOperator dataSourceRefOp = (ILogicalOperator) primaryIndexUnnestOp.getInputs().get(0)
@@ -522,19 +538,24 @@ public class BTreeAccessMethod implements IAccessMethod {
                 } else {
                     // Index-only optimization and reducing the number of SELECT optimization are not possible.
                     // Right now, the order of operators is: select <- assign <- unnest-map (primary index look-up)
-                    joinOp.getInputs().clear();
+                    //                    joinOp.getInputs().clear();
                     indexSubTree.dataSourceRef.setValue(primaryIndexUnnestOp);
-                    joinOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeJoinOp));
+                    //                    joinOp.getInputs().add(new MutableObject<ILogicalOperator>(assignBeforeJoinOp));
+                    SelectOperator topSelect = new SelectOperator(conditionRef, isLeftOuterJoin, newNullPlaceHolderVar);
+                    topSelect.getInputs().add(indexSubTree.rootRef);
+                    topSelect.setExecutionMode(ExecutionMode.LOCAL);
+                    context.computeAndSetTypeEnvironmentForOperator(topSelect);
+                    joinRef.setValue(topSelect);
                 }
             }
 
-            if (!isIndexOnlyPlanPossible && !noFalsePositiveResultsFromSIdxSearch) {
-                SelectOperator topSelect = new SelectOperator(conditionRef, isLeftOuterJoin, newNullPlaceHolderVar);
-                topSelect.getInputs().add(indexSubTree.rootRef);
-                topSelect.setExecutionMode(ExecutionMode.LOCAL);
-                context.computeAndSetTypeEnvironmentForOperator(topSelect);
-                joinRef.setValue(topSelect);
-            }
+            //            if (!isIndexOnlyPlanPossible && !noFalsePositiveResultsFromSIdxSearch) {
+            //                SelectOperator topSelect = new SelectOperator(conditionRef, isLeftOuterJoin, newNullPlaceHolderVar);
+            //                topSelect.getInputs().add(indexSubTree.rootRef);
+            //                topSelect.setExecutionMode(ExecutionMode.LOCAL);
+            //                context.computeAndSetTypeEnvironmentForOperator(topSelect);
+            //                joinRef.setValue(topSelect);
+            //            }
             //            // Replace the original join with the new subtree rooted at the select op.
         } else {
             if (primaryIndexUnnestOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
@@ -574,12 +595,21 @@ public class BTreeAccessMethod implements IAccessMethod {
         List<Pair<Integer, Integer>> exprAndVarList = analysisCtx.indexExprsAndVars.get(chosenIndex);
         List<IOptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;
         int numSecondaryKeys = analysisCtx.indexNumMatchedKeys.get(chosenIndex);
-        boolean isIndexOnlyPlanEnabled = analysisCtx.isIndexOnlyPlanEnabled();
 
-        // Set the LIMIT push-down if it is possible.
+        // Whether the given plan is an index-only plan or not.
+        boolean isIndexOnlyPlan = analysisCtx.getIsIndexOnlyPlan();
+
+        // We apply index-only plan or reducing the number of SELECT verification plan only for an internal dataset.
+        boolean generateTrylockResultFromIndexSearch = false;
+        if (dataset.getDatasetType() == DatasetType.INTERNAL
+                && (isIndexOnlyPlan || noFalsePositiveResultsFromSIdxSearch)) {
+            generateTrylockResultFromIndexSearch = true;
+        }
+
+        // Set the LIMIT information if it is possible to pass this to the index-search.
+        // We can pass LIMIT information only when the given index is set to generate trustworthy results.
         long limitNumberOfResult = -1;
-
-        if (noFalsePositiveResultsFromSIdxSearch) {
+        if (generateTrylockResultFromIndexSearch) {
             limitNumberOfResult = analysisCtx.getLimitNumberOfResult();
         }
 
@@ -838,7 +868,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         BTreeJobGenParams jobGenParams = new BTreeJobGenParams(chosenIndex.getIndexName(), IndexType.BTREE,
                 dataset.getDataverseName(), dataset.getDatasetName(), retainInput, retainNull, requiresBroadcast,
-                isIndexOnlyPlanEnabled || noFalsePositiveResultsFromSIdxSearch, limitNumberOfResult);
+                generateTrylockResultFromIndexSearch, limitNumberOfResult);
         jobGenParams.setLowKeyInclusive(lowKeyInclusive[0]);
         jobGenParams.setHighKeyInclusive(highKeyInclusive[0]);
         jobGenParams.setIsEqCondition(isEqCondition);
@@ -858,10 +888,10 @@ public class BTreeAccessMethod implements IAccessMethod {
             inputOp = probeSubTree.root;
         }
 
-        if (isIndexOnlyPlanEnabled) {
+        if (isIndexOnlyPlan) {
 
         }
-        if (!isIndexOnlyPlanEnabled && noFalsePositiveResultsFromSIdxSearch) {
+        if (!isIndexOnlyPlan && noFalsePositiveResultsFromSIdxSearch) {
 
         }
 
@@ -869,8 +899,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         // The result: SK, PK, [Optional: The result of a Trylock on PK]
         boolean outputPrimaryKeysOnlyFromSIdxSearch = false;
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
-                chosenIndex, inputOp, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput,
-                isIndexOnlyPlanEnabled, noFalsePositiveResultsFromSIdxSearch);
+                chosenIndex, inputOp, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         UnnestMapOperator primaryIndexUnnestOp = null;
@@ -885,7 +914,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             indexSubTree.dataSourceRef.setValue(externalDataAccessOp);
             return externalDataAccessOp;
         } else if (!isPrimaryIndex) {
-            if (noFalsePositiveResultsFromSIdxSearch && !isIndexOnlyPlanEnabled) {
+            if (noFalsePositiveResultsFromSIdxSearch && !isIndexOnlyPlan) {
                 tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
                         aboveTopOpRefs, opRef, conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType,
                         secondaryIndexUnnestOp, context, true, true, retainNull, false, chosenIndex, analysisCtx,
@@ -904,7 +933,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
             // Replace the datasource scan with the new plan rooted at
             // Get dataSourceRef operator - unnest-map (PK, record)
-            if (isIndexOnlyPlanEnabled) {
+            if (isIndexOnlyPlan) {
                 // Right now, the order of opertors is: union -> select -> assign -> unnest-map
                 AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) tmpPrimaryIndexUnnestOp.getInputs()
                         .get(0).getValue(); // select

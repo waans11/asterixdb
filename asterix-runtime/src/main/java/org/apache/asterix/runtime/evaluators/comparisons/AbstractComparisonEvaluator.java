@@ -56,7 +56,7 @@ import org.apache.hyracks.data.std.accessors.PointableBinaryHashFunctionFactory;
 import org.apache.hyracks.data.std.primitive.ByteArrayPointable;
 import org.apache.hyracks.data.std.primitive.FloatPointable;
 import org.apache.hyracks.data.std.primitive.IntegerPointable;
-import org.apache.hyracks.data.std.primitive.UTF8StringLowercasePointable;
+import org.apache.hyracks.data.std.primitive.UTF8StringWithoutLengthByteLowercasePointable;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.data.std.util.BinaryHashSet;
 import org.apache.hyracks.data.std.util.BinaryHashSet.BinaryEntry;
@@ -93,7 +93,7 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
     // For full-text search, we convert all strings to the lower case.
     // In addition, since each token does not include the length byte (2 bytes) in the beginning,
     // We need to have a different binary comparator that uses length parameter
-    protected IBinaryComparator strLowerCaseCmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_LOWERCASE_POINTABLE_INSTANCE
+    protected IBinaryComparator strLowerCaseCmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_WITHOUT_LENGTH_BYTE_LOWERCASE_POINTABLE_INSTANCE
             .createBinaryWithoutLengthByteComparator();
     protected IBinaryComparator circleBinaryComp = ACirclePartialBinaryComparatorFactory.INSTANCE
             .createBinaryComparator();
@@ -125,7 +125,7 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
 
     // Case insensitive hash
     protected IBinaryHashFunction hashFunc = new PointableBinaryHashFunctionFactory(
-            UTF8StringLowercasePointable.FACTORY).createBinaryHashWithoutLengthByteFunction();
+            UTF8StringWithoutLengthByteLowercasePointable.FACTORY).createBinaryHashWithoutLengthByteFunction();
 
     // Parameter: number of bucket, frame size, hashFunction, Comparator, byte array that contains the key
     //    protected BinaryHashSet leftHashSet = new BinaryHashSet(100, 32768, hashFunc, strLowerCaseCmp, null);

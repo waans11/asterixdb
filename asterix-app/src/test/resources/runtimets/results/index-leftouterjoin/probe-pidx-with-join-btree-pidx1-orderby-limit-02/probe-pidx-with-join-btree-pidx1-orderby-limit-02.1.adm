@@ -1,0 +1,4 @@
+[ { "tweetid1": 1, "count1": 1, "t2info": [ { "tweetid2": 1, "count2": 26 } ] }
+, { "tweetid1": 2, "count1": 2, "t2info": [ { "tweetid2": 2, "count2": 131 } ] }
+, { "tweetid1": 3, "count1": 3, "t2info": [ { "tweetid2": 3, "count2": 187 } ] }
+ ]

@@ -55,7 +55,7 @@ public class AccessMethodAnalysisContext {
     private ScalarFunctionCallExpression lojIsNullFuncInGroupBy = null;
 
     // For a secondary index, if we use only PK and secondary key field in a plan, it is an index-only plan.
-    private boolean indexOnlySelectPlanEnabled = false;
+    private boolean isIndexOnlyPlan = false;
 
     // For this access method, we push down the LIMIT from an ancestor operator (-1: no limit)
     // That is, an index-search just generates this number of results.
@@ -93,12 +93,12 @@ public class AccessMethodAnalysisContext {
         return lojIsNullFuncInGroupBy;
     }
 
-    public void setIndexOnlyPlanEnabled(boolean enabled) {
-        this.indexOnlySelectPlanEnabled = enabled;
+    public void setIsIndexOnlyPlan(boolean enabled) {
+        this.isIndexOnlyPlan = enabled;
     }
 
-    public boolean isIndexOnlyPlanEnabled() {
-        return this.indexOnlySelectPlanEnabled;
+    public boolean getIsIndexOnlyPlan() {
+        return this.isIndexOnlyPlan;
     }
 
     public void setLimitNumberOfResult(long limitNumberOfResult) {

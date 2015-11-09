@@ -330,9 +330,11 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                     boolean jaccardSimilarity = optFuncExpr.getFuncExpr().getFunctionIdentifier().getName()
                             .startsWith(AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK.getName());
 
-                    for (int j = 0; j < indexedTypes.size(); j++)
-                        for (int k = j + 1; k < indexedTypes.size(); k++)
+                    for (int j = 0; j < indexedTypes.size(); j++) {
+                        for (int k = j + 1; k < indexedTypes.size(); k++) {
                             typeMatch &= isMatched(indexedTypes.get(j), indexedTypes.get(k), jaccardSimilarity);
+                        }
+                    }
 
                     // Check if any field name in the optFuncExpr matches.
                     if (optFuncExpr.findFieldName(keyField) != -1) {
@@ -954,12 +956,14 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     /**
      * Checks whether the first index-search or data-scan can generate the final results in that sub tree.
      * If it does so, we pass LIMIT information to the given index-search
-     * so that it generates only certain number of results.
+     * so that it generates only certain number of results specified in LIMIT.
+     * For inner-join case, we PASS limit to the first index-search of inner branch.
+     * For left-outer-join case, we PASS limit to the first index-search of outer branch.
      *
      * @throws AlgebricksException
      */
-    protected boolean checkAndPassLimitToIndexSearch(OptimizableOperatorSubTree subTree, long limitNumberOfResult)
-            throws AlgebricksException {
+    protected boolean checkAndPassLimitToIndexSearch(OptimizableOperatorSubTree subTree, long limitNumberOfResult,
+            boolean isInnerJoin) throws AlgebricksException {
 
         if (subTree.firstIdxSearchRef == null) {
             return false;
@@ -998,16 +1002,14 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                                 return true;
                             }
                         } else {
-                            // If this a secondary index-search, we check whether
+                            // If this is a secondary index-search, we check whether
                             // this index-search is set to generate trustworthy results.
                             // If requireSplitValueForIndexOnlyPlan variable is true, this means that
                             // the given index-search will generate trustworthy results using tryLock on PK.
-                            boolean canGenerateTrustWorthyResults = jobGenParams.getRequireSplitValueForIndexOnlyPlan();
-
-                            if (!canGenerateTrustWorthyResults) {
+                            if (!jobGenParams.getRequireSplitValueForIndexOnlyPlan()) {
                                 return false;
                             } else {
-                                // Since we can produce trustworthy results,
+                                // Since we can generate trustworthy results,
                                 // we pass LIMIT information to the given index-search.
 
                                 // Reset the number of search results for the given index
@@ -1047,12 +1049,16 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     }
 
     /**
-     * Checks whether the first index-search or data-scan can generate the final results in that sub tree.
+     * Checks whether the attribute order in the given order-by clause and the given index is the same.
+     * This is required when passing LIMIT information to an index-search or data-scan.
+     * We also consider the specific situations in outer and inner joins.
      *
+     * @return
      * @throws AlgebricksException
      */
-    protected boolean canFirstIndexSearchGenerateFinalResult(OptimizableOperatorSubTree subTree,
-            long limitNumberOfResult) throws AlgebricksException {
+    protected boolean isAttrSequenceOfOrderByAndUnnestMapSame(OptimizableOperatorSubTree subTree,
+            List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions, boolean isInnerJoin)
+            throws AlgebricksException {
 
         if (subTree.firstIdxSearchRef == null) {
             return false;
@@ -1071,105 +1077,80 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                             jobGenParams.getDatasetName(), jobGenParams.getIndexName());
 
                     if (idxUsedInUnnestMap != null) {
-                        // If this is primary index, we need to check whether an index-search itself can
-                        // generate the final results
-                        if (idxUsedInUnnestMap.isPrimaryIndex()) {
-                            // If there is one or more SELECT operators after the primary index-search,
-                            // the primary index-search alone can't generate trustworthy results since SELCT
-                            // operator(s) will verify the results of the index-search.
-                            if (subTree.selectRefs != null && subTree.selectRefs.size() > 0) {
-                                return false;
+                        // If this is inner-join, then only primary-index search or
+                        // secondary-index search in non-index only plan can keep the original attribute order from the search
+                        // because of UNION_ALL operator in the index-only plan path.
+                        // Thus, we check whether the given index satisfies this condition.
+                        // If so, then we check the attribute orders in the index and order-by expressions.
+                        if (isInnerJoin) {
+                            if (idxUsedInUnnestMap.isPrimaryIndex()) {
+                                return isFieldNamesOfOrderByAndIndexSame(idxUsedInUnnestMap, subTree,
+                                        orderByExpressions);
+                            } else if (!jobGenParams.getRequireSplitValueForIndexOnlyPlan()) {
+                                // In this case where secondary index generates non-trust worthy results,
+                                // we need to fetch the primary index since the SORT between
+                                // the secondary index-search and primary index-search will sort tuples based on the PK order.
+                                Index primaryIdxUsedAfterUnnestMap = metadataProvider.getIndex(
+                                        jobGenParams.getDataverseName(), jobGenParams.getDatasetName(),
+                                        jobGenParams.getDatasetName());
+                                if (primaryIdxUsedAfterUnnestMap != null) {
+                                    return isFieldNamesOfOrderByAndIndexSame(primaryIdxUsedAfterUnnestMap, subTree,
+                                            orderByExpressions);
+                                } else {
+                                    // Actually, primary index can't be null.
+                                    return false;
+                                }
                             } else {
-                                return true;
+                                // For index-only plan or reducing the number of verification plan,
+                                // we can't keep the original attribute order of the index-search
+                                // because of UNION_ALL operator in the plan.
+                                return false;
                             }
                         } else {
-                            // If this a secondary index-search, we check whether
-                            // this index-search is set to generate trustworthy results.
-                            // If requireSplitValueForIndexOnlyPlan variable is true, this means that
-                            // the given index-search will generate trustworthy results using tryLock on PK.
-                            return jobGenParams.getRequireSplitValueForIndexOnlyPlan();
+                            // For left-outer-join case, the first index-search should generate the trustworthy result.
+                            // The final trustworthy check will be applied when we pass LIMIT information.
+                            // Here, we do a preliminary check regarding the given order by.
+                            if (idxUsedInUnnestMap.isPrimaryIndex()
+                                    || jobGenParams.getRequireSplitValueForIndexOnlyPlan()) {
+                                // For secondary indexes, only the order in B+Tree makes sense now.
+                                // Therefore, we can't pass LIMIT to the indexes to R Tree or an inverted index.
+                                if (idxUsedInUnnestMap.getIndexType() != IndexType.BTREE) {
+                                    return false;
+                                }
+                                return isFieldNamesOfOrderByAndIndexSame(idxUsedInUnnestMap, subTree,
+                                        orderByExpressions);
+                            } else {
+                                // For non index-only plan, we can't generate trustworthy results.
+                                return false;
+                            }
                         }
                     }
                 }
             } else if (firstIdxSearchOp.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
-                // If there is one or more SELECT operators after the primary index-search,
-                // the primary index-search alone can't generate trustworthy results since SELCT
-                // operator(s) will verify the results of the index-search.
-                if (subTree.selectRefs != null && subTree.selectRefs.size() > 0) {
+                // In case of DATASOURCESCAN operator
+                DataSourceScanOperator datasourceScanOp = (DataSourceScanOperator) firstIdxSearchOp;
+                Pair<String, String> datasetInfo = AnalysisUtil.getDatasetInfo(datasourceScanOp);
+                String dataverseName = datasetInfo.first;
+                String datasetName = datasetInfo.second;
+
+                if (dataverseName == null || datasetName == null) {
+                    return false;
+                }
+                // Find the primary index.
+                Index idxUsedInUnnestMap = metadataProvider.getIndex(dataverseName, datasetName, datasetName);
+                if (idxUsedInUnnestMap == null) {
                     return false;
                 } else {
-                    return true;
+                    // The final trustworthy check will be applied when we pass LIMIT information.
+                    // Here, we do a preliminary check.
+                    return isFieldNamesOfOrderByAndIndexSame(idxUsedInUnnestMap, subTree, orderByExpressions);
                 }
             } else {
                 return false;
             }
+
+            return false;
         }
-
-        // Control-flow should not reach here.
-        return false;
-    }
-
-    /**
-     * Checks whether the attribute order in the given order-by clause and the given index is the same.
-     * This is required when passing LIMIT information to an index-search or data-scan.
-     *
-     * @return
-     * @throws AlgebricksException
-     */
-    protected boolean isAttrSequenceOfOrderByAndUnnestMapSame(OptimizableOperatorSubTree subTree,
-            List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions) throws AlgebricksException {
-        // Checks whether there is an unnest-map from the beginning.
-        boolean unnestMapFound = false;
-        if (subTree.assignsAndUnnests.size() > 0) {
-            for (int i = subTree.assignsAndUnnests.size() - 1; i > 0; i--) {
-                AbstractLogicalOperator lop = subTree.assignsAndUnnests.get(i);
-                if (lop.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
-                    // We find an unnest-map. It should be an index-search.
-                    unnestMapFound = true;
-                    UnnestMapOperator unnestMapOp = (UnnestMapOperator) lop;
-
-                    AccessMethodJobGenParams jobGenParams = getAccessMethodJobGenParamsFromUnnestMap(unnestMapOp);
-
-                    if (jobGenParams != null) {
-                        // Fetch the index
-                        Index idxUsedInUnnestMap = metadataProvider.getIndex(jobGenParams.getDataverseName(),
-                                jobGenParams.getDatasetName(), jobGenParams.getIndexName());
-                        if (idxUsedInUnnestMap != null) {
-                            return isFieldNamesOfOrderByAndIndexSame(idxUsedInUnnestMap, subTree, orderByExpressions);
-                        }
-                    }
-
-                }
-                // If an unnest-map is found and the attribute order is consistent with order-by,
-                // the check is done.
-                if (unnestMapFound) {
-                    return true;
-                }
-            }
-        }
-
-        // If the control-flow reaches here, that means that there is no unnest-map.
-        // Thus, we need to check data-scan operator.
-        if (subTree.hasDataSourceScan()) {
-            DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) subTree.dataSourceRef.getValue();
-            Pair<String, String> datasetInfo = AnalysisUtil.getDatasetInfo(dataSourceScan);
-            String dataverseName = datasetInfo.first;
-            String datasetName = datasetInfo.second;
-
-            if (dataverseName == null || datasetName == null) {
-                return false;
-            }
-            // Find the primary index.
-            Index idxUsedInUnnestMap = metadataProvider.getIndex(dataverseName, datasetName, datasetName);
-            if (idxUsedInUnnestMap == null) {
-                return false;
-            } else {
-                return isFieldNamesOfOrderByAndIndexSame(idxUsedInUnnestMap, subTree, orderByExpressions);
-            }
-
-        }
-
-        return false;
     }
 
     /**
