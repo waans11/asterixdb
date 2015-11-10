@@ -316,8 +316,8 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
                     queryTokenCount++;
 
                     // Record the starting position and the length of the current token in the hash set
-                    keyEntry.set(strTokenizerForRightArray.getToken().getStart(), strTokenizerForRightArray.getToken()
-                            .getTokenLength());
+                    keyEntry.set(strTokenizerForRightArray.getToken().getStartOffset(), strTokenizerForRightArray
+                            .getToken().getTokenLength());
                     rightHashSet.put(keyEntry);
                 }
 
@@ -338,7 +338,7 @@ public abstract class AbstractComparisonEvaluator implements ICopyEvaluator {
 
                 // Checks whether this key exists in the query hash-set.
                 // Record the starting position and the length of the current token in the hash set
-                keyEntry.set(strTokenizerForLeftArray.getToken().getStart(), strTokenizerForLeftArray.getToken()
+                keyEntry.set(strTokenizerForLeftArray.getToken().getStartOffset(), strTokenizerForLeftArray.getToken()
                         .getTokenLength());
 
                 if (rightHashSet.find(keyEntry, outLeft.getByteArray()) == 1) {

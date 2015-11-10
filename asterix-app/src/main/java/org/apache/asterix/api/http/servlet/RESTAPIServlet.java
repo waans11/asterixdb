@@ -35,6 +35,8 @@ import org.apache.asterix.api.common.SessionConfig.OutputFormat;
 import org.apache.asterix.aql.translator.AqlTranslator;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.lang.aql.parser.AQLParser;
+import org.apache.asterix.lang.aql.parser.TokenMgrError;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.lang.common.base.Statement.Kind;
 import org.apache.asterix.metadata.MetadataManager;

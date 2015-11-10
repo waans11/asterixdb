@@ -27,7 +27,7 @@ import org.apache.asterix.api.common.Job;
 import org.apache.asterix.api.common.SessionConfig;
 import org.apache.asterix.api.common.SessionConfig.OutputFormat;
 import org.apache.asterix.aql.translator.AqlTranslator;
-import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.lang.aql.parser.AQLParser;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
@@ -70,12 +70,7 @@ public class AsterixJavaClient {
             builder.append((char) ch);
         }
         AQLParser parser = new AQLParser(builder.toString());
-        List<Statement> aqlStatements;
-        try {
-            aqlStatements = parser.parse();
-        } catch (ParseException pe) {
-            throw new AsterixException(pe);
-        }
+        List<Statement> aqlStatements = parser.parse();
         MetadataManager.INSTANCE.init();
 
         SessionConfig conf = new SessionConfig(writer, OutputFormat.ADM, optimize, true, generateBinaryRuntime);

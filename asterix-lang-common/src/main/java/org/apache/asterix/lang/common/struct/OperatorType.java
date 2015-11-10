@@ -35,7 +35,8 @@ public enum OperatorType {
     MOD("%"),
     CARET("^"),
     IDIV("idiv"), // integer divide
-    FUZZY_EQ("~=");
+    FUZZY_EQ("~="),
+    CONTAINS("contains"); // full-text search
 
     private final String symbol;
 
