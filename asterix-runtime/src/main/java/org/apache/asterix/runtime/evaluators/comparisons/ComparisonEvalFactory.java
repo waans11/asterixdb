@@ -78,7 +78,7 @@ public class ComparisonEvalFactory implements ICopyEvaluatorFactory {
 			return new InequalityComparisonEvaluator(out, evalLeftFactory,
 					evalRightFactory);
 		}
-		case CONTAINS: {
+		case FULLTEXT_CONTAINS: {
 			// fulltext search case
 			return new ContainsComparisonEvaluator(out, evalLeftFactory,
 					evalRightFactory);

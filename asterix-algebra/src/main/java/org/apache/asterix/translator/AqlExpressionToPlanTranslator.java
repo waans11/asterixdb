@@ -1170,7 +1170,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator
                 return AlgebricksBuiltinFunctions.LE;
             }
             case CONTAINS: {
-                return AlgebricksBuiltinFunctions.CONTAINS;
+                return AlgebricksBuiltinFunctions.FULLTEXT_CONTAINS;
             }
             default: {
                 throw new IllegalStateException();

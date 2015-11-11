@@ -62,6 +62,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
@@ -69,6 +70,7 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstan
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
@@ -119,8 +121,30 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
             throws AlgebricksException {
-        UnnestMapOperator unnestMapOp = (UnnestMapOperator) op;
-        ILogicalExpression unnestExpr = unnestMapOp.getExpressionRef().getValue();
+        // We have two types of unnest-map operator - UNNEST_MAP and LEFT_OUTER_UNNEST_MAP
+        UnnestMapOperator unnestMapOp = null;
+        LeftOuterUnnestMapOperator leftOuterUnnestMapOp = null;
+        ILogicalOperator unnestMap = null;
+        ILogicalExpression unnestExpr = null;
+        List<LogicalVariable> minFilterVarList = null;
+        List<LogicalVariable> maxFilterVarList = null;
+        List<LogicalVariable> outputVars = null;
+        if (op.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+            unnestMapOp = (UnnestMapOperator) op;
+            unnestExpr = unnestMapOp.getExpressionRef().getValue();
+            minFilterVarList = unnestMapOp.getMinFilterVars();
+            maxFilterVarList = unnestMapOp.getMaxFilterVars();
+            outputVars = unnestMapOp.getVariables();
+            unnestMap = unnestMapOp;
+        } else if (op.getOperatorTag() == LogicalOperatorTag.LEFT_OUTER_UNNEST_MAP) {
+            leftOuterUnnestMapOp = (LeftOuterUnnestMapOperator) op;
+            unnestExpr = leftOuterUnnestMapOp.getExpressionRef().getValue();
+            minFilterVarList = leftOuterUnnestMapOp.getMinFilterVars();
+            maxFilterVarList = leftOuterUnnestMapOp.getMaxFilterVars();
+            outputVars = leftOuterUnnestMapOp.getVariables();
+            unnestMap = leftOuterUnnestMapOp;
+        }
+
         if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             throw new IllegalStateException();
         }
@@ -141,8 +165,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         }
         int[] keyIndexes = getKeyIndexes(jobGenParams.getKeyVarList(), inputSchemas);
 
-        int[] minFilterFieldIndexes = getKeyIndexes(unnestMapOp.getMinFilterVars(), inputSchemas);
-        int[] maxFilterFieldIndexes = getKeyIndexes(unnestMapOp.getMaxFilterVars(), inputSchemas);
+        int[] minFilterFieldIndexes = getKeyIndexes(minFilterVarList, inputSchemas);
+        int[] maxFilterFieldIndexes = getKeyIndexes(maxFilterVarList, inputSchemas);
         // Build runtime.
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(
                 metadataProvider, context, builder.getJobSpec(), unnestMapOp, opSchema, jobGenParams.getRetainInput(),
@@ -160,7 +184,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
 
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
             AqlMetadataProvider metadataProvider, JobGenContext context, JobSpecification jobSpec,
-            UnnestMapOperator unnestMap, IOperatorSchema opSchema, boolean retainInput, boolean retainNull,
+            ILogicalOperator unnestMap, IOperatorSchema opSchema, boolean retainInput, boolean retainNull,
             String datasetName, Dataset dataset, String indexName, ATypeTag searchKeyType, int[] keyFields,
             SearchModifierType searchModifierType, IAlgebricksConstantValue similarityThreshold,
             int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isIndexOnlyPlanEnabled,
@@ -217,13 +241,18 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             }
 
             IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
-            List<LogicalVariable> outputVars = unnestMap.getVariables();
-            int outputFromUnnestVarsSize = outputVars.size();
+            List<LogicalVariable> outputVars = null;
 
+            if (unnestMap.getOperatorTag() == LogicalOperatorTag.LEFT_OUTER_UNNEST_MAP) {
+                outputVars = ((LeftOuterUnnestMapOperator) unnestMap).getVariables();
+            } else if (unnestMap.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+                outputVars = ((UnnestMapOperator) unnestMap).getVariables();
+            }
             if (retainInput) {
                 outputVars = new ArrayList<LogicalVariable>();
                 VariableUtilities.getLiveVariables(unnestMap, outputVars);
             }
+            int outputFromUnnestVarsSize = outputVars.size();
             RecordDescriptor outputRecDesc = JobGenHelper.mkRecordDescriptor(typeEnv, opSchema, context);
 
             int start = outputRecDesc.getFieldCount() - numPrimaryKeys;

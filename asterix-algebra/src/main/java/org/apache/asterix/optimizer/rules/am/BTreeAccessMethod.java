@@ -887,13 +887,6 @@ public class BTreeAccessMethod implements IAccessMethod {
             inputOp = probeSubTree.root;
         }
 
-        if (isIndexOnlyPlan) {
-
-        }
-        if (!isIndexOnlyPlan && noFalsePositiveResultsFromSIdxSearch) {
-
-        }
-
         // Create an unnest-map for the secondary index search
         // The result: SK, PK, [Optional: The result of a Trylock on PK]
         boolean outputPrimaryKeysOnlyFromSIdxSearch = false;
@@ -902,7 +895,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         UnnestMapOperator primaryIndexUnnestOp = null;
-        AbstractLogicalOperator tmpPrimaryIndexUnnestOp = null;
+        ILogicalOperator tmpPrimaryIndexUnnestOp = null;
 
         boolean isPrimaryIndex = chosenIndex.isPrimaryIndex();
         if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
@@ -914,18 +907,22 @@ public class BTreeAccessMethod implements IAccessMethod {
             return externalDataAccessOp;
         } else if (!isPrimaryIndex) {
             if (noFalsePositiveResultsFromSIdxSearch && !isIndexOnlyPlan) {
-                tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
-                        aboveTopOpRefs, opRef, conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType,
-                        secondaryIndexUnnestOp, context, true, true, retainNull, false, chosenIndex, analysisCtx,
+                // Reducing the number of verification after the primary index search optimization is possible.
+                // In order to apply this optimization, the result of tryLock on PK during the secondary index search
+                // needs to be retained. Thus, we always set retainInput parameter as true.
+                tmpPrimaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(aboveTopOpRefs, opRef,
+                        conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType, secondaryIndexUnnestOp,
+                        context, true, true, retainNull, false, chosenIndex, analysisCtx,
                         outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
                         secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
                         noFalsePositiveResultsFromSIdxSearch);
             } else {
-                // pass retainInput variable's value
-                tmpPrimaryIndexUnnestOp = (AbstractLogicalOperator) AccessMethodUtils.createPrimaryIndexUnnestMap(
-                        aboveTopOpRefs, opRef, conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType,
-                        secondaryIndexUnnestOp, context, true, retainInput, retainNull, false, chosenIndex,
-                        analysisCtx, outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
+                // Index-only plan optimization is possible.
+                // We pass retainInput variable's value from the parameter.
+                tmpPrimaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(aboveTopOpRefs, opRef,
+                        conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType, secondaryIndexUnnestOp,
+                        context, true, retainInput, retainNull, false, chosenIndex, analysisCtx,
+                        outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
                         secondaryKeyFieldUsedInSelectCondition, secondaryKeyFieldUsedAfterSelectOp, indexSubTree,
                         noFalsePositiveResultsFromSIdxSearch);
             }

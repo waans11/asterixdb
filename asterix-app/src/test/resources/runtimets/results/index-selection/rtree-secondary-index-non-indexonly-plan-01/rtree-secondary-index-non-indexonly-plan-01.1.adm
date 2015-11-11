@@ -1,7 +1,6 @@
-[ { "id": 10, "docid": 10 }
-, { "id": 20, "docid": 20 }
-, { "id": 30, "docid": 30 }
-, { "id": 40, "docid": 40 }
-, { "id": 50, "docid": 50 }
-, { "id": 60, "docid": 60 }
- ]
+{ "id": 10, "docid": 10 }
+{ "id": 20, "docid": 20 }
+{ "id": 30, "docid": 30 }
+{ "id": 40, "docid": 40 }
+{ "id": 50, "docid": 50 }
+{ "id": 60, "docid": 60 }

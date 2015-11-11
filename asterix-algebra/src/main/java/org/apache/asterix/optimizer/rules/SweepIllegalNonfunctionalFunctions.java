@@ -43,6 +43,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.IndexInsertD
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.InsertDeleteOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterJoinOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LimitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.MaterializeOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.NestedTupleSourceOperator;
@@ -76,8 +77,7 @@ public class SweepIllegalNonfunctionalFunctions extends AbstractExtractExprRule 
     }
 
     @Override
-    public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
-            throws AlgebricksException {
+    public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
         return false;
     }
 
@@ -101,8 +101,8 @@ public class SweepIllegalNonfunctionalFunctions extends AbstractExtractExprRule 
             if (expr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                 if (!expr.isFunctional()) {
                     AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expr;
-                    throw new AlgebricksException(
-                            "Found non-functional function " + fce.getFunctionIdentifier() + " in op " + op);
+                    throw new AlgebricksException("Found non-functional function " + fce.getFunctionIdentifier()
+                            + " in op " + op);
                 }
             }
         }
@@ -249,6 +249,11 @@ public class SweepIllegalNonfunctionalFunctions extends AbstractExtractExprRule 
         }
 
         @Override
+        public Void visitLeftOuterUnnestMapOperator(LeftOuterUnnestMapOperator op, Void arg) throws AlgebricksException {
+            return null;
+        }
+
+        @Override
         public Void visitDataScanOperator(DataSourceScanOperator op, Void arg) throws AlgebricksException {
             return null;
         }
@@ -297,8 +302,7 @@ public class SweepIllegalNonfunctionalFunctions extends AbstractExtractExprRule 
         }
 
         @Override
-        public Void visitExternalDataLookupOperator(ExternalDataLookupOperator op, Void arg)
-                throws AlgebricksException {
+        public Void visitExternalDataLookupOperator(ExternalDataLookupOperator op, Void arg) throws AlgebricksException {
             return null;
         }
     }

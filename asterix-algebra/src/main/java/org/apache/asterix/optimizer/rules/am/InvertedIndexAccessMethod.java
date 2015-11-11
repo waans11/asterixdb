@@ -75,7 +75,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOpe
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ReplicateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedIndexSearchModifierFactory;
@@ -109,12 +108,13 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     private static List<Pair<FunctionIdentifier, Boolean>> funcIdents = new ArrayList<Pair<FunctionIdentifier, Boolean>>();
     static {
         // contains(substring) function
-        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AsterixBuiltinFunctions.CONTAINS_SUBSTRING, false));
+        //        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AsterixBuiltinFunctions.CONTAINS_SUBSTRING, false));
+        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AsterixBuiltinFunctions.STRING_CONTAINS, false));
         // For matching similarity-check functions. For example, similarity-jaccard-check returns a list of two items,
         // and the select condition will get the first list-item and check whether it evaluates to true.
         funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AsterixBuiltinFunctions.GET_ITEM, false));
         // full-text search function
-        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AlgebricksBuiltinFunctions.CONTAINS, true));
+        funcIdents.add(new Pair<FunctionIdentifier, Boolean>(AlgebricksBuiltinFunctions.FULLTEXT_CONTAINS, true));
     }
 
     // These function identifiers are matched in this AM's analyzeFuncExprArgs(),
@@ -145,14 +145,14 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             IOptimizationContext context, IVariableTypeEnvironment typeEnvironment) throws AlgebricksException {
 
         boolean matches;
-        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
+        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.STRING_CONTAINS) {
             matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx, context,
                     typeEnvironment);
             if (!matches) {
                 matches = AccessMethodUtils.analyzeFuncExprArgsForTwoVars(funcExpr, analysisCtx);
             }
             return matches;
-        } else if (funcExpr.getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
+        } else if (funcExpr.getFunctionIdentifier() == AlgebricksBuiltinFunctions.FULLTEXT_CONTAINS) {
             matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx, context,
                     typeEnvironment);
             if (!matches) {
@@ -484,7 +484,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         jobGenParams.setKeyVarList(keyVarList);
         // By default, we don't generate SK output.
         boolean outputPrimaryKeysOnlyFromSIdxSearch = true;
-        UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
+        ILogicalOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
                 chosenIndex, inputOp, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput);
 
         // If an index-only plan is not possible and there is no false positive results from this secondary index search,
@@ -1320,11 +1320,11 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private void addFunctionSpecificArgs(IOptimizableFuncExpr optFuncExpr, InvertedIndexJobGenParams jobGenParams) {
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.STRING_CONTAINS) {
             jobGenParams.setSearchModifierType(SearchModifierType.CONJUNCTIVE);
             jobGenParams.setSimilarityThreshold(new AsterixConstantValue(ANull.NULL));
         }
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AlgebricksBuiltinFunctions.FULLTEXT_CONTAINS) {
             jobGenParams.setSearchModifierType(SearchModifierType.DISJUNCTIVE);
             //            jobGenParams.setSearchModifierType(SearchModifierType.CONJUNCTIVE);
             jobGenParams.setSimilarityThreshold(new AsterixConstantValue(ANull.NULL));
@@ -1375,12 +1375,12 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             return isJaccardFuncOptimizable(index, optFuncExpr);
         }
 
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING) {
-            return isContainsSubstringFuncOptimizable(index, optFuncExpr);
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.STRING_CONTAINS) {
+            return isStringContainsFuncOptimizable(index, optFuncExpr);
         }
 
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
-            return isContainsFuncOptimizable(index, optFuncExpr);
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AlgebricksBuiltinFunctions.FULLTEXT_CONTAINS) {
+            return isFullTextContainsFuncOptimizable(index, optFuncExpr);
         }
 
         return false;
@@ -1568,30 +1568,30 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return false;
     }
 
-    private boolean isContainsSubstringFuncOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+    private boolean isStringContainsFuncOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         if (optFuncExpr.getNumLogicalVars() == 2) {
-            return isContainsSubstringFuncJoinOptimizable(index, optFuncExpr);
+            return isStringContainsFuncJoinOptimizable(index, optFuncExpr);
         } else {
-            return isContainsSubstringFuncSelectOptimizable(index, optFuncExpr);
+            return isStringContainsFuncSelectOptimizable(index, optFuncExpr);
         }
     }
 
     // Does full-text search can utilize the given index?
-    private boolean isContainsFuncOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+    private boolean isFullTextContainsFuncOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         if (optFuncExpr.getNumLogicalVars() == 2) {
-            return isContainsFuncJoinOptimizable(index, optFuncExpr);
+            return isFullTextContainsFuncJoinOptimizable(index, optFuncExpr);
         } else {
-            return isContainsFuncSelectOptimizable(index, optFuncExpr);
+            return isFullTextContainsFuncSelectOptimizable(index, optFuncExpr);
         }
     }
 
-    private boolean isContainsSubstringFuncSelectOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+    private boolean isStringContainsFuncSelectOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         AsterixConstantValue strConstVal = (AsterixConstantValue) ((ConstantExpression) optFuncExpr
                 .getConstantAtRuntimeExpr(0)).getValue();
         IAObject strObj = strConstVal.getObject();
         ATypeTag typeTag = strObj.getType().getTypeTag();
 
-        if (!isContainsSubstringFuncCompatible(typeTag, index.getIndexType())) {
+        if (!isStringContainsFuncCompatible(typeTag, index.getIndexType())) {
             return false;
         }
 
@@ -1606,7 +1606,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     // For full-text search
-    private boolean isContainsFuncSelectOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+    private boolean isFullTextContainsFuncSelectOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         AsterixConstantValue strConstVal = (AsterixConstantValue) ((ConstantExpression) optFuncExpr
                 .getConstantAtRuntimeExpr(0)).getValue();
         IAObject strObj = strConstVal.getObject();
@@ -1626,21 +1626,21 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return false;
     }
 
-    private boolean isContainsSubstringFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+    private boolean isStringContainsFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         if (index.isEnforcingKeyFileds())
-            return isContainsSubstringFuncCompatible(index.getKeyFieldTypes().get(0).getTypeTag(), index.getIndexType());
+            return isStringContainsFuncCompatible(index.getKeyFieldTypes().get(0).getTypeTag(), index.getIndexType());
         else
-            return isContainsSubstringFuncCompatible(optFuncExpr.getFieldType(0).getTypeTag(), index.getIndexType());
+            return isStringContainsFuncCompatible(optFuncExpr.getFieldType(0).getTypeTag(), index.getIndexType());
     }
 
-    private boolean isContainsFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
+    private boolean isFullTextContainsFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
         if (index.isEnforcingKeyFileds())
             return isContainsFuncCompatible(index.getKeyFieldTypes().get(0).getTypeTag(), index.getIndexType());
         else
             return isContainsFuncCompatible(optFuncExpr.getFieldType(0).getTypeTag(), index.getIndexType());
     }
 
-    private boolean isContainsSubstringFuncCompatible(ATypeTag typeTag, IndexType indexType) {
+    private boolean isStringContainsFuncCompatible(ATypeTag typeTag, IndexType indexType) {
         //We can only optimize contains-substring with ngram indexes.
         if ((typeTag == ATypeTag.STRING)
                 && (indexType == IndexType.SINGLE_PARTITION_NGRAM_INVIX || indexType == IndexType.LENGTH_PARTITIONED_NGRAM_INVIX)) {

@@ -33,6 +33,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
@@ -40,6 +41,7 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvir
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
@@ -64,8 +66,29 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
             throws AlgebricksException {
-        UnnestMapOperator unnestMap = (UnnestMapOperator) op;
-        ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
+        // We have two types of unnest-map operator - UNNEST_MAP and LEFT_OUTER_UNNEST_MAP
+        UnnestMapOperator unnestMapOp = null;
+        LeftOuterUnnestMapOperator leftOuterUnnestMapOp = null;
+        ILogicalOperator unnestMap = null;
+        ILogicalExpression unnestExpr = null;
+        List<LogicalVariable> minFilterVarList = null;
+        List<LogicalVariable> maxFilterVarList = null;
+        List<LogicalVariable> outputVars = null;
+        if (op.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+            unnestMapOp = (UnnestMapOperator) op;
+            unnestExpr = unnestMapOp.getExpressionRef().getValue();
+            minFilterVarList = unnestMapOp.getMinFilterVars();
+            maxFilterVarList = unnestMapOp.getMaxFilterVars();
+            outputVars = unnestMapOp.getVariables();
+            unnestMap = unnestMapOp;
+        } else if (op.getOperatorTag() == LogicalOperatorTag.LEFT_OUTER_UNNEST_MAP) {
+            leftOuterUnnestMapOp = (LeftOuterUnnestMapOperator) op;
+            unnestExpr = leftOuterUnnestMapOp.getExpressionRef().getValue();
+            minFilterVarList = leftOuterUnnestMapOp.getMinFilterVars();
+            maxFilterVarList = leftOuterUnnestMapOp.getMaxFilterVars();
+            outputVars = leftOuterUnnestMapOp.getVariables();
+            unnestMap = leftOuterUnnestMapOp;
+        }
         if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             throw new IllegalStateException();
         }
@@ -78,13 +101,12 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
         jobGenParams.readFromFuncArgs(unnestFuncExpr.getArguments());
         int[] keyIndexes = getKeyIndexes(jobGenParams.getKeyVarList(), inputSchemas);
 
-        int[] minFilterFieldIndexes = getKeyIndexes(unnestMap.getMinFilterVars(), inputSchemas);
-        int[] maxFilterFieldIndexes = getKeyIndexes(unnestMap.getMaxFilterVars(), inputSchemas);
+        int[] minFilterFieldIndexes = getKeyIndexes(minFilterVarList, inputSchemas);
+        int[] maxFilterFieldIndexes = getKeyIndexes(maxFilterVarList, inputSchemas);
 
         AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
         Dataset dataset = mp.findDataset(jobGenParams.getDataverseName(), jobGenParams.getDatasetName());
         IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
-        List<LogicalVariable> outputVars = unnestMap.getVariables();
         if (jobGenParams.getRetainInput()) {
             outputVars = new ArrayList<LogicalVariable>();
             VariableUtilities.getLiveVariables(unnestMap, outputVars);
@@ -92,7 +114,8 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> rtreeSearch = mp.buildRtreeRuntime(
                 builder.getJobSpec(), outputVars, opSchema, typeEnv, context, jobGenParams.getRetainInput(),
                 jobGenParams.getRetainNull(), dataset, jobGenParams.getIndexName(), keyIndexes, minFilterFieldIndexes,
-                maxFilterFieldIndexes, jobGenParams.getRequireSplitValueForIndexOnlyPlan(), jobGenParams.getLimitNumberOfResult());
+                maxFilterFieldIndexes, jobGenParams.getRequireSplitValueForIndexOnlyPlan(),
+                jobGenParams.getLimitNumberOfResult());
 
         builder.contributeHyracksOperator(unnestMap, rtreeSearch.first);
         builder.contributeAlgebricksPartitionConstraint(rtreeSearch.first, rtreeSearch.second);

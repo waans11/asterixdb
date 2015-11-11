@@ -79,6 +79,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOpe
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
@@ -162,8 +163,8 @@ public class AccessMethodUtils {
         }
         if (arg2.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
             // The arguments of contains() function are asymmetrical, we can only use index if it is on the first argument
-            if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS_SUBSTRING
-                    || funcExpr.getFunctionIdentifier() == AlgebricksBuiltinFunctions.CONTAINS) {
+            if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.STRING_CONTAINS
+                    || funcExpr.getFunctionIdentifier() == AlgebricksBuiltinFunctions.FULLTEXT_CONTAINS) {
                 return false;
             }
             IAType expressionType = constantRuntimeResultType(arg1, context, typeEnvironment);
@@ -353,7 +354,12 @@ public class AccessMethodUtils {
             numPrimaryKeys = DatasetUtils.getPartitioningKeys(dataset).size();
         }
         List<LogicalVariable> keyVars = new ArrayList<LogicalVariable>();
-        List<LogicalVariable> sourceVars = ((UnnestMapOperator) unnestMapOp).getVariables();
+        List<LogicalVariable> sourceVars = null;
+        if (unnestMapOp.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+            sourceVars = ((UnnestMapOperator) unnestMapOp).getVariables();
+        } else if (unnestMapOp.getOperatorTag() == LogicalOperatorTag.LEFT_OUTER_UNNEST_MAP) {
+            sourceVars = ((LeftOuterUnnestMapOperator) unnestMapOp).getVariables();
+        }
         // Assumes the primary keys are located at the end.
         //        int start = sourceVars.size() - numPrimaryKeys;
         //        int stop = sourceVars.size();
@@ -392,7 +398,12 @@ public class AccessMethodUtils {
             ILogicalOperator unnestMapOp) {
         int numPrimaryKeys = DatasetUtils.getPartitioningKeys(dataset).size();
         List<LogicalVariable> primaryKeyVars = new ArrayList<LogicalVariable>();
-        List<LogicalVariable> sourceVars = ((UnnestMapOperator) unnestMapOp).getVariables();
+        List<LogicalVariable> sourceVars = null;
+        if (unnestMapOp.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+            sourceVars = ((UnnestMapOperator) unnestMapOp).getVariables();
+        } else if (unnestMapOp.getOperatorTag() == LogicalOperatorTag.LEFT_OUTER_UNNEST_MAP) {
+            sourceVars = ((LeftOuterUnnestMapOperator) unnestMapOp).getVariables();
+        }
         // Assumes the primary keys are located at the beginning.
         for (int i = 0; i < numPrimaryKeys; i++) {
             primaryKeyVars.add(sourceVars.get(i));

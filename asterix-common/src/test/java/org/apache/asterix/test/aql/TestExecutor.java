@@ -79,8 +79,8 @@ public class TestExecutor {
     public void runScriptAndCompareWithResult(File scriptFile, PrintWriter print, File expectedFile, File actualFile)
             throws Exception {
         System.err.println("Expected results file: " + expectedFile.toString());
-        BufferedReader readerExpected = new BufferedReader(
-                new InputStreamReader(new FileInputStream(expectedFile), "UTF-8"));
+        BufferedReader readerExpected = new BufferedReader(new InputStreamReader(new FileInputStream(expectedFile),
+                "UTF-8"));
         BufferedReader readerActual = new BufferedReader(
                 new InputStreamReader(new FileInputStream(actualFile), "UTF-8"));
         String lineExpected, lineActual;
@@ -93,8 +93,8 @@ public class TestExecutor {
                     if (lineExpected.isEmpty()) {
                         continue;
                     }
-                    throw new Exception(
-                            "Result for " + scriptFile + " changed at line " + num + ":\n< " + lineExpected + "\n> ");
+                    throw new Exception("Result for " + scriptFile + " changed at line " + num + ":\n< " + lineExpected
+                            + "\n> ");
                 }
 
                 if (!equalStrings(lineExpected.split("Time")[0], lineActual.split("Time")[0])) {
@@ -385,8 +385,8 @@ public class TestExecutor {
         return s.toString();
     }
 
-    public void executeTest(String actualPath, TestCaseContext testCaseCtx, ProcessBuilder pb,
-            boolean isDmlRecoveryTest) throws Exception {
+    public void executeTest(String actualPath, TestCaseContext testCaseCtx, ProcessBuilder pb, boolean isDmlRecoveryTest)
+            throws Exception {
         executeTest(actualPath, testCaseCtx, pb, isDmlRecoveryTest, null);
     }
 
@@ -404,8 +404,7 @@ public class TestExecutor {
 
         List<CompilationUnit> cUnits = testCaseCtx.getTestCase().getCompilationUnit();
         for (CompilationUnit cUnit : cUnits) {
-            LOGGER.info(
-                    "Starting [TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName() + " ... ");
+            LOGGER.info("Starting [TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName() + " ... ");
             testFileCtxs = testCaseCtx.getTestFiles(cUnit);
             expectedResultFileCtxs = testCaseCtx.getExpectedResultFiles(cUnit);
             for (TestFileContext ctx : testFileCtxs) {
@@ -420,11 +419,11 @@ public class TestExecutor {
                         case "update":
                             //isDmlRecoveryTest: set IP address
                             if (isDmlRecoveryTest && statement.contains("nc1://")) {
-                                statement = statement.replaceAll("nc1://",
-                                        "127.0.0.1://../../../../../../asterix-app/");
+                                statement = statement
+                                        .replaceAll("nc1://", "127.0.0.1://../../../../../../asterix-app/");
                             }
 
-                            TestsUtils.executeUpdate(statement, cUnit.getParameter());
+                            TestsUtils.executeUpdate(statement);
                             break;
                         case "query":
                         case "async":
@@ -446,9 +445,9 @@ public class TestExecutor {
                                 resultStream = executeAnyAQLAsync(statement, true, fmt);
 
                             if (queryCount >= expectedResultFileCtxs.size()) {
-                                throw new IllegalStateException(
-                                        "no result file for " + testFile.toString() + "; queryCount: " + queryCount
-                                                + ", filectxs.size: " + expectedResultFileCtxs.size());
+                                throw new IllegalStateException("no result file for " + testFile.toString()
+                                        + "; queryCount: " + queryCount + ", filectxs.size: "
+                                        + expectedResultFileCtxs.size());
                             }
                             expectedResultFile = expectedResultFileCtxs.get(queryCount).getFile();
 
@@ -488,22 +487,24 @@ public class TestExecutor {
                             break;
                         case "txneu": //eu represents erroneous update
                             try {
-                                TestsUtils.executeUpdate(statement, cUnit.getParameter());
+                                TestsUtils.executeUpdate(statement);
                             } catch (Exception e) {
                                 //An exception is expected.
                                 failed = true;
                                 e.printStackTrace();
                             }
                             if (!failed) {
-                                throw new Exception(
-                                        "Test \"" + testFile + "\" FAILED!\n  An exception" + "is expected.");
+                                throw new Exception("Test \"" + testFile + "\" FAILED!\n  An exception"
+                                        + "is expected.");
                             }
                             System.err.println("...but that was expected.");
                             break;
                         case "script":
                             try {
-                                String output = executeScript(pb, getScriptPath(testFile.getAbsolutePath(),
-                                        pb.environment().get("SCRIPT_HOME"), statement.trim()));
+                                String output = executeScript(
+                                        pb,
+                                        getScriptPath(testFile.getAbsolutePath(), pb.environment().get("SCRIPT_HOME"),
+                                                statement.trim()));
                                 if (output.contains("ERROR")) {
                                     throw new Exception(output);
                                 }
@@ -523,8 +524,8 @@ public class TestExecutor {
                                 e.printStackTrace();
                             }
                             if (!failed) {
-                                throw new Exception(
-                                        "Test \"" + testFile + "\" FAILED!\n  An exception" + "is expected.");
+                                throw new Exception("Test \"" + testFile + "\" FAILED!\n  An exception"
+                                        + "is expected.");
                             }
                             System.err.println("...but that was expected.");
                             break;
