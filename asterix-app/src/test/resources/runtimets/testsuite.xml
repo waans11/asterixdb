@@ -2554,11 +2554,6 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-join">
-            <compilation-unit name="rtree-spatial-intersect-point_06">
-                <output-dir compare="Text">rtree-spatial-intersect-point_06</output-dir>
-            </compilation-unit>
-        </test-case>
-        <test-case FilePath="index-join">
             <compilation-unit name="invertedindex-secondary-fulltext-search-contains-join_01">
                 <output-dir compare="Text">invertedindex-secondary-fulltext-search-contains-join_01</output-dir>
             </compilation-unit>
@@ -2581,6 +2576,16 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
+            <compilation-unit name="btree-index-limit-01">
+                <output-dir compare="Text">btree-index-limit-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="btree-index-limit-02">
+                <output-dir compare="Text">btree-index-limit-02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
             <compilation-unit name="btree-index-limit-orderby-01">
                 <output-dir compare="Text">btree-index-limit-orderby-01</output-dir>
             </compilation-unit>
@@ -2588,6 +2593,11 @@
         <test-case FilePath="index-selection">
             <compilation-unit name="btree-index-limit-orderby-02">
                 <output-dir compare="Text">btree-index-limit-orderby-02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="btree-index-limit-orderby-03">
+                <output-dir compare="Text">btree-index-limit-orderby-03</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -2746,28 +2756,28 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="btree-secondary-index-indexonly-plan-limit-orderby-01">
-                <output-dir compare="Text">btree-secondary-index-indexonly-plan-limit-orderby-01</output-dir>
+            <compilation-unit name="btree-secondary-index-indexonly-plan-limit-01">
+                <output-dir compare="Text">btree-secondary-index-indexonly-plan-limit-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="btree-secondary-index-indexonly-plan-limit-orderby-02">
-                <output-dir compare="Text">btree-secondary-index-indexonly-plan-limit-orderby-02</output-dir>
+            <compilation-unit name="btree-secondary-index-reducing-the-number-of-verification-plan-01">
+                <output-dir compare="Text">btree-secondary-index-reducing-the-number-of-verification-plan-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="btree-secondary-index-non-indexonly-plan-01">
-                <output-dir compare="Text">btree-secondary-index-non-indexonly-plan-01</output-dir>
+            <compilation-unit name="btree-secondary-index-reducing-the-number-of-verification-plan-limit-01">
+                <output-dir compare="Text">btree-secondary-index-reducing-the-number-of-verification-plan-limit-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="btree-secondary-index-non-indexonly-plan-limit-orderby-01">
-                <output-dir compare="Text">btree-secondary-index-non-indexonly-plan-limit-orderby-01</output-dir>
+            <compilation-unit name="btree-secondary-index-reducing-the-number-of-verification-plan-limit-orderby-01">
+                <output-dir compare="Text">btree-secondary-index-reducing-the-number-of-verification-plan-limit-orderby-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="btree-secondary-index-non-indexonly-plan-limit-orderby-02">
-                <output-dir compare="Text">btree-secondary-index-non-indexonly-plan-limit-orderby-02</output-dir>
+            <compilation-unit name="btree-secondary-index-reducing-the-number-of-verification-plan-limit-orderby-02">
+                <output-dir compare="Text">btree-secondary-index-reducing-the-number-of-verification-plan-limit-orderby-02</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -2831,6 +2841,11 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
+            <compilation-unit name="rtree-secondary-index-indexonly-plan-limit-01">
+                <output-dir compare="Text">rtree-secondary-index-indexonly-plan-limit-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
             <compilation-unit name="rtree-secondary-index-indexonly-plan-limit-orderby-01">
                 <output-dir compare="Text">rtree-secondary-index-indexonly-plan-limit-orderby-01</output-dir>
             </compilation-unit>
@@ -2846,8 +2861,13 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="rtree-secondary-index-non-indexonly-plan-01">
-                <output-dir compare="Text">rtree-secondary-index-non-indexonly-plan-01</output-dir>
+            <compilation-unit name="rtree-secondary-index-reducing-the-number-of-verification-plan-01">
+                <output-dir compare="Text">rtree-secondary-index-reducing-the-number-of-verification-plan-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="rtree-secondary-index-reducing-the-number-of-verification-plan-limit-01">
+                <output-dir compare="Text">rtree-secondary-index-reducing-the-number-of-verification-plan-limit-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
@@ -2866,6 +2886,11 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
+            <compilation-unit name="inverted-index-fulltext-secondary-index-indexonly-plan-limit-01">
+                <output-dir compare="Text">inverted-index-fulltext-secondary-index-indexonly-plan-limit-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
             <compilation-unit name="inverted-index-fulltext-secondary-index-indexonly-plan-limit-orderby-01">
                 <output-dir compare="Text">inverted-index-fulltext-secondary-index-indexonly-plan-limit-orderby-01</output-dir>
             </compilation-unit>
@@ -2876,8 +2901,13 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">
-            <compilation-unit name="inverted-index-fulltext-secondary-index-non-indexonly-plan-01">
-                <output-dir compare="Text">inverted-index-fulltext-secondary-index-non-indexonly-plan-01</output-dir>
+            <compilation-unit name="inverted-index-fulltext-secondary-index-reducing-the-number-of-verification-plan-01">
+                <output-dir compare="Text">inverted-index-fulltext-secondary-index-reducing-the-number-of-verification-plan-01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-selection">
+            <compilation-unit name="inverted-index-fulltext-secondary-index-reducing-the-number-of-verification-plan-limit-01">
+                <output-dir compare="Text">inverted-index-fulltext-secondary-index-reducing-the-number-of-verification-plan-limit-01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-selection">

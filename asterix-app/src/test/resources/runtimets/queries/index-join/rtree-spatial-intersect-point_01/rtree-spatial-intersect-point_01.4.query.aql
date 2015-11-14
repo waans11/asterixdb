@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 /*
  * Description    : Joins two datasets on the intersection of their point attributes.
  *                  The dataset 'MyData1' has an RTree index, and we expect the

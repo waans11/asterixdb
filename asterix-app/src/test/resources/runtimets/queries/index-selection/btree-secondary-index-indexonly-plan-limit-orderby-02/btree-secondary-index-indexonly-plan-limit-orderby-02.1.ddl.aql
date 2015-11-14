@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 /*
  *  Description     : Secondary BTree Index index-only selection plan verification test
  *                  : This test is intended to verify that the secondary BTree index is used in the optimized query plan.
@@ -27,7 +28,7 @@
  *                      ... -> unnest-map -> split -> union -> ...
  *                  : We also have a LIMIT and order by. Each partition in the secondary index should only generate the number of tuples
  *                    that are equivalent to the LIMIT number. We call this "parameterizing the LIMIT".
- *					: However, in this case, since the order by column doesn't match the column order of the secondary index,
+ *					: However, in this case, since the order by column (PK) doesn't match the column order of the secondary index,
  *					  we can't parameterize LIMIT.
  *  Expected Result : Success
  *

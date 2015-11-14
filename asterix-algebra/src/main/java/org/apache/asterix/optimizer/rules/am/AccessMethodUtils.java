@@ -1072,7 +1072,7 @@ public class AccessMethodUtils {
     /**
      * Create an unnest-map operator that does a secondary index lookup
      */
-    public static UnnestMapOperator createSecondaryIndexUnnestMap(Dataset dataset, ARecordType recordType, Index index,
+    public static ILogicalOperator createSecondaryIndexUnnestMap(Dataset dataset, ARecordType recordType, Index index,
             ILogicalOperator inputOp, AccessMethodJobGenParams jobGenParams, IOptimizationContext context,
             boolean outputPrimaryKeysOnly, boolean retainInput) throws AlgebricksException {
         // The job gen parameters are transferred to the actual job gen via the UnnestMapOperator's function arguments.
@@ -1095,12 +1095,32 @@ public class AccessMethodUtils {
         secondaryIndexSearchFunc.setReturnsUniqueValues(true);
         // This is the operator that jobgen will be looking for. It contains an unnest function that has all necessary arguments to determine
         // which index to use, which variables contain the index-search keys, what is the original dataset, etc.
-        UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars,
-                new MutableObject<ILogicalExpression>(secondaryIndexSearchFunc), secondaryIndexOutputTypes, retainInput);
-        secondaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
-        context.computeAndSetTypeEnvironmentForOperator(secondaryIndexUnnestOp);
-        secondaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
-        return secondaryIndexUnnestOp;
+
+        // Left-outer-join (retainInput and retainNull) case?
+        // Then, we use the LEFT-OUTER-UNNEST-MAP operator instead of unnest-map operator.
+        if (jobGenParams.getRetainNull()) {
+            if (retainInput) {
+                LeftOuterUnnestMapOperator secondaryIndexLeftOuterUnnestOp = new LeftOuterUnnestMapOperator(
+                        secondaryIndexUnnestVars, new MutableObject<ILogicalExpression>(secondaryIndexSearchFunc),
+                        secondaryIndexOutputTypes);
+                secondaryIndexLeftOuterUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
+                context.computeAndSetTypeEnvironmentForOperator(secondaryIndexLeftOuterUnnestOp);
+                secondaryIndexLeftOuterUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
+                return secondaryIndexLeftOuterUnnestOp;
+            } else {
+                // Left-outer-join without retainNull and retainInput doesn't make sense.
+                throw new AlgebricksException("Left-outer-join should propagate all inputs from the outer branch.");
+            }
+        } else {
+            // If this is not a left-outer-join case, then we use UNNEST-MAP operator.
+            UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars,
+                    new MutableObject<ILogicalExpression>(secondaryIndexSearchFunc), secondaryIndexOutputTypes,
+                    retainInput);
+            secondaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
+            context.computeAndSetTypeEnvironmentForOperator(secondaryIndexUnnestOp);
+            secondaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
+            return secondaryIndexUnnestOp;
+        }
     }
 
     /**

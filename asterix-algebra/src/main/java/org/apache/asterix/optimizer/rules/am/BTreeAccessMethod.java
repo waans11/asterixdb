@@ -65,6 +65,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
@@ -890,12 +891,13 @@ public class BTreeAccessMethod implements IAccessMethod {
         // Create an unnest-map for the secondary index search
         // The result: SK, PK, [Optional: The result of a Trylock on PK]
         boolean outputPrimaryKeysOnlyFromSIdxSearch = false;
-        UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
+        ILogicalOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
                 chosenIndex, inputOp, jobGenParams, context, outputPrimaryKeysOnlyFromSIdxSearch, retainInput);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         UnnestMapOperator primaryIndexUnnestOp = null;
-        ILogicalOperator tmpPrimaryIndexUnnestOp = null;
+        LeftOuterUnnestMapOperator leftOuterPrimaryIndexUnnestOp = null;
+        ILogicalOperator finalPrimaryIndexUnnestOp = null;
 
         boolean isPrimaryIndex = chosenIndex.isPrimaryIndex();
         if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
@@ -910,7 +912,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 // Reducing the number of verification after the primary index search optimization is possible.
                 // In order to apply this optimization, the result of tryLock on PK during the secondary index search
                 // needs to be retained. Thus, we always set retainInput parameter as true.
-                tmpPrimaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(aboveTopOpRefs, opRef,
+                finalPrimaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(aboveTopOpRefs, opRef,
                         conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType, secondaryIndexUnnestOp,
                         context, true, true, retainNull, false, chosenIndex, analysisCtx,
                         outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
@@ -919,7 +921,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             } else {
                 // Index-only plan optimization is possible.
                 // We pass retainInput variable's value from the parameter.
-                tmpPrimaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(aboveTopOpRefs, opRef,
+                finalPrimaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(aboveTopOpRefs, opRef,
                         conditionRef, assignBeforeTheOpRefs, dataSourceOp, dataset, recordType, secondaryIndexUnnestOp,
                         context, true, retainInput, retainNull, false, chosenIndex, analysisCtx,
                         outputPrimaryKeysOnlyFromSIdxSearch, verificationAfterSIdxSearchRequired,
@@ -931,8 +933,8 @@ public class BTreeAccessMethod implements IAccessMethod {
             // Get dataSourceRef operator - unnest-map (PK, record)
             if (isIndexOnlyPlan) {
                 // Right now, the order of opertors is: union -> select -> assign -> unnest-map
-                AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) tmpPrimaryIndexUnnestOp.getInputs()
-                        .get(0).getValue(); // select
+                AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) finalPrimaryIndexUnnestOp
+                        .getInputs().get(0).getValue(); // select
                 dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
                 dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
 
@@ -940,13 +942,13 @@ public class BTreeAccessMethod implements IAccessMethod {
                 indexSubTree.dataSourceRef.setValue(dataSourceRefOp);
             } else if (noFalsePositiveResultsFromSIdxSearch) {
                 // Right now, the order of opertors is: union -> select -> split -> assign -> unnest-map
-                AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) tmpPrimaryIndexUnnestOp.getInputs()
-                        .get(0).getValue(); // select
+                AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) finalPrimaryIndexUnnestOp
+                        .getInputs().get(0).getValue(); // select
                 dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // split
                 dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // assign
                 dataSourceRefOp = (AbstractLogicalOperator) dataSourceRefOp.getInputs().get(0).getValue(); // unnest-map
             } else {
-                indexSubTree.dataSourceRef.setValue(tmpPrimaryIndexUnnestOp);
+                indexSubTree.dataSourceRef.setValue(finalPrimaryIndexUnnestOp);
             }
         } else {
             // Primary index search case
@@ -974,6 +976,13 @@ public class BTreeAccessMethod implements IAccessMethod {
                 }
             }
 
+            boolean leftOuterUnnestMapRequired = false;
+            if (retainNull && retainInput) {
+                leftOuterUnnestMapRequired = true;
+            } else {
+                leftOuterUnnestMapRequired = false;
+            }
+
             if (conditionRef.getValue() != null) {
                 // If we cannot replace SELECT with unnest-map, we can't parameterize LIMIT on the primary index search
                 // since we can't guarantee that the results will be the final results and an additional SELECT needs to be applied.
@@ -986,28 +995,40 @@ public class BTreeAccessMethod implements IAccessMethod {
                 UnnestingFunctionCallExpression primaryIndexSearchFunc = new UnnestingFunctionCallExpression(
                         primaryIndexSearch, primaryIndexFuncArgs);
                 primaryIndexSearchFunc.setReturnsUniqueValues(true);
-                primaryIndexUnnestOp = new UnnestMapOperator(scanVariables, new MutableObject<ILogicalExpression>(
-                        primaryIndexSearchFunc), primaryIndexOutputTypes, retainInput);
+                if (!leftOuterUnnestMapRequired) {
+                    primaryIndexUnnestOp = new UnnestMapOperator(scanVariables, new MutableObject<ILogicalExpression>(
+                            primaryIndexSearchFunc), primaryIndexOutputTypes, retainInput);
+                    finalPrimaryIndexUnnestOp = primaryIndexUnnestOp;
+                } else {
+                    leftOuterPrimaryIndexUnnestOp = new LeftOuterUnnestMapOperator(scanVariables,
+                            new MutableObject<ILogicalExpression>(primaryIndexSearchFunc), primaryIndexOutputTypes);
+                    finalPrimaryIndexUnnestOp = leftOuterPrimaryIndexUnnestOp;
+                }
             } else {
                 // We can parameterize LIMIT (if any) on the primary index search
                 // since the SELECT condition can be replaced by the primary index-search.
-                primaryIndexUnnestOp = new UnnestMapOperator(scanVariables, secondaryIndexUnnestOp.getExpressionRef(),
-                        primaryIndexOutputTypes, retainInput);
+                if (!leftOuterUnnestMapRequired) {
+                    primaryIndexUnnestOp = new UnnestMapOperator(scanVariables,
+                            ((UnnestMapOperator) secondaryIndexUnnestOp).getExpressionRef(), primaryIndexOutputTypes,
+                            retainInput);
+                    finalPrimaryIndexUnnestOp = primaryIndexUnnestOp;
+                } else {
+                    leftOuterPrimaryIndexUnnestOp = new LeftOuterUnnestMapOperator(scanVariables,
+                            ((LeftOuterUnnestMapOperator) secondaryIndexUnnestOp).getExpressionRef(),
+                            primaryIndexOutputTypes);
+                    finalPrimaryIndexUnnestOp = leftOuterPrimaryIndexUnnestOp;
+                }
             }
 
-            primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
+            finalPrimaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
 
             // Adds equivalence classes --- one equivalent class between a primary key
             // variable and a record field-access expression.
-            EquivalenceClassUtils.addEquivalenceClassesForPrimaryIndexAccess(primaryIndexUnnestOp, scanVariables,
+            EquivalenceClassUtils.addEquivalenceClassesForPrimaryIndexAccess(finalPrimaryIndexUnnestOp, scanVariables,
                     recordType, dataset, context);
         }
 
-        if (tmpPrimaryIndexUnnestOp != null) {
-            return tmpPrimaryIndexUnnestOp;
-        } else {
-            return primaryIndexUnnestOp;
-        }
+        return finalPrimaryIndexUnnestOp;
     }
 
     private int createKeyVarsAndExprs(int numKeys, LimitType[] keyLimits, ILogicalExpression[] searchKeyExprs,

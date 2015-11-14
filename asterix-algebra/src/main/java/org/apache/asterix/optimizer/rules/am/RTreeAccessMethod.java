@@ -643,7 +643,7 @@ public class RTreeAccessMethod implements IAccessMethod {
             }
 
             if (isIndexOnlyPlanEnabled) {
-                // Right now, the order of opertors is: union -> select -> assign -> unnest-map
+                // Right now, the order of operators is: union -> select -> assign -> unnest-map
                 AbstractLogicalOperator dataSourceRefOp = (AbstractLogicalOperator) primaryIndexUnnestOp.getInputs()
                         .get(0).getValue(); // select
                 if (indexSubTree.assignsAndUnnests != null) {

@@ -176,9 +176,9 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 jobGenParams.getRequireSplitValueForIndexOnlyPlan(), jobGenParams.getLimitNumberOfResult());
 
         // Contribute operator in hyracks job.
-        builder.contributeHyracksOperator(unnestMapOp, invIndexSearch.first);
+        builder.contributeHyracksOperator(unnestMap, invIndexSearch.first);
         builder.contributeAlgebricksPartitionConstraint(invIndexSearch.first, invIndexSearch.second);
-        ILogicalOperator srcExchange = unnestMapOp.getInputs().get(0).getValue();
+        ILogicalOperator srcExchange = unnestMap.getInputs().get(0).getValue();
         builder.contributeGraphEdge(srcExchange, 0, unnestMapOp, 0);
     }
 
@@ -248,11 +248,14 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             } else if (unnestMap.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
                 outputVars = ((UnnestMapOperator) unnestMap).getVariables();
             }
+
+            // This
+            int outputVarsFromUnnestWithoutInputVarsSize = outputVars.size();
+
             if (retainInput) {
                 outputVars = new ArrayList<LogicalVariable>();
                 VariableUtilities.getLiveVariables(unnestMap, outputVars);
             }
-            int outputFromUnnestVarsSize = outputVars.size();
             RecordDescriptor outputRecDesc = JobGenHelper.mkRecordDescriptor(typeEnv, opSchema, context);
 
             int start = outputRecDesc.getFieldCount() - numPrimaryKeys;
@@ -301,7 +304,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                         : new SecondaryIndexSearchOperationCallbackFactory();
             } else {
                 // We deduct 1 because the last field will be the result of searchCallback.proceed()
-                int startIdx = outputFromUnnestVarsSize - 1;
+                int startIdx = outputVarsFromUnnestWithoutInputVarsSize - 1;
 
                 for (int i = 0; i < numPrimaryKeys; i++) {
                     primaryKeyFieldsInSecondaryIndex[i] = startIdx - numPrimaryKeys + i;

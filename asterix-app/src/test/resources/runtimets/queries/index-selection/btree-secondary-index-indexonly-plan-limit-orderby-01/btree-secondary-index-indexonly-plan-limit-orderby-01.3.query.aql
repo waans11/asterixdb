@@ -21,7 +21,7 @@ use dataverse test;
 count(
 for $o in dataset('MyData')
 where $o.docid < 50
-//order by $o.docid
+order by $o.docid
 limit 2
 return {"pk":$o.id, "sk":$o.docid}
 );

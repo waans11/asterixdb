@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 /*
  * Description    : Equi joins two datasets, DBLP and CSX, based on their authors.
  *                  Both datasets have a secondary btree index on authors. So, given the 'indexnl' hint

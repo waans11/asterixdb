@@ -1,6 +1,0 @@
-use dataverse STBench;
-for $x in dataset SimpleGeoPlace
-for $y in dataset JoinSeed
-let $n :=  create-circle($y.coordinates, 10.0)
-where $y.id < 3 and spatial-intersect($x.coordinates, $n)
-return $x.name;
