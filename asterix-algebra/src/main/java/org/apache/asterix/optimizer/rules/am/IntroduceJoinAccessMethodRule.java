@@ -170,8 +170,7 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         if (op1.getInputs().size() != 1) {
             return false;
         }
-        if (((AbstractLogicalOperator) op1.getInputs().get(0).getValue())
-                .getOperatorTag() != LogicalOperatorTag.LEFTOUTERJOIN) {
+        if (((AbstractLogicalOperator) op1.getInputs().get(0).getValue()).getOperatorTag() != LogicalOperatorTag.LEFTOUTERJOIN) {
             return false;
         }
         if (op1.getOperatorTag() == LogicalOperatorTag.GROUP) {
@@ -388,7 +387,9 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                     indexSubTree.getPrimaryKeyVars(pkVars);
                                     List<List<String>> chosenIndexFieldNames = chosenIndex.second.getKeyFieldNames();
                                     for (int i = 0; i < pkVars.size(); i++) {
-                                        indexSubTree.fieldNames.put(pkVars.get(i), chosenIndexFieldNames.get(i));
+                                        if (!indexSubTree.fieldNames.containsKey(pkVars.get(i))) {
+                                            indexSubTree.fieldNames.put(pkVars.get(i), chosenIndexFieldNames.get(i));
+                                        }
                                     }
                                 }
 

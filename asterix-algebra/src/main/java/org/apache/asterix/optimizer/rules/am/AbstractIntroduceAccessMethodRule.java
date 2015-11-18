@@ -684,6 +684,19 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                 }
             }
         }
+
+        // DatasourceScan?
+        if (subTree.hasDataSourceScan()) {
+            List<LogicalVariable> primaryKeyVarList = new ArrayList<LogicalVariable>();
+
+            subTree.getPrimaryKeyVars(primaryKeyVarList);
+
+            Index primaryIndex = getPrimaryIndexFromDataSourceScanOp(subTree.dataSourceRef.getValue());
+
+            for (int i = 0; i < primaryKeyVarList.size(); i++) {
+                subTree.fieldNames.put(primaryKeyVarList.get(i), primaryIndex.getKeyFieldNames().get(i));
+            }
+        }
     }
 
     private void setTypeTag(IOptimizationContext context, OptimizableOperatorSubTree subTree,
@@ -1127,17 +1140,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                     }
                 }
             } else if (firstIdxSearchOp.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
-                // In case of DATASOURCESCAN operator
-                DataSourceScanOperator datasourceScanOp = (DataSourceScanOperator) firstIdxSearchOp;
-                Pair<String, String> datasetInfo = AnalysisUtil.getDatasetInfo(datasourceScanOp);
-                String dataverseName = datasetInfo.first;
-                String datasetName = datasetInfo.second;
-
-                if (dataverseName == null || datasetName == null) {
-                    return false;
-                }
-                // Find the primary index.
-                Index idxUsedInUnnestMap = metadataProvider.getIndex(dataverseName, datasetName, datasetName);
+                Index idxUsedInUnnestMap = getPrimaryIndexFromDataSourceScanOp(firstIdxSearchOp);
                 if (idxUsedInUnnestMap == null) {
                     return false;
                 } else {
@@ -1150,6 +1153,30 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             }
 
             return false;
+        }
+    }
+
+    /**
+     * Fetch the associated primary index from the given DATASOURCESCAN operator.
+     */
+    protected Index getPrimaryIndexFromDataSourceScanOp(ILogicalOperator dataSourceScanOp) throws AlgebricksException {
+        if (dataSourceScanOp.getOperatorTag() != LogicalOperatorTag.DATASOURCESCAN) {
+            return null;
+        }
+        Pair<String, String> datasetInfo = AnalysisUtil.getDatasetInfo((DataSourceScanOperator) dataSourceScanOp);
+        String dataverseName = datasetInfo.first;
+        String datasetName = datasetInfo.second;
+
+        if (dataverseName == null || datasetName == null) {
+            return null;
+        }
+
+        // Find the primary index.
+        Index idxUsedInUnnestMap = metadataProvider.getIndex(dataverseName, datasetName, datasetName);
+        if (idxUsedInUnnestMap == null) {
+            return null;
+        } else {
+            return idxUsedInUnnestMap;
         }
     }
 

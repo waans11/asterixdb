@@ -47,6 +47,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceSc
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 
 /**
@@ -60,6 +61,8 @@ public class OptimizableOperatorSubTree {
         EXTERNAL_SCAN,
         PRIMARY_INDEX_LOOKUP,
         COLLECTION_SCAN,
+        INDEXONLY_PLAN_SECONDARY_INDEX_LOOKUP,
+        REDUCING_NUMBER_OF_SELECT_PLAN_PRIMARY_INDEX_LOOKUP,
         NO_DATASOURCE
     }
 
@@ -101,6 +104,7 @@ public class OptimizableOperatorSubTree {
         reset();
         rootRef = subTreeOpRef;
         root = subTreeOpRef.getValue();
+        boolean isIndexOnlyOrReducingTheNumberOfSelectPlan = false;
         // Examine the op's children to match the expected patterns.
         AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
         do {
@@ -117,6 +121,20 @@ public class OptimizableOperatorSubTree {
                 subTreeOpRef = subTreeOp.getInputs().get(0);
                 subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
             }
+
+            // If this is an index-only plan or reducing the number of select plan, then we have union operator.
+            if (subTreeOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
+                isIndexOnlyOrReducingTheNumberOfSelectPlan = true;
+                // If this plan has a union operator and turns out to be non-index only plan,
+                // then we try to initialize data source and return to the caller.
+                if (!initFromIndexOnlyOrReducingTheNumberOfSelectPlan(subTreeOpRef)) {
+                    return initializeDataSource(subTreeOpRef);
+                } else {
+                    // Done initializing the data source.
+                    return true;
+                }
+            }
+
             // Skip select operator.
             if (subTreeOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
                 selectRefs.add(subTreeOpRef);
@@ -142,6 +160,39 @@ public class OptimizableOperatorSubTree {
 
         // Match data source (datasource scan or primary index search).
         return initializeDataSource(subTreeOpRef);
+    }
+
+    /**
+     * Initialize assign, unnest and datasource information for the index-only
+     * or reducing the number of select plan.
+     */
+    private boolean initFromIndexOnlyOrReducingTheNumberOfSelectPlan(Mutable<ILogicalOperator> subTreeOpRef) {
+
+        AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+        boolean isIndexOnlyPlan = false;
+        boolean isReducingTheNumberOfSelectPlan = false;
+
+        // Top level operator should be UNIONALL operator.
+        if (subTreeOp.getOperatorTag() != LogicalOperatorTag.UNIONALL) {
+            return false;
+        }
+
+        UnionAllOperator unionOp = (UnionAllOperator) subTreeOp;
+
+        // Traverse the left-path first (tryLock fail path).
+        // The first operator should be SELECT operator.
+        subTreeOpRef = subTreeOp.getInputs().get(0);
+        subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+
+        if (subTreeOp.getOperatorTag() != LogicalOperatorTag.SELECT) {
+            return false;
+        }
+
+        // The second operator can be SPLIT or ASSIGN
+        subTreeOpRef = subTreeOp.getInputs().get(0);
+        subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+
+        return true;
     }
 
     /**
@@ -440,11 +491,14 @@ public class OptimizableOperatorSubTree {
      */
     public boolean setFirstIndexSearchOrDataScan() {
         // Checks whether there is an unnest-map from the beginning.
+        boolean unnestMapFound = false;
         if (assignsAndUnnestsRefs.size() > 0) {
-            for (int i = assignsAndUnnestsRefs.size() - 1; i > 0; i--) {
+            int i = assignsAndUnnestsRefs.size() - 1;
+            while (true) {
                 AbstractLogicalOperator lop = (AbstractLogicalOperator) assignsAndUnnestsRefs.get(i).getValue();
                 if (lop.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
                     // We find an unnest-map. It should be an index-search.
+                    unnestMapFound = true;
                     UnnestMapOperator unnestMap = (UnnestMapOperator) lop;
                     ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
                     if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
@@ -461,8 +515,16 @@ public class OptimizableOperatorSubTree {
 
                     return true;
                 }
+
+                i--;
+                if (i < 0) {
+                    break;
+                }
             }
-        } else if (hasDataSourceScan()) {
+        }
+
+        // If there is no UNNEST-MAP, checks whether this subtree has data-source scan.
+        if (!unnestMapFound && hasDataSourceScan()) {
             firstIdxSearchRef = dataSourceRef;
             return true;
         }
