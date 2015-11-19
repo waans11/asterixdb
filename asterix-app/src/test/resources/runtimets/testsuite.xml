@@ -1351,6 +1351,13 @@
         -->
     </test-group>
     <test-group name="dml">
+         <test-case FilePath="dml">
+            <compilation-unit name="insert-duplicated-keys-from-query">
+                <output-dir compare="Text">insert-duplicated-keys-from-query</output-dir>
+                <expected-error>org.apache.hyracks.storage.am.common.exceptions.TreeIndexDuplicateKeyException
+                </expected-error>
+            </compilation-unit>
+        </test-case>
         <test-case FilePath="dml">
             <compilation-unit name="compact-dataset-and-its-indexes">
                 <output-dir compare="Text">compact-dataset-and-its-indexes</output-dir>
@@ -4214,6 +4221,11 @@
         <test-case FilePath="numeric">
             <compilation-unit name="multiply_int64">
                 <output-dir compare="Text">multiply_int64</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="numeric">
+            <compilation-unit name="issue_1166">
+                <output-dir compare="Text">issue_1166</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="numeric">
@@ -7085,6 +7097,11 @@
         <test-case FilePath="json">
             <compilation-unit name="int01">
                 <output-dir compare="Clean-JSON">int01-cleanjson</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="json">
+            <compilation-unit name="issue-ASTERIXDB-1165">
+                <output-dir compare="Clean-JSON">issue-ASTERIXDB-1165</output-dir>
             </compilation-unit>
         </test-case>
     </test-group>

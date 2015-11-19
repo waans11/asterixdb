@@ -38,11 +38,15 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.asterix.api.common.APIFramework;
 import org.apache.asterix.api.common.SessionConfig;
 import org.apache.asterix.api.common.SessionConfig.OutputFormat;
-import org.apache.asterix.aql.translator.AqlTranslator;
+import org.apache.asterix.aql.translator.QueryTranslator;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.exceptions.AsterixException;
-import org.apache.asterix.lang.aql.parser.AQLParser;
+import org.apache.asterix.compiler.provider.AqlCompilationProvider;
+import org.apache.asterix.compiler.provider.ILangCompilationProvider;
+import org.apache.asterix.compiler.provider.SqlppCompilationProvider;
 import org.apache.asterix.lang.aql.parser.TokenMgrError;
+import org.apache.asterix.lang.common.base.IParser;
+import org.apache.asterix.lang.common.base.IParserFactory;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.result.ResultReader;
@@ -61,9 +65,36 @@ public class APIServlet extends HttpServlet {
     // For Experiment Profiler
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss,SSS");
     String messageToWrite;
+    private final ILangCompilationProvider aqlCompilationProvider;
+    private final IParserFactory aqlParserFactory;
+    private final ILangCompilationProvider sqlppCompilationProvider;
+    private final IParserFactory sqlppParserFactory;
+
+    public APIServlet() {
+        this.aqlCompilationProvider = new AqlCompilationProvider();
+        this.aqlParserFactory = aqlCompilationProvider.getParserFactory();
+
+        this.sqlppCompilationProvider = new SqlppCompilationProvider();
+        this.sqlppParserFactory = sqlppCompilationProvider.getParserFactory();
+    }
 
     @Override
     public void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        // Query language
+        ILangCompilationProvider compilationProvider;
+        IParserFactory parserFactory;
+        String lang = request.getParameter("query-language");
+        if (lang.equals("AQL")) {
+            // Uses AQL compiler.
+            compilationProvider = aqlCompilationProvider;
+            parserFactory = aqlParserFactory;
+        } else {
+            // Uses SQL++ compiler.
+            compilationProvider = sqlppCompilationProvider;
+            parserFactory = sqlppParserFactory;
+        }
+
+        // Output format.
         OutputFormat format;
         boolean csv_and_header = false;
         String output = request.getParameter("output-format");
@@ -106,8 +137,7 @@ public class APIServlet extends HttpServlet {
                     context.setAttribute(HYRACKS_DATASET_ATTR, hds);
                 }
             }
-            AQLParser parser = new AQLParser(query);
-
+            IParser parser = parserFactory.createParser(query);
             List<Statement> aqlStatements = parser.parse();
             SessionConfig sessionConfig = new SessionConfig(out, format, true, isSet(executeQuery), true);
             sessionConfig.set(SessionConfig.FORMAT_HTML, true);
@@ -116,11 +146,10 @@ public class APIServlet extends HttpServlet {
             sessionConfig.setOOBData(isSet(printExprParam), isSet(printRewrittenExprParam),
                     isSet(printLogicalPlanParam), isSet(printOptimizedLogicalPlanParam), isSet(printJob));
             MetadataManager.INSTANCE.init();
-            AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, sessionConfig);
+            QueryTranslator translator = new QueryTranslator(aqlStatements, sessionConfig, compilationProvider);
             double duration = 0;
             long startTime = System.currentTimeMillis();
-
-            aqlTranslator.compileAndExecute(hcc, hds, AqlTranslator.ResultDelivery.SYNC);
+            translator.compileAndExecute(hcc, hds, QueryTranslator.ResultDelivery.SYNC);
             long endTime = System.currentTimeMillis();
             duration = (endTime - startTime) / 1000.00;
             out.println(APIFramework.HTML_STATEMENT_SEPARATOR);

@@ -27,7 +27,7 @@ import java.util.Map;
 
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.dataflow.data.common.AqlExpressionTypeComputer;
-import org.apache.asterix.lang.aql.util.FunctionUtils;
+import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.metadata.api.IMetadataEntity;
 import org.apache.asterix.metadata.bootstrap.MetadataConstants;
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;
@@ -958,7 +958,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
 
         // Create new expression for the given unnest-map.
         // An index search is expressed as an unnest-map over an index-search function.
-        IFunctionInfo idxSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        IFunctionInfo idxSearch = FunctionUtil.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         UnnestingFunctionCallExpression idxSearchFunc = new UnnestingFunctionCallExpression(idxSearch, idxFuncArgs);
 
         // Replace the current unnest-map with newly created expression.

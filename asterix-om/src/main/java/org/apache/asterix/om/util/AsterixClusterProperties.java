@@ -78,8 +78,12 @@ public class AsterixClusterProperties {
     private ClusterState state = ClusterState.UNUSABLE;
 
     public synchronized void removeNCConfiguration(String nodeId) {
-        // state = State.UNUSABLE;
         ncConfiguration.remove(nodeId);
+        if (ncConfiguration.keySet().size() != AsterixAppContextInfo.getInstance().getMetadataProperties()
+                .getNodeNames().size()) {
+            state = ClusterState.UNUSABLE;
+            LOGGER.info("Cluster now is in UNSABLE state");
+        }
         resetClusterPartitionConstraint();
     }
 

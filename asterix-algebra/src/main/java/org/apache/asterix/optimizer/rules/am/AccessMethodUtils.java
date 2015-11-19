@@ -31,7 +31,7 @@ import org.apache.asterix.algebra.operators.physical.ExternalDataLookupPOperator
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.exceptions.AsterixException;
-import org.apache.asterix.lang.aql.util.FunctionUtils;
+import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.metadata.declared.AqlSourceId;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
@@ -1089,7 +1089,7 @@ public class AccessMethodUtils {
         appendSecondaryIndexTypes(dataset, recordType, index, outputPrimaryKeysOnly, secondaryIndexOutputTypes,
                 resultOfTryLockRequired);
         // An index search is expressed as an unnest-map over an index-search function.
-        IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        IFunctionInfo secondaryIndexSearch = FunctionUtil.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         UnnestingFunctionCallExpression secondaryIndexSearchFunc = new UnnestingFunctionCallExpression(
                 secondaryIndexSearch, secondaryIndexFuncArgs);
         secondaryIndexSearchFunc.setReturnsUniqueValues(true);
@@ -1220,7 +1220,7 @@ public class AccessMethodUtils {
             if (spatialType.getTypeTag() == BuiltinType.APOINT.getTypeTag()) {
                 // Reconstruct a POINT value
                 AbstractFunctionCallExpression createPointExpr = new ScalarFunctionCallExpression(
-                        FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_POINT));
+                        FunctionUtil.getFunctionInfo(AsterixBuiltinFunctions.CREATE_POINT));
                 List<Mutable<ILogicalExpression>> expressions = new ArrayList<Mutable<ILogicalExpression>>();
                 expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
                         secondaryKeyVarsFromSIdxSearch.get(0))));
@@ -1234,7 +1234,7 @@ public class AccessMethodUtils {
             } else if (spatialType.getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag()) {
                 // Reconstruct a RECTANGLE value
                 AbstractFunctionCallExpression createRectangleExpr = new ScalarFunctionCallExpression(
-                        FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_RECTANGLE));
+                        FunctionUtil.getFunctionInfo(AsterixBuiltinFunctions.CREATE_RECTANGLE));
                 List<Mutable<ILogicalExpression>> expressions = new ArrayList<Mutable<ILogicalExpression>>();
                 expressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
                         secondaryKeyVarsFromSIdxSearch.get(0))));
@@ -1535,7 +1535,8 @@ public class AccessMethodUtils {
         jobGenParams.writeToFuncArgs(primaryIndexFuncArgs);
 
         // Primary index search is expressed as an unnest-map over an index-search function.
-        IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        IFunctionInfo primaryIndexSearch = FunctionUtil.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+
         AbstractFunctionCallExpression primaryIndexSearchFunc = new ScalarFunctionCallExpression(primaryIndexSearch,
                 primaryIndexFuncArgs);
         // This is the operator that job gen will be looking for.
@@ -1922,7 +1923,7 @@ public class AccessMethodUtils {
         externalAccessByRIDVars.addAll(dataSourceOp.getVariables());
         appendExternalRecTypes(dataset, recordType, externalAccessOutputTypes);
 
-        IFunctionInfo externalAccessByRID = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.EXTERNAL_LOOKUP);
+        IFunctionInfo externalAccessByRID = FunctionUtil.getFunctionInfo(AsterixBuiltinFunctions.EXTERNAL_LOOKUP);
         AbstractFunctionCallExpression externalAccessFunc = new ScalarFunctionCallExpression(externalAccessByRID,
                 externalRIDAccessFuncArgs);
 
