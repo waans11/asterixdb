@@ -999,9 +999,7 @@ public class AccessMethodUtils {
                         if (tmpValFieldType == null) {
                             tmpValFieldName = probeSubTree.fieldNames.get(tmpVal);
 
-                            if (tmpValFieldName == null) {
-                                continue;
-                            } else {
+                            if (tmpValFieldName != null) {
                                 for (int j = 0; j < probeRecordType.getFieldNames().length; j++) {
                                     String fieldName = probeRecordType.getFieldNames()[j];
                                     if (tmpValFieldName.contains(fieldName)) {
@@ -1021,8 +1019,9 @@ public class AccessMethodUtils {
                                 || keyPairType.first.getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag()) {
                             // If the given field from the other join branch is a POINT or a RECTANGLE,
                             // we don't need to verify it again using SELECT operator since there are no false positive results.
-                            if (tmpValFieldType.getTypeTag() == BuiltinType.APOINT.getTypeTag()
-                                    || tmpValFieldType.getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag()) {
+                            if (tmpValFieldType != null
+                                    && (tmpValFieldType.getTypeTag() == BuiltinType.APOINT.getTypeTag() || tmpValFieldType
+                                            .getTypeTag() == BuiltinType.ARECTANGLE.getTypeTag())) {
                                 verificationAfterSIdxSearchRequired = false;
                             } else {
                                 verificationAfterSIdxSearchRequired = true;
