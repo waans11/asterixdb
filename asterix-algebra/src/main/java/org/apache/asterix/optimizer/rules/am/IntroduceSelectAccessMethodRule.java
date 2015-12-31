@@ -156,7 +156,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         return planTransformed;
     }
 
-    protected boolean checkSelectOperatorCondition() {
+    protected boolean checkSelectOperatorCondition() throws AlgebricksException {
         // Set and analyze select.
         // Check that the SELECT condition is a function call.
         ILogicalExpression condExpr = selectOp.getCondition().getValue();
@@ -168,7 +168,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         selectCond = (AbstractFunctionCallExpression) condExpr;
 
         // Match and put assign, un-nest, datasource information
-        boolean res = subTree.initFromSubTree(selectOp.getInputs().get(0));
+        boolean res = subTree.initFromSubTree(selectOp.getInputs().get(0), context);
         return res && subTree.hasDataSourceScan();
     }
 
@@ -219,7 +219,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                                 // If the chosen index is the primary index - add variable:name to subTree.fieldNames
                                 ArrayList<LogicalVariable> pkVars = new ArrayList<LogicalVariable>();
                                 if (chosenIndex.second.isPrimaryIndex()) {
-                                    subTree.getPrimaryKeyVars(pkVars);
+                                    subTree.getPrimaryKeyVars(null, pkVars);
                                     List<List<String>> chosenIndexFieldNames = chosenIndex.second.getKeyFieldNames();
                                     for (int i = 0; i < pkVars.size(); i++) {
                                         subTree.fieldNames.put(pkVars.get(i), chosenIndexFieldNames.get(i));

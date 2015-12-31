@@ -66,6 +66,7 @@ import org.apache.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
@@ -550,39 +551,41 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                         }
                     }
                 } else {
-                    UnnestOperator unnestOp = (UnnestOperator) op;
-                    LogicalVariable var = unnestOp.getVariable();
-                    int funcVarIndex = optFuncExpr.findLogicalVar(var);
-                    // No matching var in optFuncExpr.
-                    if (funcVarIndex == -1) {
-                        continue;
-                    }
-                    // At this point we have matched the optimizable func expr
-                    // at optFuncExprIndex to an unnest variable.
-                    // Remember matching subtree.
-                    optFuncExpr.setOptimizableSubTree(funcVarIndex, subTree);
-                    List<String> fieldName = null;
-                    if (subTree.dataSourceType == DataSourceType.COLLECTION_SCAN) {
-                        optFuncExpr.setLogicalExpr(funcVarIndex, new VariableReferenceExpression(var));
-                    } else {
-                        fieldName = getFieldNameFromSubTree(optFuncExpr, subTree, assignOrUnnestIndex, 0,
-                                subTree.recordType, funcVarIndex,
-                                optFuncExpr.getFuncExpr().getArguments().get(funcVarIndex).getValue());
-                        if (fieldName == null) {
+                    if (op.getOperatorTag() == LogicalOperatorTag.UNNEST) {
+                        UnnestOperator unnestOp = (UnnestOperator) op;
+                        LogicalVariable var = unnestOp.getVariable();
+                        int funcVarIndex = optFuncExpr.findLogicalVar(var);
+                        // No matching var in optFuncExpr.
+                        if (funcVarIndex == -1) {
                             continue;
                         }
-                    }
-                    IAType fieldType = (IAType) context.getOutputTypeEnvironment(unnestOp).getType(
-                            optFuncExpr.getLogicalExpr(funcVarIndex));
-                    // Set the fieldName in the corresponding matched function
-                    // expression.
-                    optFuncExpr.setFieldName(funcVarIndex, fieldName);
-                    optFuncExpr.setFieldType(funcVarIndex, fieldType);
+                        // At this point we have matched the optimizable func expr
+                        // at optFuncExprIndex to an unnest variable.
+                        // Remember matching subtree.
+                        optFuncExpr.setOptimizableSubTree(funcVarIndex, subTree);
+                        List<String> fieldName = null;
+                        if (subTree.dataSourceType == DataSourceType.COLLECTION_SCAN) {
+                            optFuncExpr.setLogicalExpr(funcVarIndex, new VariableReferenceExpression(var));
+                        } else {
+                            fieldName = getFieldNameFromSubTree(optFuncExpr, subTree, assignOrUnnestIndex, 0,
+                                    subTree.recordType, funcVarIndex,
+                                    optFuncExpr.getFuncExpr().getArguments().get(funcVarIndex).getValue());
+                            if (fieldName == null) {
+                                continue;
+                            }
+                        }
+                        IAType fieldType = (IAType) context.getOutputTypeEnvironment(unnestOp).getType(
+                                optFuncExpr.getLogicalExpr(funcVarIndex));
+                        // Set the fieldName in the corresponding matched function
+                        // expression.
+                        optFuncExpr.setFieldName(funcVarIndex, fieldName);
+                        optFuncExpr.setFieldType(funcVarIndex, fieldType);
 
-                    setTypeTag(context, subTree, optFuncExpr, funcVarIndex);
-                    if (subTree.hasDataSource()) {
-                        fillIndexExprs(datasetIndexes, fieldName, fieldType, optFuncExpr, optFuncExprIndex,
-                                funcVarIndex, subTree, analysisCtx);
+                        setTypeTag(context, subTree, optFuncExpr, funcVarIndex);
+                        if (subTree.hasDataSource()) {
+                            fillIndexExprs(datasetIndexes, fieldName, fieldType, optFuncExpr, optFuncExprIndex,
+                                    funcVarIndex, subTree, analysisCtx);
+                        }
                     }
                 }
             }
@@ -669,7 +672,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                         subTree.fieldNames.put(var, fieldName);
                     }
                 }
-            } else {
+            } else if (op.getOperatorTag() == LogicalOperatorTag.UNNEST) {
                 UnnestOperator unnestOp = (UnnestOperator) op;
                 LogicalVariable var = unnestOp.getVariable();
                 List<String> fieldName = null;
@@ -682,6 +685,32 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                         subTree.fieldNames.put(var, fieldName);
                     }
                 }
+            } else {
+                // unnestmap or left-outer-unnestmap?
+                LeftOuterUnnestMapOperator leftOuterUnnestMapOp = null;
+                UnnestMapOperator unnestMapOp = null;
+                List<LogicalVariable> varList = null;
+
+                if (op.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+                    unnestMapOp = (UnnestMapOperator) op;
+                    varList = unnestMapOp.getVariables();
+                } else if (op.getOperatorTag() == LogicalOperatorTag.LEFT_OUTER_UNNEST_MAP) {
+                    leftOuterUnnestMapOp = (LeftOuterUnnestMapOperator) op;
+                    varList = leftOuterUnnestMapOp.getVariables();
+                } else {
+                    continue;
+                }
+
+                for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
+                    LogicalVariable var = varList.get(varIndex);
+                    // funcVarIndex is not required. Thus, we set it to -1.
+                    // optFuncExpr and parentFuncExpr are not required, too. Thus, we set them to null.
+                    List<String> fieldName = getFieldNameFromSubTree(null, subTree, assignOrUnnestIndex, varIndex,
+                            subTree.recordType, -1, null);
+                    if (fieldName != null) {
+                        subTree.fieldNames.put(var, fieldName);
+                    }
+                }
             }
         }
 
@@ -689,7 +718,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         if (subTree.hasDataSourceScan()) {
             List<LogicalVariable> primaryKeyVarList = new ArrayList<LogicalVariable>();
 
-            subTree.getPrimaryKeyVars(primaryKeyVarList);
+            subTree.getPrimaryKeyVars(null, primaryKeyVarList);
 
             Index primaryIndex = getPrimaryIndexFromDataSourceScanOp(subTree.dataSourceRef.getValue());
 
@@ -697,6 +726,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                 subTree.fieldNames.put(primaryKeyVarList.get(i), primaryIndex.getKeyFieldNames().get(i));
             }
         }
+
     }
 
     private void setTypeTag(IOptimizationContext context, OptimizableOperatorSubTree subTree,
@@ -727,7 +757,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             if (expr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                 childFuncExpr = (AbstractFunctionCallExpression) expr;
             }
-        } else {
+        } else if (op.getOperatorTag() == LogicalOperatorTag.UNNEST) {
             UnnestOperator unnestOp = (UnnestOperator) op;
             expr = (AbstractLogicalExpression) unnestOp.getExpressionRef().getValue();
             if (expr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
@@ -923,11 +953,23 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     /**
      * A helper Function that returns AccessMethodJobGenParams from an unnest-map
      */
-    protected AccessMethodJobGenParams getAccessMethodJobGenParamsFromUnnestMap(UnnestMapOperator unnestMap) {
+    protected static AccessMethodJobGenParams getAccessMethodJobGenParamsFromUnnestMap(AbstractLogicalOperator unnestMap) {
+        LeftOuterUnnestMapOperator leftOuterUnnestMapOp = null;
+        UnnestMapOperator unnestMapOp = null;
+        ILogicalExpression unnestExpr = null;
+
         if (unnestMap == null) {
             return null;
         } else {
-            ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
+
+            if (unnestMap.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
+                unnestMapOp = (UnnestMapOperator) unnestMap;
+                unnestExpr = unnestMapOp.getExpressionRef().getValue();
+            } else if (unnestMap.getOperatorTag() == LogicalOperatorTag.LEFT_OUTER_UNNEST_MAP) {
+                leftOuterUnnestMapOp = (LeftOuterUnnestMapOperator) leftOuterUnnestMapOp;
+                unnestExpr = leftOuterUnnestMapOp.getExpressionRef().getValue();
+            }
+
             if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
                 return null;
             }
@@ -978,10 +1020,10 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     protected boolean checkAndPassLimitToIndexSearch(OptimizableOperatorSubTree subTree, long limitNumberOfResult,
             boolean isInnerJoin) throws AlgebricksException {
 
-        if (subTree.firstIdxSearchRef == null) {
+        if (subTree.firstTrustworthyIdxSearchRef == null) {
             return false;
         } else {
-            ILogicalOperator firstIdxSearchOp = subTree.firstIdxSearchRef.getValue();
+            ILogicalOperator firstIdxSearchOp = subTree.firstTrustworthyIdxSearchRef.getValue();
 
             // UNNEST-MAP (index-search) case
             if (firstIdxSearchOp.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {
@@ -1010,7 +1052,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                                 // Replace the expression of the current index-search
                                 UnnestMapOperator newUnnestMapOp = replaceExpressionOfUnnestMapOperator(jobGenParams,
                                         unnestMapOp);
-                                subTree.firstIdxSearchRef.setValue(newUnnestMapOp);
+                                subTree.firstTrustworthyIdxSearchRef.setValue(newUnnestMapOp);
 
                                 return true;
                             }
@@ -1031,7 +1073,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                                 // Replace the expression of the current index-search
                                 UnnestMapOperator newUnnestMapOp = replaceExpressionOfUnnestMapOperator(jobGenParams,
                                         unnestMapOp);
-                                subTree.firstIdxSearchRef.setValue(newUnnestMapOp);
+                                subTree.firstTrustworthyIdxSearchRef.setValue(newUnnestMapOp);
 
                                 return true;
                             }
@@ -1048,7 +1090,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                     DataSourceScanOperator newDataSourceScanOp = (DataSourceScanOperator) firstIdxSearchOp;
                     // Reset the number of results for the given data-source scan
                     newDataSourceScanOp.setLimitNumberOfResult(limitNumberOfResult);
-                    subTree.firstIdxSearchRef.setValue(newDataSourceScanOp);
+                    subTree.firstTrustworthyIdxSearchRef.setValue(newDataSourceScanOp);
 
                     return true;
                 }
@@ -1073,10 +1115,10 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             List<Pair<IOrder, Mutable<ILogicalExpression>>> orderByExpressions, boolean isInnerJoin)
             throws AlgebricksException {
 
-        if (subTree.firstIdxSearchRef == null) {
+        if (subTree.firstTrustworthyIdxSearchRef == null) {
             return false;
         } else {
-            ILogicalOperator firstIdxSearchOp = subTree.firstIdxSearchRef.getValue();
+            ILogicalOperator firstIdxSearchOp = subTree.firstTrustworthyIdxSearchRef.getValue();
 
             // UNNEST-MAP (index-search) case
             if (firstIdxSearchOp.getOperatorTag() == LogicalOperatorTag.UNNEST_MAP) {

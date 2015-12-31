@@ -744,7 +744,8 @@ public class BTreeAccessMethod implements IAccessMethod {
                         highKeyExprs[keyPos] = searchKeyExpr;
                         highKeyInclusive[keyPos] = false;
                     } else {
-                        // Has already been set to the identical values. When optimizing join we may encounter the same optimizable expression twice
+                        // Has already been set to the identical values.
+                        // When optimizing join we may encounter the same optimizable expression twice
                         // (once from analyzing each side of the join)
                         if (highKeyLimits[keyPos] == limit && highKeyInclusive[keyPos] == false
                                 && highKeyExprs[keyPos].equals(searchKeyExpr)) {

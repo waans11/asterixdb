@@ -170,13 +170,11 @@ public final class NonTaggedFormatUtil {
                     return AOrderedListSerializerDeserializer.getOrderedListLength(serNonTaggedAObject, offset) - 1;
             case UNORDEREDLIST:
                 if (tagged)
-                    return AUnorderedListSerializerDeserializer.getUnorderedListLength(serNonTaggedAObject, offset + 1)
-                            - 1;
+                    return AUnorderedListSerializerDeserializer.getUnorderedListLength(serNonTaggedAObject, offset + 1) - 1;
                 else
                     return AUnorderedListSerializerDeserializer.getUnorderedListLength(serNonTaggedAObject, offset) - 1;
             default:
-                throw new NotImplementedException(
-                        "No getLength implemented for a value of this type " + typeTag + " .");
+                throw new NotImplementedException("No getLength implemented for a value of this type " + typeTag + " .");
         }
     }
 
@@ -191,8 +189,7 @@ public final class NonTaggedFormatUtil {
             case POINT3D:
                 return 3;
             default:
-                throw new NotImplementedException(
-                        "getNumDimensions is not implemented for this type " + typeTag + " .");
+                throw new NotImplementedException("getNumDimensions is not implemented for this type " + typeTag + " .");
         }
     }
 

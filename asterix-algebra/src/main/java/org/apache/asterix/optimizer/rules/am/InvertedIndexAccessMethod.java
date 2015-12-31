@@ -1085,7 +1085,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             ILogicalExpression joinCond, IOptimizableFuncExpr optFuncExpr, List<LogicalVariable> originalSubTreePKs,
             List<LogicalVariable> surrogateSubTreePKs, IOptimizationContext context) throws AlgebricksException {
 
-        probeSubTree.getPrimaryKeyVars(originalSubTreePKs);
+        probeSubTree.getPrimaryKeyVars(null, originalSubTreePKs);
 
         // Create two copies of the original probe subtree.
         // The first copy, which becomes the new probe subtree, will retain the primary-key and secondary-search key variables,
@@ -1138,7 +1138,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // Replace the original probe subtree with its copy.
         Dataset origDataset = probeSubTree.dataset;
         ARecordType origRecordType = probeSubTree.recordType;
-        probeSubTree.initFromSubTree(newProbeSubTreeRootRef);
+        probeSubTree.initFromSubTree(newProbeSubTreeRootRef, context);
         probeSubTree.dataset = origDataset;
         probeSubTree.recordType = origRecordType;
 

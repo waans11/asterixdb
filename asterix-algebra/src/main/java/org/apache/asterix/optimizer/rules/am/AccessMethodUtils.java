@@ -82,6 +82,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOpera
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.ProjectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
@@ -679,7 +680,7 @@ public class AccessMethodUtils {
         dataScanPKRecordVars = indexSubTree.getDataSourceVariables();
         // In external dataset, there is no PK.
         if (dataScanPKRecordVars.size() > 1) {
-            indexSubTree.getPrimaryKeyVars(dataScanPKVars);
+            indexSubTree.getPrimaryKeyVars(null, dataScanPKVars);
         }
         dataScanRecordVars.addAll(dataScanPKRecordVars);
         dataScanRecordVars.removeAll(dataScanPKVars);
@@ -1163,6 +1164,8 @@ public class AccessMethodUtils {
         SelectOperator selectOp = null;
         ILogicalOperator lastAssignBeforeTopOp = null;
         UnionAllOperator unionAllOp = null;
+        ProjectOperator leftProjectBeforeUnionAllOp = null;
+        ProjectOperator rightProjectBeforeUnionAllOp = null;
         SelectOperator newSelectOp = null;
         SelectOperator newSelectOpInRightPath = null;
         SplitOperator splitOp = null;
@@ -1699,10 +1702,38 @@ public class AccessMethodUtils {
                 currentTopOpInRightPath = newSelectOpInRightPath;
             }
 
+            // Add PROJECT operator before UNION operator to unify the variables from each branch
+            List<LogicalVariable> leftVars = new ArrayList<LogicalVariable>();
+            List<LogicalVariable> rightVars = new ArrayList<LogicalVariable>();
+
+            // Create variables list for PROJECT operators
+            for (Iterator<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> it = unionVarMap.iterator(); it
+                    .hasNext();) {
+                Triple<LogicalVariable, LogicalVariable, LogicalVariable> itVars = it.next();
+                // Variables from the left branch
+                leftVars.add(itVars.first);
+                // Variables from the right branch
+                rightVars.add(itVars.second);
+            }
+
+            // PROJECT operator for the left side
+            leftProjectBeforeUnionAllOp = new ProjectOperator(leftVars);
+            leftProjectBeforeUnionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(newSelectOp));
+            leftProjectBeforeUnionAllOp.setExecutionMode(ExecutionMode.PARTITIONED);
+            context.computeAndSetTypeEnvironmentForOperator(leftProjectBeforeUnionAllOp);
+
+            // PROJECT operator for the right side
+            rightProjectBeforeUnionAllOp = new ProjectOperator(rightVars);
+            rightProjectBeforeUnionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(currentTopOpInRightPath));
+            rightProjectBeforeUnionAllOp.setExecutionMode(ExecutionMode.PARTITIONED);
+            context.computeAndSetTypeEnvironmentForOperator(rightProjectBeforeUnionAllOp);
+
             /// UNION operator
             unionAllOp = new UnionAllOperator(unionVarMap);
-            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(newSelectOp));
-            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(currentTopOpInRightPath));
+            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(leftProjectBeforeUnionAllOp));
+            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(rightProjectBeforeUnionAllOp));
+            //            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(newSelectOp));
+            //            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(currentTopOpInRightPath));
 
             //            StringBuilder sb = new StringBuilder();
             //            LogicalOperatorPrettyPrintVisitor pvisitor = context.getPrettyPrintVisitor();

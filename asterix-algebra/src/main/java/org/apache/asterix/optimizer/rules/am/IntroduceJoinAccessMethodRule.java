@@ -384,7 +384,7 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
                                 // If the chosen index is the primary index - add variable:name to subTree.fieldNames
                                 ArrayList<LogicalVariable> pkVars = new ArrayList<LogicalVariable>();
                                 if (chosenIndex.second.isPrimaryIndex()) {
-                                    indexSubTree.getPrimaryKeyVars(pkVars);
+                                    indexSubTree.getPrimaryKeyVars(null, pkVars);
                                     List<List<String>> chosenIndexFieldNames = chosenIndex.second.getKeyFieldNames();
                                     for (int i = 0; i < pkVars.size(); i++) {
                                         if (!indexSubTree.fieldNames.containsKey(pkVars.get(i))) {
@@ -474,8 +474,10 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
 
     /**
      * After the pattern is matched, check the condition and initialize the data sources from the both sub trees.
+     *
+     * @throws AlgebricksException
      */
-    protected boolean checkJoinOperatorCondition() {
+    protected boolean checkJoinOperatorCondition() throws AlgebricksException {
 
         typeEnvironment = context.getOutputTypeEnvironment(joinOp);
 
@@ -485,8 +487,8 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
             return false;
         }
         joinCond = (AbstractFunctionCallExpression) condExpr;
-        leftSubTree.initFromSubTree(joinOp.getInputs().get(0));
-        rightSubTree.initFromSubTree(joinOp.getInputs().get(1));
+        leftSubTree.initFromSubTree(joinOp.getInputs().get(0), context);
+        rightSubTree.initFromSubTree(joinOp.getInputs().get(1), context);
         // One of the subtrees must have a datasource scan.
         if (leftSubTree.hasDataSourceScan() || rightSubTree.hasDataSourceScan()) {
             return true;

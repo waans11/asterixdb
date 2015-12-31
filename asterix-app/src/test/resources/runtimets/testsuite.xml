@@ -2501,18 +2501,103 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-join">
-            <compilation-unit name="btree-primary-equi-join-limit-01">
-                <output-dir compare="Text">btree-primary-equi-join-limit-01</output-dir>
+            <compilation-unit name="btree-primary-equi-join-limit_01">
+                <output-dir compare="Text">btree-primary-equi-join-limit_01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-join">
-            <compilation-unit name="btree-primary-equi-join-limit-orderby-01">
-                <output-dir compare="Text">btree-primary-equi-join-limit-orderby-01</output-dir>
+            <compilation-unit name="btree-primary-equi-join-limit-orderby_01">
+                <output-dir compare="Text">btree-primary-equi-join-limit-orderby_01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-join">
-            <compilation-unit name="btree-secondary-to-primary-equi-join-01">
-                <output-dir compare="Text">btree-secondary-to-primary-equi-join-01</output-dir>
+            <compilation-unit name="btree-primary-to-secondary-indexonly-plan-equi-join_01">
+                <output-dir compare="Text">btree-primary-to-secondary-indexonly-plan-equi-join_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-primary-to-secondary-indexonly-plan-equi-join-limit_01">
+                <output-dir compare="Text">btree-primary-to-secondary-indexonly-plan-equi-join-limit_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-primary-to-secondary-indexonly-plan-equi-join-limit-orderby_01">
+                <output-dir compare="Text">btree-primary-to-secondary-indexonly-plan-equi-join-limit-orderby_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-indexonly-plan-to-primary-equi-join_01">
+                <output-dir compare="Text">btree-secondary-indexonly-plan-to-primary-equi-join_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-indexonly-plan-to-primary-equi-join-limit_01">
+                <output-dir compare="Text">btree-secondary-indexonly-plan-to-primary-equi-join-limit_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-indexonly-plan-to-primary-equi-join-limit-orderby_01">
+                <output-dir compare="Text">btree-secondary-indexonly-plan-to-primary-equi-join-limit-orderby_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-indexonly-plan-to-secondary-indexonly-plan-equi-join_01">
+                <output-dir compare="Text">btree-secondary-indexonly-plan-to-secondary-indexonly-plan-equi-join_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-indexonly-plan-to-secondary-indexonly-plan-equi-join-limit_01">
+                <output-dir compare="Text">btree-secondary-indexonly-plan-to-secondary-indexonly-plan-equi-join-limit_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-indexonly-plan-to-secondary-indexonly-plan-equi-join-limit-orderby_01">
+                <output-dir compare="Text">btree-secondary-indexonly-plan-to-secondary-indexonly-plan-equi-join-limit-orderby_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-reducing-the-number-of-verification-plan-to-primary-equi-join_01">
+                <output-dir compare="Text">btree-secondary-reducing-the-number-of-verification-plan-to-primary-equi-join_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-reducing-the-number-of-verification-plan-to-primary-equi-join-limit_01">
+                <output-dir compare="Text">btree-secondary-reducing-the-number-of-verification-plan-to-primary-equi-join-limit_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-reducing-the-number-of-verification-plan-to-primary-equi-join-limit-orderby_01">
+                <output-dir compare="Text">btree-secondary-reducing-the-number-of-verification-plan-to-primary-equi-join-limit-orderby_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-non-indexonly-plan-to-primary-equi-join_01">
+                <output-dir compare="Text">btree-secondary-non-indexonly-plan-to-primary-equi-join_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-non-indexonly-plan-to-primary-equi-join-limit_01">
+                <output-dir compare="Text">btree-secondary-non-indexonly-plan-to-primary-equi-join-limit_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-non-indexonly-plan-to-primary-equi-join-limit-orderby_01">
+                <output-dir compare="Text">btree-secondary-non-indexonly-plan-to-primary-equi-join-limit-orderby_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-non-indexonly-plan-to-secondary-indexonly-plan-equi-join_01">
+                <output-dir compare="Text">btree-secondary-non-indexonly-plan-to-secondary-indexonly-plan-equi-join_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-non-indexonly-plan-to-secondary-indexonly-plan-equi-join-limit_01">
+                <output-dir compare="Text">btree-secondary-non-indexonly-plan-to-secondary-indexonly-plan-equi-join-limit_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-join">
+            <compilation-unit name="btree-secondary-non-indexonly-plan-to-secondary-indexonly-plan-equi-join-limit-orderby_01">
+                <output-dir compare="Text">btree-secondary-non-indexonly-plan-to-secondary-indexonly-plan-equi-join-limit-orderby_01</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-join">
@@ -5617,6 +5702,11 @@
         <test-case FilePath="tokenizers">
             <compilation-unit name="gram-tokens_02">
                 <output-dir compare="Text">gram-tokens_02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="tokenizers">
+            <compilation-unit name="gram-tokens_03">
+                <output-dir compare="Text">gram-tokens_03</output-dir>
             </compilation-unit>
         </test-case>
         <test-case FilePath="tokenizers">
