@@ -18,8 +18,14 @@
  */
 
 /*
- * Description  : Test that left-outer-join may use two available indexes, one for primary index in prob subtree and
- *                another for primary index in index subtree.
+ * Description  : Test that left-outer-join may use an available secondary index in the index subtree.
+ *                In the probe side, this is a non index-only plan since a secondary index-search can't cover
+ *                all fields that are required for the plan.
+ *                In the inner branch, this is a index-only plan since a secondary index-search can cover
+ *                all fields that are required for that branch.
+ *                We also have a LIMIT. However, none of index-searches can generate the final results since there are
+ *                additional predicates that can't be replaced by an index-search.
+ *                Thus, a LIMIT can't be applied on an index-search.
  * Expected Res : Success
  */
 

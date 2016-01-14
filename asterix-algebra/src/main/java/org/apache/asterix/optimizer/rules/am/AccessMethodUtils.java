@@ -603,10 +603,10 @@ public class AccessMethodUtils {
         // secondary key field usage after the select operator
         boolean secondaryKeyFieldUsedAfterTopOp = indexOnlyPlanInfo.third;
 
-        // Whether a verification is required after the secondary index search (R-Tree case)
+        // Whether a verification is required after the secondary index search
         boolean verificationAfterSIdxSearchRequired = indexOnlyPlanInfo.fourth;
 
-        // Does this secondary index search generate any false positive results (super-set of results)?
+        // Does this secondary index search generate any false positive results?
         boolean noFalsePositiveResultsFromSIdxSearch = indexOnlyPlanInfo.fifth;
 
         // logical variables that select operator is using
@@ -628,6 +628,28 @@ public class AccessMethodUtils {
         for (int i = 0; i < usedVarsInTopOpTemp.size(); i++) {
             if (!usedVarsInTopOp.contains(usedVarsInTopOpTemp.get(i))) {
                 usedVarsInTopOp.add(usedVarsInTopOpTemp.get(i));
+            }
+        }
+
+        // If this is a join, we need to traverse the index subtree and find SELECT conditions.
+        List<LogicalVariable> selectInIndexSubTreeVars = new ArrayList<LogicalVariable>();
+        if (probeSubTree != null) {
+            ILogicalOperator tmpOp = indexSubTree.root;
+            while (tmpOp.getOperatorTag() != LogicalOperatorTag.EMPTYTUPLESOURCE) {
+                if (tmpOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
+                    VariableUtilities.getUsedVariables(tmpOp, selectInIndexSubTreeVars);
+
+                    // Remove any duplicated variables.
+                    for (int i = 0; i < selectInIndexSubTreeVars.size(); i++) {
+                        if (!usedVarsInTopOp.contains(selectInIndexSubTreeVars.get(i))) {
+                            usedVarsInTopOp.add(selectInIndexSubTreeVars.get(i));
+                        }
+                    }
+
+                    selectInIndexSubTreeVars.clear();
+                }
+                tmpOp = tmpOp.getInputs().get(0).getValue();
+
             }
         }
         usedVarsInTopOpTemp.clear();
@@ -701,6 +723,25 @@ public class AccessMethodUtils {
 
         //        boolean isIndexOnlyPlanPossible = false;
 
+        // Collect variables that contain a constant expression in ASSIGN operators in the subtree.
+        List<LogicalVariable> constantVars = new ArrayList<LogicalVariable>();
+        ILogicalExpression condExpr = null;
+        List<Mutable<ILogicalExpression>> condExprs = null;
+        AbstractFunctionCallExpression condExprFnCall = null;
+
+        for (AbstractLogicalOperator assignUnnestOp : indexSubTree.assignsAndUnnests) {
+            if (assignUnnestOp.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
+                AssignOperator assignOp = (AssignOperator) assignUnnestOp;
+                condExprs = assignOp.getExpressions();
+                for (int i = 0; i < condExprs.size(); i++) {
+                    condExpr = (ILogicalExpression) condExprs.get(i).getValue();
+                    if (condExpr.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+                        constantVars.add(assignOp.getVariables().get(i));
+                    }
+                }
+            }
+        }
+
         // #1. Check whether variables in the SELECT operator are from secondary key fields and/or PK fields
         int selectVarFoundCount = 0;
         for (IOptimizableFuncExpr matchedFuncExpr : matchedFuncExprs) {
@@ -771,9 +812,8 @@ public class AccessMethodUtils {
 
         AbstractLogicalOperator aboveSelectRefOp = null;
         AggregateOperator aggOp = null;
-        ILogicalExpression condExpr = null;
-        List<Mutable<ILogicalExpression>> condExprs = null;
-        AbstractFunctionCallExpression condExprFnCall = null;
+        condExpr = null;
+        condExprs = null;
 
         if (isIndexOnlyPlan) {
             if (aboveTopRefs == null) {
@@ -863,7 +903,14 @@ public class AccessMethodUtils {
                                     VariableUtilities.substituteVariables(aboveSelectRefOp, usedVarAfterSelect,
                                             dataScanPKVars.get(0), context);
                                     isIndexOnlyPlan = true;
+                                } else {
+                                    isIndexOnlyPlan = false;
+                                    break;
                                 }
+                            } else if (constantVars.contains(usedVarAfterSelect)) {
+                                // If this variable contains a constant expression,
+                                // this does not affect our check and we can continue.
+                                isIndexOnlyPlan = true;
                             } else {
                                 isIndexOnlyPlan = false;
                                 break;
@@ -1399,7 +1446,7 @@ public class AccessMethodUtils {
 
             }
 
-            // Is the used variables after SELECT operator from the given secondary index?
+            // Are the used variables after SELECT operator from the given secondary index?
             for (Iterator<LogicalVariable> iterator = varsUsedAfterTopOp.iterator(); iterator.hasNext();) {
                 LogicalVariable tVar = iterator.next();
                 varAlreadyAdded = false;

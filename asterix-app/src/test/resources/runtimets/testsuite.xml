@@ -6866,6 +6866,21 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-leftouterjoin">
+            <compilation-unit name="probe-pidx-with-join-btree-pidx1-limit_01">
+                <output-dir compare="Text">probe-pidx-with-join-btree-pidx1-limit_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+            <compilation-unit name="probe-pidx-with-join-btree-pidx1-limit-orderby_01">
+                <output-dir compare="Text">probe-pidx-with-join-btree-pidx1-limit-orderby_01</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+            <compilation-unit name="probe-pidx-with-join-btree-pidx1-limit-orderby_02">
+                <output-dir compare="Text">probe-pidx-with-join-btree-pidx1-limit-orderby_02</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
             <compilation-unit name="probe-pidx-with-join-btree-sidx1">
                 <output-dir compare="Text">probe-pidx-with-join-btree-sidx1</output-dir>
             </compilation-unit>
@@ -6896,21 +6911,6 @@
             </compilation-unit>
         </test-case>
         <test-case FilePath="index-leftouterjoin">
-            <compilation-unit name="probe-pidx-with-join-btree-pidx1-limit-01">
-                <output-dir compare="Text">probe-pidx-with-join-btree-pidx1-limit-01</output-dir>
-            </compilation-unit>
-        </test-case>
-        <test-case FilePath="index-leftouterjoin">
-            <compilation-unit name="probe-pidx-with-join-btree-pidx1-orderby-limit-01">
-                <output-dir compare="Text">probe-pidx-with-join-btree-pidx1-orderby-limit-01</output-dir>
-            </compilation-unit>
-        </test-case>
-        <test-case FilePath="index-leftouterjoin">
-            <compilation-unit name="probe-pidx-with-join-btree-pidx1-orderby-limit-02">
-                <output-dir compare="Text">probe-pidx-with-join-btree-pidx1-orderby-limit-02</output-dir>
-            </compilation-unit>
-        </test-case>
-        <test-case FilePath="index-leftouterjoin">
                 <compilation-unit name="probe-pidx-with-join-btree-sidx1-orderby-limit-01">
                     <output-dir compare="Text">probe-pidx-with-join-btree-sidx1-orderby-limit-01</output-dir>
                 </compilation-unit>
@@ -6918,6 +6918,81 @@
         <test-case FilePath="index-leftouterjoin">
                 <compilation-unit name="probe-pidx-with-join-btree-sidx2-orderby-limit-01">
                     <output-dir compare="Text">probe-pidx-with-join-btree-sidx2-orderby-limit-01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-pidx-with-join-btree-sidx3-indexonly-plan">
+                    <output-dir compare="Text">probe-pidx-with-join-btree-sidx3-indexonly-plan</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-pidx-with-join-btree-sidx3-indexonly-plan-limit_01">
+                    <output-dir compare="Text">probe-pidx-with-join-btree-sidx3-indexonly-plan-limit_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-pidx-with-join-btree-sidx3-indexonly-plan-limit-orderby_01">
+                    <output-dir compare="Text">probe-pidx-with-join-btree-sidx3-indexonly-plan-limit-orderby_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-indexonly-plan-with-join-btree-pidx1">
+                    <output-dir compare="Text">probe-sidx-btree-indexonly-plan-with-join-btree-pidx1</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-indexonly-plan-with-join-btree-pidx1-limit_01">
+                    <output-dir compare="Text">probe-sidx-btree-indexonly-plan-with-join-btree-pidx1-limit_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-indexonly-plan-with-join-btree-pidx1-limit-orderby_01">
+                    <output-dir compare="Text">probe-sidx-btree-indexonly-plan-with-join-btree-pidx1-limit-orderby_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-indexonly-plan-with-join-btree-sidx1-indexonly-plan">
+                    <output-dir compare="Text">probe-sidx-btree-indexonly-plan-with-join-btree-sidx1-indexonly-plan</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-indexonly-plan-with-join-btree-sidx1-indexonly-plan-limit_01">
+                    <output-dir compare="Text">probe-sidx-btree-indexonly-plan-with-join-btree-sidx1-indexonly-plan-limit_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-indexonly-plan-with-join-btree-sidx1-indexonly-plan-limit-orderby_01">
+                    <output-dir compare="Text">probe-sidx-btree-indexonly-plan-with-join-btree-sidx1-indexonly-plan-limit-orderby_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-non-indexonly-plan-with-join-btree-pidx1">
+                    <output-dir compare="Text">probe-sidx-btree-non-indexonly-plan-with-join-btree-pidx1</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-non-indexonly-plan-with-join-btree-pidx1-limit_01">
+                    <output-dir compare="Text">probe-sidx-btree-non-indexonly-plan-with-join-btree-pidx1-limit_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-non-indexonly-plan-with-join-btree-pidx1-limit-orderby_01">
+                    <output-dir compare="Text">probe-sidx-btree-non-indexonly-plan-with-join-btree-pidx1-limit-orderby_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-non-indexonly-plan-with-join-btree-sidx1-indexonly-plan">
+                    <output-dir compare="Text">probe-sidx-btree-non-indexonly-plan-with-join-btree-sidx1-indexonly-plan</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-non-indexonly-plan-with-join-btree-sidx1-indexonly-plan-limit_01">
+                    <output-dir compare="Text">probe-sidx-btree-non-indexonly-plan-with-join-btree-sidx1-indexonly-plan-limit_01</output-dir>
+                </compilation-unit>
+        </test-case>
+        <test-case FilePath="index-leftouterjoin">
+                <compilation-unit name="probe-sidx-btree-non-indexonly-plan-with-join-btree-sidx1-indexonly-plan-limit-orderby_01">
+                    <output-dir compare="Text">probe-sidx-btree-non-indexonly-plan-with-join-btree-sidx1-indexonly-plan-limit-orderby_01</output-dir>
                 </compilation-unit>
         </test-case>
     </test-group>

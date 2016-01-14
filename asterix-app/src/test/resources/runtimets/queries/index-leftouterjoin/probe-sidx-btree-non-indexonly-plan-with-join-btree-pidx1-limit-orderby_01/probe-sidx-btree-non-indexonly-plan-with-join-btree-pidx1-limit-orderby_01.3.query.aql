@@ -18,23 +18,30 @@
  */
 
 /*
- * Description  : Test that left-outer-join may use two available indexes, one for primary index in prob subtree and
- *                another for primary index in index subtree.
+ * Description  : Test that left-outer-join may use an available primary index in the index subtree.
+ *                In the probe side, this is a non index-only plan since a secondary index-search can't cover
+ *                all fields that are required for the plan.
+ *                We also have a LIMIT. However, none of index-searches can generate the final results since there are
+ *                additional predicates that can't be replaced by an index-search.
+ *                Thus, a LIMIT can't be applied on an index-search.
+ *                Also, there is an order-by and its attribute is consistent to the first index attribute.
+ *                However, since lIMIT can't be applied on an index-search,
+ *                this order-by doesn't have any effect on index-search.
  * Expected Res : Success
  */
-
 
 use dataverse test;
 
 count(
 for $t1 in dataset('TweetMessages')
-where $t1.tweetid < int64("10")
+where $t1.countA > 0 and $t1.countB < 10000
+order by $t1.countA
+limit 3
 return {
 "tweetid1": $t1.tweetid,
 "count1":$t1.countA,
 "t2info": for $t2 in dataset('TweetMessages')
-                        where $t1.tweetid /* +indexnl */= $t2.tweetid
+                        where $t1.countA /* +indexnl */= $t2.tweetid
                         return {"tweetid2": $t2.tweetid,
                                 "count2": $t2.countB}
-}
-);
+});

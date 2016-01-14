@@ -110,9 +110,9 @@ public class OptimizableOperatorSubTree {
         reset();
         rootRef = subTreeOpRef;
         root = subTreeOpRef.getValue();
-        boolean isIndexOnlyOrReducingTheNumberOfSelectPlan = false;
         // Examine the op's children to match the expected patterns.
         AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+        Mutable<ILogicalOperator> dataSourceOpRef = subTreeOpRef;
 
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
         do {
@@ -121,19 +121,28 @@ public class OptimizableOperatorSubTree {
                 limitRef = subTreeOpRef;
                 subTreeOpRef = subTreeOp.getInputs().get(0);
                 subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+                //                subTreeOp = (AbstractLogicalOperator) subTreeOp.getInputs().get(0).getValue();
             }
+            // Match (assign | unnest)+.
+            while (subTreeOp.getOperatorTag() == LogicalOperatorTag.ASSIGN
+                    || subTreeOp.getOperatorTag() == LogicalOperatorTag.UNNEST) {
+                assignsAndUnnestsRefs.add(subTreeOpRef);
+                assignsAndUnnests.add(subTreeOp);
+
+                subTreeOpRef = subTreeOp.getInputs().get(0);
+                subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+            };
             // Keep Order by information if one is present
             if (subTreeOp.getOperatorTag() == LogicalOperatorTag.ORDER) {
                 OrderOperator orderOp = (OrderOperator) subTreeOp;
                 subTreeOrderByExpr = orderOp.getOrderExpressions();
                 subTreeOpRef = subTreeOp.getInputs().get(0);
                 subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+                //                subTreeOp = (AbstractLogicalOperator) subTreeOp.getInputs().get(0).getValue();
             }
-
             // If this is an index-only plan or reducing the number of select plan, then we have union operator.
             if (subTreeOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
-                isIndexOnlyOrReducingTheNumberOfSelectPlan = true;
-                // If this plan has a union operator and turns out to be non-index only plan,
+                // If this plan has a UNIONALL operator and turns out to be a non-index only plan,
                 // then we try to initialize data source and return to the caller.
                 if (!initFromIndexOnlyOrReducingTheNumberOfTheSelectPlan(subTreeOpRef, context)) {
                     return initializeDataSource(subTreeOpRef);
@@ -142,7 +151,6 @@ public class OptimizableOperatorSubTree {
                     return true;
                 }
             }
-
             // Skip select operator.
             if (subTreeOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
                 selectRefs.add(subTreeOpRef);

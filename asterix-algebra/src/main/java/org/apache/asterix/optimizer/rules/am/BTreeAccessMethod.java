@@ -66,9 +66,11 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExternalDataLookupOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestMapOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.ProjectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 
 /**
  * Class for helping rewrite rules to choose and apply BTree indexes.
@@ -467,21 +469,124 @@ public class BTreeAccessMethod implements IAccessMethod {
         }
 
         if (isLeftOuterJoin && hasGroupBy) {
+
+            ScalarFunctionCallExpression LOJFuncExprs = analysisCtx.getLOJIsNullFuncInGroupBy();
+            List<LogicalVariable> LOJNullVariables = new ArrayList<LogicalVariable>();
+            LOJFuncExprs.getUsedVariables(LOJNullVariables);
+            boolean oldVarExist = false;
+            if (LOJNullVariables.size() > 0) {
+                oldVarExist = true;
+            }
+
             //reset the null place holder variable
             AccessMethodUtils.resetLOJNullPlaceholderVariableInGroupByOp(analysisCtx, newNullPlaceHolderVar, context);
 
             // For the index-only plan or reducing the number of select operations plan,
             // if newNullPlaceHolderVar is not in the variable map of the union operator,
             // we need to add this variable to the map.
+            // Also, we need to delete replaced variables in the map if it was used only in the group-by operator.
             if (primaryIndexUnnestOp.getOperatorTag() == LogicalOperatorTag.UNIONALL) {
+
+                // First, check whether the old variable can be deleted.
+                // If it is used somewhere else except the group-by operator, we can't delete it since we need to propagate it.
+                boolean oldVarCanBeDeleted = true;
+                if (oldVarExist) {
+                    List<LogicalVariable> usedVars = new ArrayList<LogicalVariable>();
+                    for (int i = 0; i < aboveJoinRefs.size(); i++) {
+                        usedVars.clear();
+                        ILogicalOperator lOp = aboveJoinRefs.get(i).getValue();
+                        VariableUtilities.getUsedVariables(lOp, usedVars);
+                        if (usedVars.containsAll(LOJNullVariables) && lOp.getOperatorTag() != LogicalOperatorTag.GROUP) {
+                            oldVarCanBeDeleted = false;
+                            break;
+                        }
+                    }
+                }
+
                 List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> varMap = ((UnionAllOperator) primaryIndexUnnestOp)
                         .getVariableMappings();
-                varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(newNullPlaceHolderVar,
-                        newNullPlaceHolderVar, newNullPlaceHolderVar));
-                UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
-                unionAllOp.getInputs().addAll(((UnionAllOperator) primaryIndexUnnestOp).getInputs());
-                context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
-                primaryIndexUnnestOp = unionAllOp;
+                boolean varFoundInTheMap = false;
+
+                if (oldVarExist && oldVarCanBeDeleted) {
+                    // Delete old variables from the map
+                    for (Iterator<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> it = varMap.iterator(); it
+                            .hasNext();) {
+                        Triple<LogicalVariable, LogicalVariable, LogicalVariable> tripleVars = it.next();
+                        if (tripleVars.first.equals(LOJNullVariables.get(0))
+                                || tripleVars.second.equals(LOJNullVariables.get(0))
+                                || tripleVars.third.equals(LOJNullVariables.get(0))) {
+                            it.remove();
+                        }
+                    }
+                }
+
+                // Add new variables to the map
+                for (int i = 0; i < varMap.size(); i++) {
+                    Triple<LogicalVariable, LogicalVariable, LogicalVariable> tripleVars = varMap.get(i);
+                    if (tripleVars.first.equals(newNullPlaceHolderVar)
+                            || tripleVars.second.equals(newNullPlaceHolderVar)
+                            || tripleVars.third.equals(newNullPlaceHolderVar)) {
+                        varFoundInTheMap = true;
+                        break;
+                    }
+                }
+
+                if (!varFoundInTheMap) {
+                    varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(newNullPlaceHolderVar,
+                            newNullPlaceHolderVar, newNullPlaceHolderVar));
+                }
+
+                // When changes in the variable mapping are happened, we need to adjust Project operator before UnionAll operators.
+                if (!varFoundInTheMap || (oldVarExist && oldVarCanBeDeleted)) {
+                    UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
+                    ProjectOperator leftProjectBeforeUnionAllOp = null;
+                    ProjectOperator rightProjectBeforeUnionAllOp = null;
+
+                    // Change the Project before UNIONALL operator, too.
+                    int projectOpCount = 0;
+                    for (int i = 0; i < primaryIndexUnnestOp.getInputs().size(); i++) {
+                        ILogicalOperator op = primaryIndexUnnestOp.getInputs().get(i).getValue();
+                        if (op.getOperatorTag() == LogicalOperatorTag.PROJECT) {
+                            projectOpCount++;
+                        }
+                    }
+
+                    if (projectOpCount == primaryIndexUnnestOp.getInputs().size()) {
+                        // Add PROJECT operator before UNION operator to unify the variables from each branch
+                        List<LogicalVariable> leftVars = new ArrayList<LogicalVariable>();
+                        List<LogicalVariable> rightVars = new ArrayList<LogicalVariable>();
+
+                        ILogicalOperator leftOp = primaryIndexUnnestOp.getInputs().get(0).getValue();
+                        ILogicalOperator rightOp = primaryIndexUnnestOp.getInputs().get(1).getValue();
+
+                        // Create variables list for PROJECT operators
+                        for (Iterator<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> it = varMap.iterator(); it
+                                .hasNext();) {
+                            Triple<LogicalVariable, LogicalVariable, LogicalVariable> itVars = it.next();
+                            // Variables from the left branch
+                            leftVars.add(itVars.first);
+                            // Variables from the right branch
+                            rightVars.add(itVars.second);
+                        }
+
+                        // PROJECT operator for the left side
+                        leftProjectBeforeUnionAllOp = new ProjectOperator(leftVars);
+                        leftProjectBeforeUnionAllOp.getInputs().addAll(leftOp.getInputs());
+                        leftProjectBeforeUnionAllOp.setExecutionMode(ExecutionMode.PARTITIONED);
+                        context.computeAndSetTypeEnvironmentForOperator(leftProjectBeforeUnionAllOp);
+
+                        // PROJECT operator for the right side
+                        rightProjectBeforeUnionAllOp = new ProjectOperator(rightVars);
+                        rightProjectBeforeUnionAllOp.getInputs().addAll(rightOp.getInputs());
+                        rightProjectBeforeUnionAllOp.setExecutionMode(ExecutionMode.PARTITIONED);
+                        context.computeAndSetTypeEnvironmentForOperator(rightProjectBeforeUnionAllOp);
+                    }
+
+                    unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(leftProjectBeforeUnionAllOp));
+                    unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(rightProjectBeforeUnionAllOp));
+                    context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
+                    primaryIndexUnnestOp = unionAllOp;
+                }
             }
         }
 

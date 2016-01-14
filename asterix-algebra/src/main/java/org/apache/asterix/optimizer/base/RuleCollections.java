@@ -115,7 +115,7 @@ import org.apache.hyracks.algebricks.rewriter.rules.PushSubplanIntoGroupByRule;
 import org.apache.hyracks.algebricks.rewriter.rules.PushSubplanWithAggregateDownThroughProductRule;
 import org.apache.hyracks.algebricks.rewriter.rules.PushUnnestDownThroughUnionRule;
 import org.apache.hyracks.algebricks.rewriter.rules.ReinferAllTypesRule;
-import org.apache.hyracks.algebricks.rewriter.rules.RemoveRedundantGroupByDecorVars;
+import org.apache.hyracks.algebricks.rewriter.rules.RemoveRedundantGroupByDecorVarsRule;
 import org.apache.hyracks.algebricks.rewriter.rules.RemoveRedundantVariablesRule;
 import org.apache.hyracks.algebricks.rewriter.rules.RemoveUnnecessarySortMergeExchange;
 import org.apache.hyracks.algebricks.rewriter.rules.RemoveUnusedAssignAndAggregateRule;
@@ -244,7 +244,7 @@ public final class RuleCollections {
         consolidation.add(new IntroduceAggregateCombinerRule());
         consolidation.add(new CountVarToCountOneRule());
         consolidation.add(new RemoveUnusedAssignAndAggregateRule());
-        consolidation.add(new RemoveRedundantGroupByDecorVars());
+        consolidation.add(new RemoveRedundantGroupByDecorVarsRule());
         consolidation.add(new NestedSubplanToJoinRule());
         //unionRule => PushUnnestDownUnion => RemoveRedundantListifyRule cause these rules are correlated
         consolidation.add(new IntroduceUnionRule());

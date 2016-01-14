@@ -18,8 +18,14 @@
  */
 
 /*
- * Description  : Test that left-outer-join may use two available indexes, one for primary index in prob subtree and
- *                another for primary index in index subtree.
+ * Description  : Test that left-outer-join may use an available secondary index in the index subtree.
+ *                In the probe side, this is an index-only plan since a secondary index-search will fetch all fields that
+ *                are required for the plan.
+ *                In the inner branch, this is also an index-only plan since a secondary index-search will fetch all fields that
+ *                are required for the branch. All other variables will be propagated from the outer branch.
+ *                We also have a LIMIT. Each partition in the secondary index of the outer branch should only generate
+ *                the number of tuples that are equivalent to the LIMIT number. We call this "parameterizing the LIMIT".
+ *                And the given order by attribute is consistent to the first index attribute.
  * Expected Res : Success
  */
 

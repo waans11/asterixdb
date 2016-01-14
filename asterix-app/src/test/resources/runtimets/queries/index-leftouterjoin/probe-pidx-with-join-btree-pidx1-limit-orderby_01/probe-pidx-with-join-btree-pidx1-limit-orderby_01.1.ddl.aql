@@ -20,6 +20,9 @@
 /*
  * Description  : Test that left-outer-join may use two available indexes, one for primary index in prob subtree and
  *                another for primary index in index subtree.
+ *                We also have a LIMIT. Each partition in the primary index of the outer branch should only generate
+ *                the number of tuples that are equivalent to the LIMIT number. We call this "parameterizing the LIMIT".
+ *                And the given order by attribute is consistent to the index attribute.
  * Expected Res : Success
  */
 
