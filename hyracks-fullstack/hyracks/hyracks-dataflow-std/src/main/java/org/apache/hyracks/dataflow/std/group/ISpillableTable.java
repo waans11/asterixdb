@@ -21,9 +21,19 @@ package org.apache.hyracks.dataflow.std.group;
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 
 public interface ISpillableTable {
+
+    /**
+     * Result Type for an insertion.
+     */
+    public static enum InsertResultType {
+        SUCCESS,
+        FAIL,
+        // If a memory budget is given and if an insertion is successful,
+        // but exceeds the given budget, we return this code.
+        SUCCESS_BUT_EXCEEDS_BUDGET
+    }
 
     /**
      * Release all the storage resources.
@@ -45,7 +55,7 @@ public interface ISpillableTable {
      * @return
      * @throws HyracksDataException
      */
-    boolean insert(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException;
+    InsertResultType insert(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException;
 
     /**
      * Flush the certain partition to writer, and return the numOfTuples that have been flushed

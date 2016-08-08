@@ -27,6 +27,7 @@ import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.io.RunFileWriter;
 import org.apache.hyracks.dataflow.std.group.AggregateType;
 import org.apache.hyracks.dataflow.std.group.ISpillableTable;
+import org.apache.hyracks.dataflow.std.group.ISpillableTable.InsertResultType;
 
 public class ExternalHashGroupBy {
 
@@ -50,7 +51,8 @@ public class ExternalHashGroupBy {
         accessor.reset(buffer);
         int tupleCount = accessor.getTupleCount();
         for (int i = 0; i < tupleCount; i++) {
-            if (!table.insert(accessor, i)) {
+            InsertResultType result = table.insert(accessor, i);
+            if (result == InsertResultType.FAIL || result == InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET) {
                 do {
                     int partition = table.findVictimPartition(accessor, i);
                     if (partition < 0) {
@@ -58,7 +60,13 @@ public class ExternalHashGroupBy {
                     }
                     RunFileWriter writer = getPartitionWriterOrCreateOneIfNotExist(partition);
                     flushPartitionToRun(partition, writer);
-                } while (!table.insert(accessor, i));
+                    if (result == InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET) {
+                        // If the result type is SUCCESS_BUT_EXCEEDS_BUDGET,
+                        // then we don't need to re-insert this tuple.
+                        break;
+                    }
+                    result = table.insert(accessor, i);
+                } while (result != InsertResultType.SUCCESS);
             }
         }
     }

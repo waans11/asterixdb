@@ -140,7 +140,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             }
 
             @Override
-            public boolean insert(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException {
+            public InsertResultType insert(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException {
                 int entryInHashTable = tpc.partition(accessor, tIndex, tableSize);
                 for (int i = 0; i < hashTableForTuplePointer.getTupleCount(entryInHashTable); i++) {
                     hashTableForTuplePointer.getTuplePointer(entryInHashTable, i, pointer);
@@ -148,24 +148,30 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                     int c = ftpcInputCompareToAggregate.compare(accessor, tIndex, bufferAccessor);
                     if (c == 0) {
                         aggregateExistingTuple(accessor, tIndex, bufferAccessor, pointer.getTupleIndex());
-                        return true;
+                        return InsertResultType.SUCCESS;
                     }
                 }
 
                 return insertNewAggregateEntry(entryInHashTable, accessor, tIndex);
             }
 
-            private boolean insertNewAggregateEntry(int entryInHashTable, IFrameTupleAccessor accessor, int tIndex)
+            private InsertResultType insertNewAggregateEntry(int entryInHashTable, IFrameTupleAccessor accessor,
+                    int tIndex)
                     throws HyracksDataException {
                 initStateTupleBuilder(accessor, tIndex);
                 int pid = getPartition(entryInHashTable);
 
                 if (!bufferManager.insertTuple(pid, stateTupleBuilder.getByteArray(),
                         stateTupleBuilder.getFieldEndOffsets(), 0, stateTupleBuilder.getSize(), pointer)) {
-                    return false;
+                    return InsertResultType.FAIL;
                 }
                 hashTableForTuplePointer.insert(entryInHashTable, pointer);
-                return true;
+                // If the number of frames allocated to the data table and hash table exceeds the frame limit,
+                // we need to spill a partition to the disk to make a space.
+                if (bufferManager.getFrameCount() + hashTableForTuplePointer.getFrameCount() >= framesLimit) {
+                    return InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET;
+                }
+                return InsertResultType.SUCCESS;
             }
 
             private void initStateTupleBuilder(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException {

@@ -40,14 +40,22 @@ public class PreferToSpillFullyOccupiedFramePolicy {
     }
 
     public int selectVictimPartition(int failedToInsertPartition) {
-        // To avoid flush the half-full frame, it's better to spill itself.
+        // To avoid flush a half-full frame, it's better to spill itself.
         if (bufferManager.getNumTuples(failedToInsertPartition) > 0) {
             return failedToInsertPartition;
         }
+        // Try to find a victim partition from the already spilled partitions.
+        // The reason is that we want to keep in-memory partition (not spilled to the disk yet) as long as possible
+        // to reduce the overhead of writing to and reading from disk.
         int partitionToSpill = findSpilledPartitionWithMaxMemoryUsage();
         int maxToSpillPartSize = 0;
-        // if we couldn't find the already spilled partition, or it is too small to flush that one,
+        // If we couldn't find an already spilled partition, or it is too small to flush that one,
         // try to flush an in memory partition.
+        //
+        // Note: right now, the createAtMostOneFrameForSpilledPartitionConstrain we are using for a spilled partition
+        // enforces that the number of maximum frame for a spilled partition is 1. So, the following first if statement
+        // is always true. i.e. we need to spill an in-memory partition anyway.
+        // But, when we will have another policy, the if statement will make more sense.
         if (partitionToSpill < 0
                 || (maxToSpillPartSize = bufferManager.getPhysicalSize(partitionToSpill)) == minFrameSize) {
             int partitionInMem = findInMemPartitionWithMaxMemoryUsage();
@@ -81,7 +89,7 @@ public class PreferToSpillFullyOccupiedFramePolicy {
 
     /**
      * Create an constrain for the already spilled partition that it can only use at most one frame.
-     * 
+     *
      * @param spillStatus
      * @return
      */

@@ -20,6 +20,7 @@ package org.apache.asterix.api.common;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.math.BigInteger;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
@@ -247,6 +248,27 @@ public class APIFramework {
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesExternalSort(sortFrameLimit);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesExternalGroupBy(groupFrameLimit);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesForJoin(joinFrameLimit);
+
+        // To set the number of hash values (slots) in external group by hash table,
+        // we try to get a prime number that is ranged between 80% * ceil(groupFrameLimit * framesize / 8) and
+        // 90% * ceil(groupFrameLimit * framesize / 8).
+        // Here, we assume that each hash entry pointer occupies 8 bytes (frame, offset).
+        // So, the number of hash entry pointer in a frame is ceil(framesize / 8).
+        // The reason why we set the limit as 90% is that if it occupies 100% capacity,
+        // then there is no space for saving actual tuples.
+        int hashEntryMinSize = (int) Math.ceil(0.8 * groupFrameLimit * frameSize / 8);
+        int hashEntryMaxSize = (int) Math.ceil(0.9 * groupFrameLimit * frameSize / 8);
+        BigInteger tableSizePrimeNumber = BigInteger.valueOf(hashEntryMinSize).nextProbablePrime();
+        double capacityOccupationRatio = 0.8;
+        // If this number is bigger than 90%, then we try to find a prime number that fits within the budget.
+        while (tableSizePrimeNumber.longValue() > hashEntryMaxSize) {
+            // Try to reduce the ratio by 2% and try to get a prime number again.
+            capacityOccupationRatio -= 0.02;
+            hashEntryMinSize = (int) Math.ceil(capacityOccupationRatio * groupFrameLimit * frameSize / 8);
+            tableSizePrimeNumber = BigInteger.valueOf(hashEntryMinSize).nextProbablePrime();
+        }
+        OptimizationConfUtil.getPhysicalOptimizationConfig()
+                .setExternalGroupByTableSize(tableSizePrimeNumber.intValue());
 
         HeuristicCompilerFactoryBuilder builder =
                 new HeuristicCompilerFactoryBuilder(AqlOptimizationContextFactory.INSTANCE);
