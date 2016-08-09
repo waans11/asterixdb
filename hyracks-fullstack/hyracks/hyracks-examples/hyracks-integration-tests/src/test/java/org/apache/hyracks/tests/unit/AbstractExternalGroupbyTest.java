@@ -28,9 +28,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
@@ -56,6 +53,8 @@ import org.apache.hyracks.dataflow.std.group.aggregators.CountFieldAggregatorFac
 import org.apache.hyracks.dataflow.std.group.aggregators.IntSumFieldAggregatorFactory;
 import org.apache.hyracks.dataflow.std.group.aggregators.MultiFieldsAggregatorFactory;
 import org.apache.hyracks.test.support.TestUtils;
+import org.junit.Assert;
+import org.junit.Test;
 
 public abstract class AbstractExternalGroupbyTest {
 
@@ -177,7 +176,9 @@ public abstract class AbstractExternalGroupbyTest {
     @Test
     public void testBuildAndMergeNormalFrameInMem() throws HyracksDataException {
         int tableSize = 1001;
-        int numFrames = 3;
+        // With the above table size, there can be 1001 * 8 / 256 (= 32) number of header frames in Hash Table.
+        // We need to make sure that we have enough number of frames to pass the number of frame usage check.
+        int numFrames = 32;
         int frameSize = 256;
         int minDataSize = frameSize;
         int minRecordSize = 20;
@@ -188,7 +189,9 @@ public abstract class AbstractExternalGroupbyTest {
     @Test
     public void testBuildAndMergeNormalFrameSpill() throws HyracksDataException {
         int tableSize = 1001;
-        int numFrames = 3;
+        // With the above table size, there can be 1001 * 8 / 256 (= 32) number of header frames in Hash Table.
+        // We need to make sure that we have enough number of frames to pass the number of frame usage check.
+        int numFrames = 32;
         int frameSize = 256;
         int minDataSize = frameSize * 4;
         int minRecordSize = 20;
@@ -199,7 +202,9 @@ public abstract class AbstractExternalGroupbyTest {
     @Test
     public void testBuildAndMergeBigObj() throws HyracksDataException {
         int tableSize = 1001;
-        int numFrames = 4;
+        // With the above table size, there can be 1001 * 8 / 256 (= 32) number of header frames in Hash Table.
+        // We need to make sure that we have enough number of frames to pass the number of frame usage check.
+        int numFrames = 32;
         int frameSize = 256;
         int minDataSize = frameSize * 5;
         int minRecordSize = 20;

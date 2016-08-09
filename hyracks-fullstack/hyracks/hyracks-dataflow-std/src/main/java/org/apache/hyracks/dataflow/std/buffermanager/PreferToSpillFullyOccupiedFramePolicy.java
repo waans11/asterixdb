@@ -57,7 +57,7 @@ public class PreferToSpillFullyOccupiedFramePolicy {
         // is always true. i.e. we need to spill an in-memory partition anyway.
         // But, when we will have another policy, the if statement will make more sense.
         if (partitionToSpill < 0
-                || (maxToSpillPartSize = bufferManager.getPhysicalSize(partitionToSpill)) == minFrameSize) {
+                || (maxToSpillPartSize = bufferManager.getPhysicalSize(partitionToSpill)) <= minFrameSize) {
             int partitionInMem = findInMemPartitionWithMaxMemoryUsage();
             if (partitionInMem >= 0 && bufferManager.getPhysicalSize(partitionInMem) > maxToSpillPartSize) {
                 partitionToSpill = partitionInMem;

@@ -62,10 +62,18 @@ public class ExternalHashGroupBy {
                     flushPartitionToRun(partition, writer);
                     if (result == InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET) {
                         // If the result type is SUCCESS_BUT_EXCEEDS_BUDGET,
-                        // then we don't need to re-insert this tuple.
-                        break;
+                        // then we don't need to re-insert this tuple since the insertion has succeeded.
+                        // The only issue was that it has exceeded the budget slightly.
+                        // Now, since a partition is spilled to the disk, we check the frame usage again.
+                        if (!table.isUsedNumFramesExceedBudget()) {
+                            // If the table conforms to the budget, we can stop here.
+                            // If not, we continue to spill partitions.
+                            result = InsertResultType.SUCCESS;
+                        }
+                    } else {
+                        // FAIL case - try to insert again
+                        result = table.insert(accessor, i);
                     }
-                    result = table.insert(accessor, i);
                 } while (result != InsertResultType.SUCCESS);
             }
         }

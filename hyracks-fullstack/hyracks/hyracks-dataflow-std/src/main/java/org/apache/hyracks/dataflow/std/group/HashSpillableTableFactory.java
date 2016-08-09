@@ -62,7 +62,8 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             final INormalizedKeyComputer firstKeyNormalizerFactory, IAggregatorDescriptorFactory aggregateFactory,
             RecordDescriptor inRecordDescriptor, RecordDescriptor outRecordDescriptor, final int framesLimit,
             final int seed) throws HyracksDataException {
-        if (framesLimit < 2) {
+        if (framesLimit < 4) {
+            // For HashTable, we need to have at least two frames (one for header and one for content)
             throw new HyracksDataException("The frame limit is too small to partition the data");
         }
         final int tableSize = suggestTableSize;
@@ -168,10 +169,11 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 hashTableForTuplePointer.insert(entryInHashTable, pointer);
                 // If the number of frames allocated to the data table and hash table exceeds the frame limit,
                 // we need to spill a partition to the disk to make a space.
-                if (bufferManager.getFrameCount() + hashTableForTuplePointer.getFrameCount() >= framesLimit) {
+                if (isUsedNumFramesExceedBudget()) {
                     return InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET;
+                } else {
+                    return InsertResultType.SUCCESS;
                 }
-                return InsertResultType.SUCCESS;
             }
 
             private void initStateTupleBuilder(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException {
@@ -236,11 +238,26 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             }
 
             @Override
+            public int getNumFrames() {
+                return bufferManager.getFrameCount() + hashTableForTuplePointer.getFrameCount();
+            }
+
+            @Override
+            public boolean isUsedNumFramesExceedBudget() {
+                if (getNumFrames() <= framesLimit) {
+                    return false;
+                } else {
+                    return true;
+                }
+            }
+
+            @Override
             public int findVictimPartition(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException {
                 int entryInHashTable = tpc.partition(accessor, tIndex, tableSize);
                 int partition = getPartition(entryInHashTable);
                 return spillPolicy.selectVictimPartition(partition);
             }
+
         };
     }
 
