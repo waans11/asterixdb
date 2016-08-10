@@ -31,8 +31,12 @@ public class PhysicalOptimizationConfig {
     private static final String FUDGE_FACTOR = "FUDGE_FACTOR";
     private static final String MAX_RECORDS_PER_FRAME = "MAX_RECORDS_PER_FRAME";
 
+    // Not used anywhere
     private static final String DEFAULT_HASH_GROUP_TABLE_SIZE = "DEFAULT_HASH_GROUP_TABLE_SIZE";
+
     private static final String DEFAULT_EXTERNAL_GROUP_TABLE_SIZE = "DEFAULT_EXTERNAL_GROUP_TABLE_SIZE";
+
+    // Not used anywhere
     private static final String DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE = "DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE";
 
     private Properties properties = new Properties();
@@ -69,6 +73,7 @@ public class PhysicalOptimizationConfig {
         return getInt(MAX_RECORDS_PER_FRAME, 512);
     }
 
+    // not called from anywhere
     public void setMaxRecordsPerFrame(int maxRecords) {
         setInt(MAX_RECORDS_PER_FRAME, maxRecords);
     }
@@ -78,6 +83,7 @@ public class PhysicalOptimizationConfig {
         return getInt(MAX_FRAMES_FOR_JOIN_LEFT_INPUT, (int) (140L * 1024 * MB / frameSize));
     }
 
+    // not called from anywhere
     public void setMaxFramesForJoinLeftInput(int frameLimit) {
         setInt(MAX_FRAMES_FOR_JOIN_LEFT_INPUT, frameLimit);
     }
@@ -109,10 +115,12 @@ public class PhysicalOptimizationConfig {
         setInt(MAX_FRAMES_EXTERNAL_SORT, frameLimit);
     }
 
+    // not called from anywhere
     public int getHashGroupByTableSize() {
         return getInt(DEFAULT_HASH_GROUP_TABLE_SIZE, 10485767);
     }
 
+    // not called from anywhere
     public void setHashGroupByTableSize(int tableSize) {
         setInt(DEFAULT_HASH_GROUP_TABLE_SIZE, tableSize);
     }
@@ -121,14 +129,17 @@ public class PhysicalOptimizationConfig {
         return getInt(DEFAULT_EXTERNAL_GROUP_TABLE_SIZE, 10485767);
     }
 
+    // not called from anywhere
     public void setExternalGroupByTableSize(int tableSize) {
         setInt(DEFAULT_EXTERNAL_GROUP_TABLE_SIZE, tableSize);
     }
 
+    // not called from anywhere
     public int getInMemHashJoinTableSize() {
         return getInt(DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE, 10485767);
     }
 
+    // not called from anywhere
     public void setInMemHashJoinTableSize(int tableSize) {
         setInt(DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE, tableSize);
     }

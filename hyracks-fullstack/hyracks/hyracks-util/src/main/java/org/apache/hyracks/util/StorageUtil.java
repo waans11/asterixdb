@@ -48,7 +48,7 @@ public class StorageUtil {
             case TERABYTE:
                 return size * TB;
             default:
-                throw new IllegalStateException("Unsupported unti: " + unit);
+                throw new IllegalStateException("Unsupported unit: " + unit);
         }
     }
 
@@ -67,7 +67,7 @@ public class StorageUtil {
             case PETABYTE:
                 return size * PB;
             default:
-                throw new IllegalStateException("Unsupported unti: " + unit);
+                throw new IllegalStateException("Unsupported unit: " + unit);
         }
     }
 

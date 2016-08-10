@@ -340,6 +340,14 @@ public class SerializableHashTable implements ISerializableTable {
         return offset;
     }
 
+    public static int getUnitSize() {
+        return INT_SIZE;
+    }
+
+    public static int getSlotUnitSize() {
+        return INIT_ENTRY_SIZE;
+    }
+
     private static class IntSerDeBuffer {
 
         private byte[] bytes;

@@ -62,11 +62,18 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             final INormalizedKeyComputer firstKeyNormalizerFactory, IAggregatorDescriptorFactory aggregateFactory,
             RecordDescriptor inRecordDescriptor, RecordDescriptor outRecordDescriptor, final int framesLimit,
             final int seed) throws HyracksDataException {
-        if (framesLimit < 4) {
-            // For HashTable, we need to have at least two frames (one for header and one for content)
-            throw new HyracksDataException("The frame limit is too small to partition the data");
-        }
         final int tableSize = suggestTableSize;
+
+        // We check whether the number given by the configuration file is within the budget of groupFrameLimit.
+        int expectedByteSizeOfHashTableForGroupBy = SerializableHashTable.getUnitSize()
+                * (2 + SerializableHashTable.getSlotUnitSize() * 2) * tableSize;
+
+        // Case 1. For HashTable, we need to have at least two frames (one for header and one for content)
+        // Case 2. The expected hash table size is greater than the budget.
+        // In either case, we generate an exception and stops here.
+        if (framesLimit < 4 || expectedByteSizeOfHashTableForGroupBy >= ctx.getInitialFrameSize() * framesLimit) {
+            throw new HyracksDataException("The given frame limit is too small to partition the data.");
+        }
 
         final int[] intermediateResultKeys = new int[keyFields.length];
         for (int i = 0; i < keyFields.length; i++) {

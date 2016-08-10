@@ -244,10 +244,15 @@ public class APIFramework {
         int sortFrameLimit = (int) (compilerProperties.getSortMemorySize() / frameSize);
         int groupFrameLimit = (int) (compilerProperties.getGroupMemorySize() / frameSize);
         int joinFrameLimit = (int) (compilerProperties.getJoinMemorySize() / frameSize);
+        // the number of hash entries in the hash table of an external hash group-by operator
+        int groupHashTableSize = (int) (compilerProperties.getGroupHashTableSize());
         OptimizationConfUtil.getPhysicalOptimizationConfig().setFrameSize(frameSize);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesExternalSort(sortFrameLimit);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesExternalGroupBy(groupFrameLimit);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesForJoin(joinFrameLimit);
+        OptimizationConfUtil.getPhysicalOptimizationConfig().setExternalGroupByTableSize(groupHashTableSize);
+
+
 
         // To set the number of hash values (slots) in external group by hash table,
         // we try to get a prime number that is ranged between 80% * ceil(groupFrameLimit * framesize / 8) and
