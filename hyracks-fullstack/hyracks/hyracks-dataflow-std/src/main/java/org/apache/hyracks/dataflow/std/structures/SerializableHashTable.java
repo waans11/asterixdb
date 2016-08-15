@@ -256,8 +256,7 @@ public class SerializableHashTable implements ISerializableTable {
     }
 
     private void insertNonFirstTuple(IntSerDeBuffer header, int offsetInHeaderFrame, int contentFrameIndex,
-            int offsetInContentFrame,
-            TuplePointer pointer) throws HyracksDataException {
+            int offsetInContentFrame, TuplePointer pointer) throws HyracksDataException {
         int frameIndex = contentFrameIndex;
         IntSerDeBuffer contentFrame = contents.get(frameIndex);
         int entrySlotCapacity = contentFrame.getInt(offsetInContentFrame);
@@ -344,7 +343,7 @@ public class SerializableHashTable implements ISerializableTable {
         return INT_SIZE;
     }
 
-    public static int getSlotUnitSize() {
+    public static int getNumberOfEntryInSlot() {
         return INIT_ENTRY_SIZE;
     }
 

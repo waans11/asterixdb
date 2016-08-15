@@ -176,9 +176,9 @@ public abstract class AbstractExternalGroupbyTest {
     @Test
     public void testBuildAndMergeNormalFrameInMem() throws HyracksDataException {
         int tableSize = 1001;
-        // With the above table size, there can be 1001 * 8 / 256 (= 32) number of header frames in Hash Table.
+        // With the above table size, there can be 1001 * 40 / 256 (= 156) number of header frames in Hash Table.
         // We need to make sure that we have enough number of frames to pass the number of frame usage check.
-        int numFrames = 32;
+        int numFrames = 160;
         int frameSize = 256;
         int minDataSize = frameSize;
         int minRecordSize = 20;
@@ -189,9 +189,9 @@ public abstract class AbstractExternalGroupbyTest {
     @Test
     public void testBuildAndMergeNormalFrameSpill() throws HyracksDataException {
         int tableSize = 1001;
-        // With the above table size, there can be 1001 * 8 / 256 (= 32) number of header frames in Hash Table.
+        // With the above table size, there can be 1001 * 40 / 256 (= 156) number of header frames in Hash Table.
         // We need to make sure that we have enough number of frames to pass the number of frame usage check.
-        int numFrames = 32;
+        int numFrames = 160;
         int frameSize = 256;
         int minDataSize = frameSize * 4;
         int minRecordSize = 20;
@@ -202,9 +202,9 @@ public abstract class AbstractExternalGroupbyTest {
     @Test
     public void testBuildAndMergeBigObj() throws HyracksDataException {
         int tableSize = 1001;
-        // With the above table size, there can be 1001 * 8 / 256 (= 32) number of header frames in Hash Table.
+        // With the above table size, there can be 1001 * 8 / 256 (= 156) number of header frames in Hash Table.
         // We need to make sure that we have enough number of frames to pass the number of frame usage check.
-        int numFrames = 32;
+        int numFrames = 161;
         int frameSize = 256;
         int minDataSize = frameSize * 5;
         int minRecordSize = 20;

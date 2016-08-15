@@ -67,7 +67,7 @@ public class ExternalHashGroupBy {
                         // Now, since a partition is spilled to the disk, we check the frame usage again.
                         if (!table.isUsedNumFramesExceedBudget()) {
                             // If the table conforms to the budget, we can stop here.
-                            // If not, we continue to spill partitions.
+                            // If not, we continue to spill another partitions.
                             result = InsertResultType.SUCCESS;
                         }
                     } else {

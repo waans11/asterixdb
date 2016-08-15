@@ -64,13 +64,13 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             final int seed) throws HyracksDataException {
         final int tableSize = suggestTableSize;
 
-        // We check whether the number given by the configuration file is within the budget of groupFrameLimit.
+        // We check whether the given table size is within the budget of groupFrameLimit.
         int expectedByteSizeOfHashTableForGroupBy = SerializableHashTable.getUnitSize()
-                * (2 + SerializableHashTable.getSlotUnitSize() * 2) * tableSize;
+                * (2 + SerializableHashTable.getNumberOfEntryInSlot() * 2) * tableSize;
 
-        // Case 1. For HashTable, we need to have at least two frames (one for header and one for content)
-        // Case 2. The expected hash table size is greater than the budget.
-        // In either case, we generate an exception and stops here.
+        // For HashTable, we need to have at least two frames (one for header and one for content).
+        // For DataTable, we need to have at least two frames.
+        // The expected hash table size should be within the budget.
         if (framesLimit < 4 || expectedByteSizeOfHashTableForGroupBy >= ctx.getInitialFrameSize() * framesLimit) {
             throw new HyracksDataException("The given frame limit is too small to partition the data.");
         }
@@ -264,7 +264,6 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 int partition = getPartition(entryInHashTable);
                 return spillPolicy.selectVictimPartition(partition);
             }
-
         };
     }
 

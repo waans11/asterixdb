@@ -85,7 +85,6 @@ public interface ISpillableTable {
     /**
      * When the table is full, it will return a proper partition which will be the flush() candidate.
      * The {@code accessor} and {@code tIndex} given the reference to the tuple to be inserted.
-     *
      * @return the partition id of the victim, -1 if it failed to find a partition
      * @param accessor
      * @param tIndex

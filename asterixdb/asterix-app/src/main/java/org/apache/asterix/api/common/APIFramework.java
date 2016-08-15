@@ -211,8 +211,8 @@ public class APIFramework {
 
         org.apache.asterix.common.transactions.JobId asterixJobId = JobIdFactory.generateJobId();
         queryMetadataProvider.setJobId(asterixJobId);
-        ILangExpressionToPlanTranslator t =
-                translatorFactory.createExpressionToPlanTranslator(queryMetadataProvider, varCounter);
+        ILangExpressionToPlanTranslator t = translatorFactory.createExpressionToPlanTranslator(queryMetadataProvider,
+                varCounter);
 
         ILogicalPlan plan;
         // statement = null when it's a query
@@ -257,14 +257,14 @@ public class APIFramework {
 
         // Calculate the number of unique hash entries in the hash table using the given budget.
         double expectedhashTableNumberOfEntry = groupHashTableSize / (SerializableHashTable.getUnitSize() * 2
-                + SerializableHashTable.getUnitSize() * SerializableHashTable.getSlotUnitSize() * 2);
+                + SerializableHashTable.getUnitSize() * SerializableHashTable.getNumberOfEntryInSlot() * 2);
         // Find the smallest prime number that is greater than expectedhashTableNumberOFEntry.
         BigInteger tableSizePrimeNumber = BigInteger.valueOf((long) expectedhashTableNumberOfEntry).nextProbablePrime();
         OptimizationConfUtil.getPhysicalOptimizationConfig()
                 .setExternalGroupByTableSize(tableSizePrimeNumber.intValue());
 
-        HeuristicCompilerFactoryBuilder builder =
-                new HeuristicCompilerFactoryBuilder(AqlOptimizationContextFactory.INSTANCE);
+        HeuristicCompilerFactoryBuilder builder = new HeuristicCompilerFactoryBuilder(
+                AqlOptimizationContextFactory.INSTANCE);
         builder.setPhysicalOptimizationConfig(OptimizationConfUtil.getPhysicalOptimizationConfig());
         builder.setLogicalRewrites(buildDefaultLogicalRewrites());
         builder.setPhysicalRewrites(buildDefaultPhysicalRewrites());
@@ -346,8 +346,8 @@ public class APIFramework {
         builder.setTypeTraitProvider(format.getTypeTraitProvider());
         builder.setNormalizedKeyComputerFactoryProvider(format.getNormalizedKeyComputerFactoryProvider());
 
-        JobEventListenerFactory jobEventListenerFactory =
-                new JobEventListenerFactory(asterixJobId, queryMetadataProvider.isWriteTransaction());
+        JobEventListenerFactory jobEventListenerFactory = new JobEventListenerFactory(asterixJobId,
+                queryMetadataProvider.isWriteTransaction());
         JobSpecification spec = compiler.createJob(AsterixAppContextInfo.getInstance(), jobEventListenerFactory);
 
         if (conf.is(SessionConfig.OOB_HYRACKS_JOB)) {
