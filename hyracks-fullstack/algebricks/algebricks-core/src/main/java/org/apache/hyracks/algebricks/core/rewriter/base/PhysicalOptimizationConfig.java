@@ -115,12 +115,10 @@ public class PhysicalOptimizationConfig {
         setInt(MAX_FRAMES_EXTERNAL_SORT, frameLimit);
     }
 
-    // not called from anywhere
     public int getHashGroupByTableSize() {
         return getInt(DEFAULT_HASH_GROUP_TABLE_SIZE, 10485767);
     }
 
-    // not called from anywhere
     public void setHashGroupByTableSize(int tableSize) {
         setInt(DEFAULT_HASH_GROUP_TABLE_SIZE, tableSize);
     }
@@ -129,17 +127,14 @@ public class PhysicalOptimizationConfig {
         return getInt(DEFAULT_EXTERNAL_GROUP_TABLE_SIZE, 10485767);
     }
 
-    // not called from anywhere
     public void setExternalGroupByTableSize(int tableSize) {
         setInt(DEFAULT_EXTERNAL_GROUP_TABLE_SIZE, tableSize);
     }
 
-    // not called from anywhere
     public int getInMemHashJoinTableSize() {
         return getInt(DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE, 10485767);
     }
 
-    // not called from anywhere
     public void setInMemHashJoinTableSize(int tableSize) {
         setInt(DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE, tableSize);
     }

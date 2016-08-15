@@ -220,6 +220,28 @@
   </property>
 
   <property>
+    <name>compiler.groupmemory</name>
+    <value>32MB</value>
+    <description>The amount of memory in bytes given to group-by operations.
+      (Default = "33554432" // 32mb)
+    </description>
+  </property>
+
+  <property>
+    <name>compiler.grouphashtablememory</name>
+    <value>16MB</value>
+    <description>The size of hash table in an external hash group-by operation.
+      In an external hash group-by operation, a hash table is used to insert/traverse the group-by value
+      more efficiently using pointers. Actual Group-by value is stored in data table.
+      The number of possible entries in this table when there is no hash value collision will be approximately
+      the same as the given value divided by 40 bytes. (E.g., 16MB / 40 = 419,430).
+      Since we prefer to have a prime number for the hash table size, the number will be slightly larger.
+      Please make sure this size is not greater than compiler.groupmemory size.
+      (Default = "16MB")
+    </description>
+  </property>
+
+  <property>
     <name>compiler.framesize</name>
     <value>128KB</value>
     <description>The Hyracks frame size that the compiler configures per

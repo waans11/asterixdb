@@ -34,27 +34,14 @@ public class AsterixCompilerProperties extends AbstractAsterixProperties {
     private static final String COMPILER_PREGELIX_HOME = "compiler.pregelix.home";
     private static final String COMPILER_PREGELIX_HOME_DEFAULT = "~/pregelix";
 
-    // This option defines the number of possible hash entries in an external hash group-by operator.
-    // The defalut value: the smallest prime number that is greater than 500,000
-    // the space occupation of maximum hash entries: 8 bytes * 500,009 = 4,000,072 bytes = 4MB
-    // 32 bytes per slot * 500,009 = 15.3MB
-    // So, the default size of the groupmemory is 32MB, this default can take 20MB of space if hash key is
-    // well distributed.
-    private static final String COMPILER_EXTERNAL_GROUP_TABLE_SIZE_KEY = "compiler.grouphashtablesize";
-    private static final long COMPILER_EXTERNAL_GROUP_TABLE_SIZE_DEFAULT = 500009;
-
-    // If the maximum expected size of the group hash table exceeds the compiler.groupmemory,
-    // this options tells whether the hash table size can be adjusted or not.
-    // If so, we will use the specified ration in the config file to adjust table size.
-    // If not, an exception will be thrown and the query will not be executed.
-    private static final String COMPILER_EXTERNAL_GROUP_TABLE_SIZE_ADJUST_KEY = "compiler.adjustgrouphashtablesize";
-    private static final boolean COMPILER_EXTERNAL_GROUP_TABLE_SIZE_ADJUST_DEFAULT = false;
-
-    // When the above adjust option is enabled, we use the ratio to allocate memory to hash table.
-    // For example, if it's 0.3, 30% of compiler.groupmemory will be given to hash table.
-    // and 70% of compiler.groupmemory will be given to data table.
-    private static final String COMPILER_EXTERNAL_GROUP_TABLE_SIZE_ADJUST_RATIO_KEY = "compiler.adjustratioforgrouphashtablesize";
-    private static final double COMPILER_EXTERNAL_GROUP_TABLE_SIZE_ADJUST_RATIO_DEFAULT = 0.5;
+    // This option defines the size of hash table in an external hash group-by operation.
+    // In an external hash group-by operation, a hash table is used to insert/traverse the group-by value
+    // more efficiently using pointers. Actual Group-by value is stored in data table.
+    // The number of possible entries in this table when there is no collision will be approximately
+    // the same as the given value divided by 40. (E.g., 80KB / 40 = 2,048).
+    // Since we prefer to have a prime number for this, the number will be slightly larger
+    private static final String COMPILER_EXTERNAL_GROUP_TABLE_SIZE_KEY = "compiler.grouphashtablememory";
+    private static final long COMPILER_EXTERNAL_GROUP_TABLE_SIZE_DEFAULT = (16 << 20); // 16MB
 
     public AsterixCompilerProperties(AsterixPropertiesAccessor accessor) {
         super(accessor);
@@ -75,15 +62,9 @@ public class AsterixCompilerProperties extends AbstractAsterixProperties {
                 PropertyInterpreters.getLongBytePropertyInterpreter());
     }
 
-    public long getGroupHashTableSize() {
+    public long getGroupHashTableMemorySize() {
         return accessor.getProperty(COMPILER_EXTERNAL_GROUP_TABLE_SIZE_KEY, COMPILER_EXTERNAL_GROUP_TABLE_SIZE_DEFAULT,
-                PropertyInterpreters.getLongPropertyInterpreter());
-    }
-
-    // This method is used to set the hash table size when the COMPILER_EXTERNAL_GROUP_TABLE_SIZE_KEY set by
-    // the configuration file is expected to exceed the budget.
-    public long getGroupHashTableDefaultSize() {
-        return COMPILER_EXTERNAL_GROUP_TABLE_SIZE_DEFAULT;
+                PropertyInterpreters.getLongBytePropertyInterpreter());
     }
 
     public int getFrameSize() {

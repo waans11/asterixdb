@@ -83,6 +83,7 @@ import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConf
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 import org.json.JSONException;
 
 /**
@@ -244,34 +245,21 @@ public class APIFramework {
         int sortFrameLimit = (int) (compilerProperties.getSortMemorySize() / frameSize);
         int groupFrameLimit = (int) (compilerProperties.getGroupMemorySize() / frameSize);
         int joinFrameLimit = (int) (compilerProperties.getJoinMemorySize() / frameSize);
-        // the number of hash entries in the hash table of an external hash group-by operator
-        int groupHashTableSize = (int) (compilerProperties.getGroupHashTableSize());
         OptimizationConfUtil.getPhysicalOptimizationConfig().setFrameSize(frameSize);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesExternalSort(sortFrameLimit);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesExternalGroupBy(groupFrameLimit);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesForJoin(joinFrameLimit);
-        OptimizationConfUtil.getPhysicalOptimizationConfig().setExternalGroupByTableSize(groupHashTableSize);
 
+        // the byte size of hash table of an external hash group-by operator
+        // If this number is too big to fit into group memory size, then a run-time exception will be thrown.
+        // We don't throw an exception here since there may be an optimization that touches this value.
+        long groupHashTableSize = compilerProperties.getGroupHashTableMemorySize();
 
-
-        // To set the number of hash values (slots) in external group by hash table,
-        // we try to get a prime number that is ranged between 80% * ceil(groupFrameLimit * framesize / 8) and
-        // 90% * ceil(groupFrameLimit * framesize / 8).
-        // Here, we assume that each hash entry pointer occupies 8 bytes (frame, offset).
-        // So, the number of hash entry pointer in a frame is ceil(framesize / 8).
-        // The reason why we set the limit as 90% is that if it occupies 100% capacity,
-        // then there is no space for saving actual tuples.
-        int hashEntryMinSize = (int) Math.ceil(0.8 * groupFrameLimit * frameSize / 8);
-        int hashEntryMaxSize = (int) Math.ceil(0.9 * groupFrameLimit * frameSize / 8);
-        BigInteger tableSizePrimeNumber = BigInteger.valueOf(hashEntryMinSize).nextProbablePrime();
-        double capacityOccupationRatio = 0.8;
-        // If this number is bigger than 90%, then we try to find a prime number that fits within the budget.
-        while (tableSizePrimeNumber.longValue() > hashEntryMaxSize) {
-            // Try to reduce the ratio by 2% and try to get a prime number again.
-            capacityOccupationRatio -= 0.02;
-            hashEntryMinSize = (int) Math.ceil(capacityOccupationRatio * groupFrameLimit * frameSize / 8);
-            tableSizePrimeNumber = BigInteger.valueOf(hashEntryMinSize).nextProbablePrime();
-        }
+        // Calculate the number of unique hash entries in the hash table using the given budget.
+        double expectedhashTableNumberOfEntry = groupHashTableSize / (SerializableHashTable.getUnitSize() * 2
+                + SerializableHashTable.getUnitSize() * SerializableHashTable.getSlotUnitSize() * 2);
+        // Find the smallest prime number that is greater than expectedhashTableNumberOFEntry.
+        BigInteger tableSizePrimeNumber = BigInteger.valueOf((long) expectedhashTableNumberOfEntry).nextProbablePrime();
         OptimizationConfUtil.getPhysicalOptimizationConfig()
                 .setExternalGroupByTableSize(tableSizePrimeNumber.intValue());
 
