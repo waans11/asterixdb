@@ -29,11 +29,11 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
  * .
  * Header indicates the first entry slot location for the given integer value.
  * A header slot consists of [content frame number], [offset in that frame] to get
- * the first tuple's pointer information that shares the same value.
+ * the first tuple's pointer information that shares the same hash value.
  * .
  * An entry slot in the content frame is as follows.
  * [capacity of the slot], [# of occupied elements], {[frameIndex], [tupleIndex]}+;
- * fIndex, tIndex; .... <fIndex, tIndex> forms a tuple pointer
+ * <fIndex, tIndex> forms a tuple pointer
  */
 public class SerializableHashTable implements ISerializableTable {
 
@@ -45,7 +45,7 @@ public class SerializableHashTable implements ISerializableTable {
     private IntSerDeBuffer[] headers;
     // Content frame list
     private List<IntSerDeBuffer> contents = new ArrayList<>();
-    private List<Integer> currentOffsetInFrameList = new ArrayList<>();
+    private List<Integer> currentOffsetInEachFrameList = new ArrayList<>();
     private final IHyracksFrameMgrContext ctx;
     private final int frameCapacity;
     private int currentLargestFrameNumber = 0;
@@ -65,7 +65,7 @@ public class SerializableHashTable implements ISerializableTable {
         IntSerDeBuffer frame = new IntSerDeBuffer(ctx.allocateFrame().array());
         contents.add(frame);
         totalFrameCount++;
-        currentOffsetInFrameList.add(0);
+        currentOffsetInEachFrameList.add(0);
         frameCapacity = frame.capacity();
     }
 
@@ -121,25 +121,25 @@ public class SerializableHashTable implements ISerializableTable {
             dataPointer.reset(-1, -1);
             return false;
         }
-        int frameIndex = header.getInt(offsetInHeaderFrame);
-        int offsetIndex = header.getInt(offsetInHeaderFrame + 1);
-        if (frameIndex < 0) {
+        int contentFrameIndex = header.getInt(offsetInHeaderFrame);
+        int offsetInContentFrame = header.getInt(offsetInHeaderFrame + 1);
+        if (contentFrameIndex < 0) {
             dataPointer.reset(-1, -1);
             return false;
         }
-        IntSerDeBuffer frame = contents.get(frameIndex);
-        int entryUsedItems = frame.getInt(offsetIndex + 1);
-        if (offset > entryUsedItems - 1) {
+        IntSerDeBuffer frame = contents.get(contentFrameIndex);
+        int entryUsedCountInSlot = frame.getInt(offsetInContentFrame + 1);
+        if (offset > entryUsedCountInSlot - 1) {
             dataPointer.reset(-1, -1);
             return false;
         }
-        int startIndex = offsetIndex + 2 + offset * 2;
-        while (startIndex >= frameCapacity) {
-            ++frameIndex;
-            startIndex -= frameCapacity;
+        int startOffsetInContentFrame = offsetInContentFrame + 2 + offset * 2;
+        while (startOffsetInContentFrame >= frameCapacity) {
+            ++contentFrameIndex;
+            startOffsetInContentFrame -= frameCapacity;
         }
-        frame = contents.get(frameIndex);
-        dataPointer.reset(frame.getInt(startIndex), frame.getInt(startIndex + 1));
+        frame = contents.get(contentFrameIndex);
+        dataPointer.reset(frame.getInt(startOffsetInContentFrame), frame.getInt(startOffsetInContentFrame + 1));
         return true;
     }
 
@@ -149,9 +149,9 @@ public class SerializableHashTable implements ISerializableTable {
             if (frame != null)
                 resetFrame(frame);
 
-        currentOffsetInFrameList.clear();
+        currentOffsetInEachFrameList.clear();
         for (int i = 0; i < contents.size(); i++) {
-            currentOffsetInFrameList.add(0);
+            currentOffsetInEachFrameList.add(0);
         }
 
         currentLargestFrameNumber = 0;
@@ -194,7 +194,7 @@ public class SerializableHashTable implements ISerializableTable {
         for (int i = 0; i < headers.length; i++)
             headers[i] = null;
         contents.clear();
-        currentOffsetInFrameList.clear();
+        currentOffsetInEachFrameList.clear();
         tupleCount = 0;
         totalFrameCount = 0;
         currentLargestFrameNumber = 0;
@@ -204,7 +204,7 @@ public class SerializableHashTable implements ISerializableTable {
     private void insertNewEntry(IntSerDeBuffer header, int offsetInHeaderFrame, int entryCapacity, TuplePointer pointer)
             throws HyracksDataException {
         IntSerDeBuffer lastContentFrame = contents.get(currentLargestFrameNumber);
-        int lastOffsetInCurrentFrame = currentOffsetInFrameList.get(currentLargestFrameNumber);
+        int lastOffsetInCurrentFrame = currentOffsetInEachFrameList.get(currentLargestFrameNumber);
         int requiredIntCapacity = entryCapacity * 2;
         int currentFrameNumber = currentLargestFrameNumber;
 
@@ -217,10 +217,10 @@ public class SerializableHashTable implements ISerializableTable {
                     currentLargestFrameNumber++;
                     contents.add(newContentFrame);
                     totalFrameCount++;
-                    currentOffsetInFrameList.add(0);
+                    currentOffsetInEachFrameList.add(0);
                 } else {
                     currentLargestFrameNumber++;
-                    currentOffsetInFrameList.set(currentLargestFrameNumber, 0);
+                    currentOffsetInEachFrameList.set(currentLargestFrameNumber, 0);
                 }
                 requiredIntCapacity -= frameCapacity;
             } while (requiredIntCapacity > 0);
@@ -243,7 +243,7 @@ public class SerializableHashTable implements ISerializableTable {
         int newLastOffsetInContentFrame = lastOffsetInCurrentFrame + entryCapacity * 2;
         newLastOffsetInContentFrame = newLastOffsetInContentFrame < frameCapacity ? newLastOffsetInContentFrame
                 : frameCapacity - 1;
-        currentOffsetInFrameList.set(currentFrameNumber, newLastOffsetInContentFrame);
+        currentOffsetInEachFrameList.set(currentFrameNumber, newLastOffsetInContentFrame);
 
         requiredIntCapacity = entryCapacity * 2 - (frameCapacity - lastOffsetInCurrentFrame);
         while (requiredIntCapacity > 0) {
@@ -251,7 +251,7 @@ public class SerializableHashTable implements ISerializableTable {
             requiredIntCapacity -= frameCapacity;
             newLastOffsetInContentFrame = requiredIntCapacity < 0 ? requiredIntCapacity + frameCapacity
                     : frameCapacity - 1;
-            currentOffsetInFrameList.set(currentFrameNumber, newLastOffsetInContentFrame);
+            currentOffsetInEachFrameList.set(currentFrameNumber, newLastOffsetInContentFrame);
         }
     }
 

@@ -43,6 +43,19 @@ public class AsterixCompilerProperties extends AbstractAsterixProperties {
     private static final String COMPILER_EXTERNAL_GROUP_TABLE_SIZE_KEY = "compiler.grouphashtablesize";
     private static final long COMPILER_EXTERNAL_GROUP_TABLE_SIZE_DEFAULT = 500009;
 
+    // If the maximum expected size of the group hash table exceeds the compiler.groupmemory,
+    // this options tells whether the hash table size can be adjusted or not.
+    // If so, we will use the specified ration in the config file to adjust table size.
+    // If not, an exception will be thrown and the query will not be executed.
+    private static final String COMPILER_EXTERNAL_GROUP_TABLE_SIZE_ADJUST_KEY = "compiler.adjustgrouphashtablesize";
+    private static final boolean COMPILER_EXTERNAL_GROUP_TABLE_SIZE_ADJUST_DEFAULT = false;
+
+    // When the above adjust option is enabled, we use the ratio to allocate memory to hash table.
+    // For example, if it's 0.3, 30% of compiler.groupmemory will be given to hash table.
+    // and 70% of compiler.groupmemory will be given to data table.
+    private static final String COMPILER_EXTERNAL_GROUP_TABLE_SIZE_ADJUST_RATIO_KEY = "compiler.adjustratioforgrouphashtablesize";
+    private static final double COMPILER_EXTERNAL_GROUP_TABLE_SIZE_ADJUST_RATIO_DEFAULT = 0.5;
+
     public AsterixCompilerProperties(AsterixPropertiesAccessor accessor) {
         super(accessor);
     }
