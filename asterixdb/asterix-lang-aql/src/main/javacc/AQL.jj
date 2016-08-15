@@ -769,7 +769,19 @@ boolean IfNotExists() throws ParseException:
 {
 }
 {
-  ( <IF> <NOT> <EXISTS>
+  (
+    LOOKAHEAD(1)
+    <IF>
+    <IDENTIFIER>
+    (
+      {
+        if(!token.image.equals("not")){
+           throw new ParseException("Expect word \"not\" at line " + token.beginLine + ", column "
+                         + token.beginColumn +"!");
+        }
+      }
+    )
+    <EXISTS>
     {
       return true;
     }
@@ -900,7 +912,9 @@ boolean IfExists() throws ParseException :
 {
 }
 {
-  ( <IF> <EXISTS>
+  (
+    LOOKAHEAD(1)
+    <IF> <EXISTS>
     {
       return true;
     }
@@ -2395,7 +2409,7 @@ Clause GroupClause()throws ParseException :
     // GbyVariableExpressionPair pair = new GbyVariableExpressionPair();
     List<GbyVariableExpressionPair> vePairList = new ArrayList<GbyVariableExpressionPair>();
     List<GbyVariableExpressionPair> decorPairList = new ArrayList<GbyVariableExpressionPair>();
-    List<VariableExpr> withVarList= new ArrayList<VariableExpr>();
+    Map<Expression, VariableExpr> withVarMap = new HashMap<Expression, VariableExpr>();
     VariableExpr var = null;
     VariableExpr withVar = null;
     Expression expr = null;
@@ -2451,20 +2465,20 @@ Clause GroupClause()throws ParseException :
     {
       if(withVar.getIsNewVar()==true)
           throw new ParseException("can't find variable " + withVar.getVar());
-      withVarList.add(withVar);
+      withVarMap.put(withVar, withVar);
       newScope.addNewVarSymbolToScope(withVar.getVar());
     }
     (<COMMA> withVar = VariableRef()
     {
       if(withVar.getIsNewVar()==true)
           throw new ParseException("can't find variable " + withVar.getVar());
-      withVarList.add(withVar);
+      withVarMap.put(withVar, withVar);
       newScope.addNewVarSymbolToScope(withVar.getVar());
     })*
     {
       gbc.setGbyPairList(vePairList);
       gbc.setDecorPairList(decorPairList);
-      gbc.setWithVarList(withVarList);
+      gbc.setWithVarMap(withVarMap);
       replaceCurrentScope(newScope);
       return gbc;
     }
@@ -2621,7 +2635,6 @@ TOKEN :
   | <LOAD : "load">
   | <NGRAM : "ngram">
   | <NODEGROUP : "nodegroup">
-  | <NOT : "not">
   | <OFFSET : "offset">
   | <ON : "on">
   | <OPEN : "open">

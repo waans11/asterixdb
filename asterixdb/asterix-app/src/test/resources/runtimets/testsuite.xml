@@ -343,6 +343,21 @@
         <output-dir compare="Text">query-issue550</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="flwor">
+      <compilation-unit name="query-ASTERIXDB-883">
+        <output-dir compare="Text">query-ASTERIXDB-883</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="flwor">
+      <compilation-unit name="query-ASTERIXDB-1463">
+        <output-dir compare="Text">query-ASTERIXDB-1485</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="flwor">
+      <compilation-unit name="query-ASTERIXDB-1485">
+        <output-dir compare="Text">query-ASTERIXDB-1485</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="union">
     <test-case FilePath="union">
@@ -1939,6 +1954,11 @@
         <output-dir compare="Text">query-ASTERIXDB-867</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="dml">
+      <compilation-unit name="query-ASTERIXDB-1406">
+        <output-dir compare="Text">query-ASTERIXDB-1406</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="employee">
     <test-case FilePath="employee">
@@ -3234,6 +3254,11 @@
     <test-case FilePath="misc">
       <compilation-unit name="query-ASTERIXDB-819-2">
         <output-dir compare="Text">query-ASTERIXDB-819-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="query-ASTERIXDB-971">
+        <output-dir compare="Text">query-ASTERIXDB-971-aql</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="misc">
