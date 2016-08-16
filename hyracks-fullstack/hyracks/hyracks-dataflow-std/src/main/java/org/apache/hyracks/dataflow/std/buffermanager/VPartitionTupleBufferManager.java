@@ -47,7 +47,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     private final FixedSizeFrameTupleAppender appender;
     private BufferInfo tempInfo;
     private final IPartitionedMemoryConstrain constrain;
-    // total number of frames that are allocated
     private int totalFrameCount = 0;
 
     public VPartitionTupleBufferManager(IHyracksFrameMgrContext ctx, IPartitionedMemoryConstrain constrain,
@@ -172,9 +171,8 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         ByteBuffer newBuffer = requestNewBufferFromPool(size);
         if (newBuffer == null) {
             return -1;
-        } else {
-            totalFrameCount++;
         }
+        totalFrameCount++;
         appendFrame.reset(newBuffer);
         appender.reset(appendFrame, true);
         return partitionArray[partition].insertFrame(newBuffer);

@@ -65,8 +65,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         final int tableSize = suggestTableSize;
 
         // We check whether the given table size is within the budget of groupFrameLimit.
-        int expectedByteSizeOfHashTableForGroupBy = SerializableHashTable.getUnitSize()
-                * (2 + SerializableHashTable.getNumberOfEntryInSlot() * 2) * tableSize;
+        int expectedByteSizeOfHashTableForGroupBy = SerializableHashTable.getExpectedByteSizeOfHashTable(tableSize);
 
         // For HashTable, we need to have at least two frames (one for header and one for content).
         // For DataTable, we need to have at least two frames.
@@ -251,11 +250,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
 
             @Override
             public boolean isUsedNumFramesExceedBudget() {
-                if (getNumFrames() <= framesLimit) {
-                    return false;
-                } else {
-                    return true;
-                }
+                return getNumFrames() > framesLimit;
             }
 
             @Override

@@ -47,6 +47,15 @@ public class ExternalHashGroupBy {
         this.spilledNumTuples = new int[runWriters.length];
     }
 
+    /**
+     * Inserts tuples to the spillable table.
+     * If an insertion was not successful, that means there are not enough frames.
+     * Thus, this method tries to spill a data partition to disk and tries that insertion again.
+     * If the insertion was successful, but that insertion consumed all budget,
+     * the only issue was that it has exceeded the budget slightly.
+     * Like the failing case, we try to spill a partition to the disk until the number of frames
+     * that we are used is within the budget.
+     */
     public void insert(ByteBuffer buffer) throws HyracksDataException {
         accessor.reset(buffer);
         int tupleCount = accessor.getTupleCount();
@@ -61,17 +70,12 @@ public class ExternalHashGroupBy {
                     RunFileWriter writer = getPartitionWriterOrCreateOneIfNotExist(partition);
                     flushPartitionToRun(partition, writer);
                     if (result == InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET) {
-                        // If the result type is SUCCESS_BUT_EXCEEDS_BUDGET,
-                        // then we don't need to re-insert this tuple since the insertion has succeeded.
-                        // The only issue was that it has exceeded the budget slightly.
-                        // Now, since a partition is spilled to the disk, we check the frame usage again.
                         if (!table.isUsedNumFramesExceedBudget()) {
                             // If the table conforms to the budget, we can stop here.
                             // If not, we continue to spill another partitions.
                             result = InsertResultType.SUCCESS;
                         }
                     } else {
-                        // FAIL case - try to insert again
                         result = table.insert(accessor, i);
                     }
                 } while (result != InsertResultType.SUCCESS);
