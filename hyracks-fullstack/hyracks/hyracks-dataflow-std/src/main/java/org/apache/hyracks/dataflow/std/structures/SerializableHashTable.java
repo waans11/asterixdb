@@ -347,10 +347,14 @@ public class SerializableHashTable implements ISerializableTable {
         return INIT_ENTRY_SIZE;
     }
 
-    public static int getExpectedByteSizeOfHashTable(int tableSize) {
+    public static int getExpectedByteSizePerHashValue() {
         // first constant 2: capacity, # of used count
         // second constant 2: tuple pointer (frameIndex, offset)
-        return getUnitSize() * (2 + getNumberOfEntryInSlot() * 2) * tableSize;
+        return getUnitSize() * (2 + getNumberOfEntryInSlot() * 2);
+    }
+
+    public static int getExpectedByteSizeOfHashTable(int tableSize) {
+        return getExpectedByteSizePerHashValue() * tableSize;
     }
 
     private static class IntSerDeBuffer {
