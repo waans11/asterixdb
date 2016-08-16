@@ -27,7 +27,7 @@ public interface ISpillableTable {
     /**
      * Result Type for an insertion.
      */
-    public static enum InsertResultType {
+    public enum InsertResultType {
         SUCCESS,
         FAIL,
         // If a memory budget is given and if an insertion is successful,

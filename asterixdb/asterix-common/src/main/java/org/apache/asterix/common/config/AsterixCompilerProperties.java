@@ -20,16 +20,16 @@ package org.apache.asterix.common.config;
 
 public class AsterixCompilerProperties extends AbstractAsterixProperties {
     private static final String COMPILER_SORTMEMORY_KEY = "compiler.sortmemory";
-    private static final long COMPILER_SORTMEMORY_DEFAULT = (32 << 20); // 32MB
+    private static final long COMPILER_SORTMEMORY_DEFAULT = 32 << 20; // 32MB
 
     private static final String COMPILER_GROUPMEMORY_KEY = "compiler.groupmemory";
-    private static final long COMPILER_GROUPMEMORY_DEFAULT = (32 << 20); // 32MB
+    private static final long COMPILER_GROUPMEMORY_DEFAULT = 32 << 20; // 32MB
 
     private static final String COMPILER_JOINMEMORY_KEY = "compiler.joinmemory";
-    private static final long COMPILER_JOINMEMORY_DEFAULT = (32 << 20); // 32MB
+    private static final long COMPILER_JOINMEMORY_DEFAULT = 32 << 20; // 32MB
 
     private static final String COMPILER_FRAMESIZE_KEY = "compiler.framesize";
-    private static int COMPILER_FRAMESIZE_DEFAULT = (32 << 10); // 32KB
+    private static int COMPILER_FRAMESIZE_DEFAULT = 32 << 10; // 32KB
 
     private static final String COMPILER_PREGELIX_HOME = "compiler.pregelix.home";
     private static final String COMPILER_PREGELIX_HOME_DEFAULT = "~/pregelix";
@@ -41,7 +41,7 @@ public class AsterixCompilerProperties extends AbstractAsterixProperties {
     // the same as the given value divided by 40. (E.g., 80KB / 40 = 2,048).
     // Since we prefer to have a prime number for this, the number will be slightly larger
     private static final String COMPILER_EXTERNAL_GROUP_TABLE_SIZE_KEY = "compiler.grouphashtablememory";
-    private static final long COMPILER_EXTERNAL_GROUP_TABLE_SIZE_DEFAULT = (16 << 20); // 16MB
+    private static final long COMPILER_EXTERNAL_GROUP_TABLE_SIZE_DEFAULT = 16 << 20; // 16MB
 
     public AsterixCompilerProperties(AsterixPropertiesAccessor accessor) {
         super(accessor);
