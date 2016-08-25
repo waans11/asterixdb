@@ -85,6 +85,11 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         final ITuplePartitionComputer tpc = new FieldHashPartitionComputerFamily(keyFields, hashFunctionFamilies)
                 .createPartitioner(seed);
 
+        // For calculating hash value from already aggregated tuples (not incoming tuples)
+        // This computer is needed for the garbage collection of Hash Table.
+        final ITuplePartitionComputer tpc1 = new FieldHashPartitionComputerFamily(intermediateResultKeys,
+                hashFunctionFamilies).createPartitioner(seed);
+
         final IAggregatorDescriptor aggregator = aggregateFactory.createAggregator(ctx, inRecordDescriptor,
                 outRecordDescriptor, keyFields, intermediateResultKeys, null);
 
@@ -134,6 +139,10 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 bufferManager.clearPartition(partition);
             }
 
+            public void garbageCollection(int entryInHashTable, TuplePointer pointer) throws HyracksDataException {
+                hashTableForTuplePointer.executeGarbageCollection(bufferAccessor, tpc1);
+            }
+
             private int getPartition(int entryInHashTable) {
                 return entryInHashTable / entriesPerPartition;
             }
@@ -158,7 +167,6 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                         return InsertResultType.SUCCESS;
                     }
                 }
-
                 return insertNewAggregateEntry(entryInHashTable, accessor, tIndex);
             }
 
@@ -178,6 +186,8 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 if (isUsedNumFramesExceedBudget()) {
                     return InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET;
                 } else {
+                    System.out.println("pointer:" + pointer + " " + entryInHashTable);
+                    garbageCollection(entryInHashTable, pointer);
                     return InsertResultType.SUCCESS;
                 }
             }

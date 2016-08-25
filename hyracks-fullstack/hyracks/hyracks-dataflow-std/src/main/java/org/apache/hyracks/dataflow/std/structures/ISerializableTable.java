@@ -18,7 +18,9 @@
  */
 package org.apache.hyracks.dataflow.std.structures;
 
+import org.apache.hyracks.api.dataflow.value.ITuplePartitionComputer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.dataflow.std.buffermanager.ITuplePointerAccessor;
 
 public interface ISerializableTable {
 
@@ -37,4 +39,9 @@ public interface ISerializableTable {
     void reset();
 
     void close();
+
+    boolean isGarbageCollectioNeeded();
+
+    void executeGarbageCollection(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
+            throws HyracksDataException;
 }
