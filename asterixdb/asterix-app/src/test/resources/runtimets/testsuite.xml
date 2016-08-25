@@ -150,6 +150,13 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
+      <compilation-unit name="revised-tweet-parser">
+        <output-dir compare="Text">revised-tweet-parser</output-dir>
+        <expected-error>One or more parameters are missing from adapter configuration</expected-error>
+        <expected-error>Unknown source feed</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
       <compilation-unit name="feed-with-external-parser">
         <output-dir compare="Text">feed-with-external-parser</output-dir>
       </compilation-unit>
@@ -254,6 +261,11 @@
     <test-case FilePath="upsert">
       <compilation-unit name="filtered-dataset">
         <output-dir compare="Text">filtered-dataset</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="upsert">
+      <compilation-unit name="issue1587-foreignDataType">
+        <output-dir compare="Text">issue1587-foreignDataType</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="upsert">
@@ -6558,6 +6570,11 @@
     <test-case FilePath="load">
       <compilation-unit name="adm_binary">
         <output-dir compare="Text">adm_binary</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="load">
+      <compilation-unit name="utf8">
+        <output-dir compare="Text">utf8</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>

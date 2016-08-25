@@ -44,16 +44,21 @@ public class ExecutionTestUtil {
 
     protected static final String TEST_CONFIG_FILE_NAME = "asterix-build-configuration.xml";
 
-    protected static TestGroup FailedGroup;
+    public static TestGroup FailedGroup;
 
     public static AsterixHyracksIntegrationUtil integrationUtil = new AsterixHyracksIntegrationUtil();
 
     public static List<ILibraryManager> setUp(boolean cleanup) throws Exception {
+        return setUp(cleanup, TEST_CONFIG_FILE_NAME, integrationUtil, true);
+    }
+
+    public static List<ILibraryManager> setUp(boolean cleanup, String configFile,
+            AsterixHyracksIntegrationUtil integrationUtil, boolean startHdfs) throws Exception {
         System.out.println("Starting setup");
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Starting setup");
         }
-        System.setProperty(GlobalConfig.CONFIG_FILE_PROPERTY, TEST_CONFIG_FILE_NAME);
+        System.setProperty(GlobalConfig.CONFIG_FILE_PROPERTY, configFile);
 
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("initializing pseudo cluster");
@@ -64,7 +69,9 @@ public class ExecutionTestUtil {
             LOGGER.info("initializing HDFS");
         }
 
-        HDFSCluster.getInstance().setup();
+        if (startHdfs) {
+            HDFSCluster.getInstance().setup();
+        }
 
         // Set the node resolver to be the identity resolver that expects node
         // names
@@ -80,14 +87,19 @@ public class ExecutionTestUtil {
         libraryManagers.add(AsterixAppContextInfo.getInstance().getLibraryManager());
         // Adds library managers for NCs, one-per-NC.
         for (NodeControllerService nc : integrationUtil.ncs) {
-            IAsterixAppRuntimeContext runtimeCtx = (IAsterixAppRuntimeContext) nc.getApplicationContext()
-                    .getApplicationObject();
+            IAsterixAppRuntimeContext runtimeCtx =
+                    (IAsterixAppRuntimeContext) nc.getApplicationContext().getApplicationObject();
             libraryManagers.add(runtimeCtx.getLibraryManager());
         }
         return libraryManagers;
     }
 
     public static void tearDown(boolean cleanup) throws Exception {
+        tearDown(cleanup, integrationUtil, true);
+    }
+
+    public static void tearDown(boolean cleanup, AsterixHyracksIntegrationUtil integrationUtil, boolean stopHdfs)
+            throws Exception {
         // validateBufferCacheState(); <-- Commented out until bug is fixed -->
         integrationUtil.deinit(cleanup);
         File outdir = new File(PATH_ACTUAL);
@@ -95,7 +107,9 @@ public class ExecutionTestUtil {
         if (files == null || files.length == 0) {
             outdir.delete();
         }
-        HDFSCluster.getInstance().cleanup();
+        if (stopHdfs) {
+            HDFSCluster.getInstance().cleanup();
+        }
 
         if (FailedGroup != null && FailedGroup.getTestCase().size() > 0) {
             File temp = File.createTempFile("failed", ".xml");
