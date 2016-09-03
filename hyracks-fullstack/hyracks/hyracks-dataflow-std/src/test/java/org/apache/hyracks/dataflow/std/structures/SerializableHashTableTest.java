@@ -33,7 +33,7 @@ public class SerializableHashTableTest {
     SerializableHashTable nsTable;
     final int NUM_PART = 101;
     TuplePointer pointer = new TuplePointer(0, 0);
-    final int num = 1000;
+    final int num = 10000;
 
     @Before
     public void setup() throws HyracksDataException {
@@ -76,7 +76,7 @@ public class SerializableHashTableTest {
             }
         }
         for (int i = 0; i < NUM_PART; i++) {
-            assertTrue(nsTable.getTupleCount(i) == 10 || nsTable.getTupleCount(i) == 9);
+            assertTrue(nsTable.getTupleCount(i) == 100 || nsTable.getTupleCount(i) == 99);
         }
 
     }

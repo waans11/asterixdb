@@ -65,7 +65,8 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         final int tableSize = suggestTableSize;
 
         // We check whether the given table size is within the budget of groupFrameLimit.
-        int expectedByteSizeOfHashTableForGroupBy = SerializableHashTable.getExpectedByteSizeOfHashTable(tableSize);
+        int expectedByteSizeOfHashTableForGroupBy = SerializableHashTable.getExpectedByteSizeOfHashTable(tableSize,
+                ctx.getInitialFrameSize());
 
         // For HashTable, we need to have at least two frames (one for header and one for content).
         // For DataTable, we need to have at least two frames.
@@ -85,8 +86,8 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         final ITuplePartitionComputer tpc = new FieldHashPartitionComputerFamily(keyFields, hashFunctionFamilies)
                 .createPartitioner(seed);
 
-        // For calculating hash value from already aggregated tuples (not incoming tuples)
-        // This computer is needed for the garbage collection of Hash Table.
+        // For calculating hash value from the already aggregated tuples (not incoming tuples)
+        // This computer is needed for doing the garbage collection work on Hash Table.
         final ITuplePartitionComputer tpc1 = new FieldHashPartitionComputerFamily(intermediateResultKeys,
                 hashFunctionFamilies).createPartitioner(seed);
 
@@ -98,7 +99,8 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         final ArrayTupleBuilder stateTupleBuilder = new ArrayTupleBuilder(outRecordDescriptor.getFields().length);
 
         //TODO(jf) research on the optimized partition size
-        final int numPartitions = getNumOfPartitions((int) (dataBytesSize / ctx.getInitialFrameSize()),
+        final int numPartitions = getNumOfPartitions(
+                (int) ((dataBytesSize + expectedByteSizeOfHashTableForGroupBy) / ctx.getInitialFrameSize()),
                 framesLimit - 1);
         final int entriesPerPartition = (int) Math.ceil(1.0 * tableSize / numPartitions);
         if (LOGGER.isLoggable(Level.FINE)) {
@@ -136,11 +138,15 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 for (int p = getFirstEntryInHashTable(partition); p < getLastEntryInHashTable(partition); p++) {
                     hashTableForTuplePointer.delete(p);
                 }
-                bufferManager.clearPartition(partition);
-            }
 
-            public void garbageCollection(int entryInHashTable, TuplePointer pointer) throws HyracksDataException {
-                hashTableForTuplePointer.executeGarbageCollection(bufferAccessor, tpc1);
+                // Garbage Collection on Hash Table
+                int numberOfPagesReclaimed = hashTableForTuplePointer.executeGarbageCollection(bufferAccessor, tpc1);
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine(
+                            "Garbage Collection on Hash table is done. Deallocated pages:" + numberOfPagesReclaimed);
+                }
+
+                bufferManager.clearPartition(partition);
             }
 
             private int getPartition(int entryInHashTable) {
@@ -176,18 +182,17 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 initStateTupleBuilder(accessor, tIndex);
                 int pid = getPartition(entryInHashTable);
 
+
                 if (!bufferManager.insertTuple(pid, stateTupleBuilder.getByteArray(),
                         stateTupleBuilder.getFieldEndOffsets(), 0, stateTupleBuilder.getSize(), pointer)) {
                     return InsertResultType.FAIL;
                 }
                 hashTableForTuplePointer.insert(entryInHashTable, pointer);
                 // If the number of frames allocated to the data table and hash table exceeds the frame limit,
-                // we need to spill a partition to the disk to make a space.
+                // we need to spill a partition to the disk to make some space.
                 if (isUsedNumFramesExceedBudget()) {
                     return InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET;
                 } else {
-                    System.out.println("pointer:" + pointer + " " + entryInHashTable);
-                    garbageCollection(entryInHashTable, pointer);
                     return InsertResultType.SUCCESS;
                 }
             }
@@ -272,17 +277,21 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         };
     }
 
-    private int getNumOfPartitions(int nubmerOfFramesForData, int frameLimit) {
-        if (frameLimit > nubmerOfFramesForData) {
+    private int getNumOfPartitions(int nubmerOfFramesForDataAndHashTable, int frameLimit) {
+        if (frameLimit >= nubmerOfFramesForDataAndHashTable * FUDGE_FACTOR) {
             return 1; // all in memory, we will create a big partition
         }
+        // The formula is based on Shapiro's paper - http://cs.stanford.edu/people/chrismre/cs345/rl/shapiro.pdf.
+        // Check the page 249 for more details.
         int numberOfPartitions = (int) (Math
-                .ceil((nubmerOfFramesForData * FUDGE_FACTOR - frameLimit) / (frameLimit - 1)));
-        if (numberOfPartitions <= 0) {
-            numberOfPartitions = 1; //becomes in-memory hash
-        }
+                .ceil((nubmerOfFramesForDataAndHashTable * FUDGE_FACTOR - frameLimit) / (frameLimit - 1)));
+        // Actually, at this stage, we know that this is not a in-memory hash (#frames required > #frameLimit).
+        // So we want to guarantee that the number of partition is at least two because there may be corner cases.
+        numberOfPartitions = Math.max(2, numberOfPartitions);
+        // If the number of partition is greater than the memory budget, there might be a case that we can't
+        // allocate at least one frame for each partition in memory. So, we deal with those cases here.
         if (numberOfPartitions > frameLimit) {
-            numberOfPartitions = (int) Math.ceil(Math.sqrt(nubmerOfFramesForData * FUDGE_FACTOR));
+            numberOfPartitions = (int) Math.ceil(Math.sqrt(nubmerOfFramesForDataAndHashTable * FUDGE_FACTOR));
             return Math.max(2, Math.min(numberOfPartitions, frameLimit));
         }
         return numberOfPartitions;

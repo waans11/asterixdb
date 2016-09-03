@@ -189,7 +189,7 @@ public abstract class AbstractExternalGroupbyTest {
         int tableSize = 101;
         int numFrames = 20;
         int frameSize = 256;
-        int minDataSize = frameSize * 10;
+        int minDataSize = frameSize * 25;
         int minRecordSize = 20;
         int maxRecordSize = 50;
         testBuildAndMerge(tableSize, numFrames, frameSize, minDataSize, minRecordSize, maxRecordSize, null);
@@ -200,13 +200,11 @@ public abstract class AbstractExternalGroupbyTest {
         int tableSize = 101;
         int numFrames = 21;
         int frameSize = 256;
-        int minDataSize = frameSize * 11;
+        int minDataSize = frameSize * 30;
         int minRecordSize = 20;
         int maxRecordSize = 50;
         HashMap<Integer, String> bigRecords = AbstractRunGeneratorTest.generateBigObject(frameSize, 2);
-        testBuildAndMerge(tableSize, numFrames, frameSize, minDataSize, minRecordSize, maxRecordSize,
-                bigRecords);
-
+        testBuildAndMerge(tableSize, numFrames, frameSize, minDataSize, minRecordSize, maxRecordSize, bigRecords);
     }
 
     protected abstract void initial(IHyracksTaskContext ctx, int tableSize, int numFrames) throws HyracksDataException;
