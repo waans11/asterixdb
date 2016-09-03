@@ -78,7 +78,6 @@ import org.apache.asterix.om.typecomputer.impl.OpenARecordTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.OpenRecordConstructorResultType;
 import org.apache.asterix.om.typecomputer.impl.OrderedListConstructorTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.OrderedListOfAInt32TypeComputer;
-import org.apache.asterix.om.typecomputer.impl.OrderedListOfAInt64TypeComputer;
 import org.apache.asterix.om.typecomputer.impl.OrderedListOfAIntervalTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.OrderedListOfAPointTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.OrderedListOfAStringTypeComputer;
@@ -89,9 +88,12 @@ import org.apache.asterix.om.typecomputer.impl.RecordMergeTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.RecordRemoveFieldsTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.ScalarVersionOfAggregateResultType;
 import org.apache.asterix.om.typecomputer.impl.StringBooleanTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.StringInt32TypeComputer;
+import org.apache.asterix.om.typecomputer.impl.StringIntToStringTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.StringStringTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.StringToInt64ListTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.StringToStringListTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.SubsetCollectionTypeComputer;
-import org.apache.asterix.om.typecomputer.impl.Substring2TypeComputer;
 import org.apache.asterix.om.typecomputer.impl.SubstringTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.SwitchCaseComputer;
 import org.apache.asterix.om.typecomputer.impl.UnaryBinaryInt64TypeComputer;
@@ -251,10 +253,34 @@ public class AsterixBuiltinFunctions {
             "matches", 2);
     public static final FunctionIdentifier STRING_MATCHES_WITH_FLAG = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "matches", 3);
+    public static final FunctionIdentifier STRING_REGEXP_LIKE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "regexp-like", 2);
+    public static final FunctionIdentifier STRING_REGEXP_LIKE_WITH_FLAG = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "regexp-like", 3);
+    public static final FunctionIdentifier STRING_REGEXP_POSITION = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "regexp-position", 2);
+    public static final FunctionIdentifier STRING_REGEXP_POSITION_WITH_FLAG = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "regexp-position", 3);
     public static final FunctionIdentifier STRING_LOWERCASE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "lowercase", 1);
     public static final FunctionIdentifier STRING_UPPERCASE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "uppercase", 1);
+    public static final FunctionIdentifier STRING_INITCAP = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "initcap", 1);
+    public static final FunctionIdentifier STRING_TRIM = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "trim",
+            1);
+    public static final FunctionIdentifier STRING_LTRIM = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "ltrim",
+            1);
+    public static final FunctionIdentifier STRING_RTRIM = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "rtrim",
+            1);
+    public static final FunctionIdentifier STRING_TRIM2 = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "trim",
+            2);
+    public static final FunctionIdentifier STRING_LTRIM2 = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "ltrim", 2);
+    public static final FunctionIdentifier STRING_RTRIM2 = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "rtrim", 2);
+    public static final FunctionIdentifier STRING_POSITION = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "position", 2);
     public static final FunctionIdentifier STRING_REPLACE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "replace", 3);
     public static final FunctionIdentifier STRING_REPLACE_WITH_FLAG = new FunctionIdentifier(
@@ -285,6 +311,10 @@ public class AsterixBuiltinFunctions {
             "string-concat", 1);
     public static final FunctionIdentifier STRING_JOIN = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "string-join", 2);
+    public static final FunctionIdentifier STRING_REPEAT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "repeat", 2);
+    public static final FunctionIdentifier STRING_SPLIT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "split",
+            2);
 
     public static final FunctionIdentifier DATASET = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "dataset", 1);
     public static final FunctionIdentifier FEED_COLLECT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -603,8 +633,6 @@ public class AsterixBuiltinFunctions {
             "spatial-cell", 4);
     public static final FunctionIdentifier SWITCH_CASE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "switch-case", FunctionIdentifier.VARARGS);
-    public static final FunctionIdentifier REG_EXP = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "reg-exp", 2);
-
     public static final FunctionIdentifier INJECT_FAILURE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "inject-failure", 2);
     public static final FunctionIdentifier FLOW_RECORD = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -861,23 +889,37 @@ public class AsterixBuiltinFunctions {
 
         addFunction(STRING_LIKE, BooleanFunctionTypeComputer.INSTANCE, true);
         addFunction(STRING_CONTAINS, ABooleanTypeComputer.INSTANCE, true);
-        addFunction(STRING_TO_CODEPOINT, OrderedListOfAInt64TypeComputer.INSTANCE, true);
+        addFunction(STRING_TO_CODEPOINT, StringToInt64ListTypeComputer.INSTANCE, true);
         addFunction(CODEPOINT_TO_STRING, AStringTypeComputer.INSTANCE, true);
         addFunction(STRING_CONCAT, AStringTypeComputer.INSTANCE, true);
-        addFunction(SUBSTRING2, Substring2TypeComputer.INSTANCE, true);
+        addFunction(SUBSTRING2, StringIntToStringTypeComputer.INSTANCE, true);
         addFunction(STRING_LENGTH, UnaryStringInt64TypeComputer.INSTANCE, true);
         addFunction(STRING_LOWERCASE, StringStringTypeComputer.INSTANCE, true);
         addFunction(STRING_UPPERCASE, StringStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_INITCAP, StringStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_TRIM, StringStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_LTRIM, StringStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_RTRIM, StringStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_TRIM2, StringStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_LTRIM2, StringStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_RTRIM2, StringStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_POSITION, StringInt32TypeComputer.INSTANCE, true);
         addFunction(STRING_STARTS_WITH, StringBooleanTypeComputer.INSTANCE, true);
         addFunction(STRING_ENDS_WITH, StringBooleanTypeComputer.INSTANCE, true);
         addFunction(STRING_MATCHES, StringBooleanTypeComputer.INSTANCE, true);
         addFunction(STRING_MATCHES_WITH_FLAG, StringBooleanTypeComputer.INSTANCE, true);
+        addFunction(STRING_REGEXP_LIKE, StringBooleanTypeComputer.INSTANCE, true);
+        addFunction(STRING_REGEXP_LIKE_WITH_FLAG, StringBooleanTypeComputer.INSTANCE, true);
+        addFunction(STRING_REGEXP_POSITION, StringInt32TypeComputer.INSTANCE, true);
+        addFunction(STRING_REGEXP_POSITION_WITH_FLAG, StringInt32TypeComputer.INSTANCE, true);
         addFunction(STRING_REPLACE, StringStringTypeComputer.INSTANCE, true);
         addFunction(STRING_REPLACE_WITH_FLAG, StringStringTypeComputer.INSTANCE, true);
         addFunction(SUBSTRING_BEFORE, StringStringTypeComputer.INSTANCE, true);
         addFunction(SUBSTRING_AFTER, StringStringTypeComputer.INSTANCE, true);
         addPrivateFunction(STRING_EQUAL, StringBooleanTypeComputer.INSTANCE, true);
         addFunction(STRING_JOIN, AStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_REPEAT, StringIntToStringTypeComputer.INSTANCE, true);
+        addFunction(STRING_SPLIT, StringToStringListTypeComputer.INSTANCE, true);
 
         addPrivateFunction(ORDERED_LIST_CONSTRUCTOR, OrderedListConstructorTypeComputer.INSTANCE, true);
         addFunction(POINT_CONSTRUCTOR, APointTypeComputer.INSTANCE, true);
@@ -975,7 +1017,6 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(SUBSET_COLLECTION, SubsetCollectionTypeComputer.INSTANCE, true);
         addFunction(SUBSTRING, SubstringTypeComputer.INSTANCE, true);
         addFunction(SWITCH_CASE, SwitchCaseComputer.INSTANCE, true);
-        addPrivateFunction(REG_EXP, ABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(INJECT_FAILURE, InjectFailureTypeComputer.INSTANCE, true);
         addPrivateFunction(CAST_TYPE, CastTypeComputer.INSTANCE, true);
 

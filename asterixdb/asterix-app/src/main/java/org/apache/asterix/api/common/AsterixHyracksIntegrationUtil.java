@@ -72,7 +72,7 @@ public class AsterixHyracksIntegrationUtil {
         for (String ncName : nodes) {
             NodeControllerService nodeControllerService = new NodeControllerService(createNCConfig(ncName));
             nodeControllers.add(nodeControllerService);
-            Thread ncStartThread = new Thread() {
+            Thread ncStartThread = new Thread("IntegrationUtil-" + ncName) {
                 @Override
                 public void run() {
                     try {
@@ -109,6 +109,7 @@ public class AsterixHyracksIntegrationUtil {
         ncConfig.clusterNetIPAddress = Inet4Address.getLoopbackAddress().getHostAddress();
         ncConfig.dataIPAddress = Inet4Address.getLoopbackAddress().getHostAddress();
         ncConfig.resultIPAddress = Inet4Address.getLoopbackAddress().getHostAddress();
+        ncConfig.messagingIPAddress = Inet4Address.getLoopbackAddress().getHostAddress();
         ncConfig.nodeId = ncName;
         ncConfig.resultTTL = 30000;
         ncConfig.resultSweepThreshold = 1000;
@@ -218,15 +219,16 @@ public class AsterixHyracksIntegrationUtil {
      */
     public static void main(String[] args) {
         AsterixHyracksIntegrationUtil integrationUtil = new AsterixHyracksIntegrationUtil();
-        run(integrationUtil);
+        run(integrationUtil, false, false);
     }
 
-    protected static void run(final AsterixHyracksIntegrationUtil integrationUtil) {
+    protected static void run(final AsterixHyracksIntegrationUtil integrationUtil, boolean cleanupOnStart,
+            boolean cleanupOnShutdown) {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
                 try {
-                    integrationUtil.deinit(false);
+                    integrationUtil.deinit(cleanupOnShutdown);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -235,7 +237,7 @@ public class AsterixHyracksIntegrationUtil {
         try {
             System.setProperty(GlobalConfig.CONFIG_FILE_PROPERTY, "asterix-build-configuration.xml");
 
-            integrationUtil.init(false);
+            integrationUtil.init(cleanupOnStart);
             while (true) {
                 Thread.sleep(10000);
             }

@@ -37,6 +37,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.asterix.app.result.ResultReader;
+import org.apache.asterix.app.result.ResultUtil;
 import org.apache.asterix.app.translator.QueryTranslator;
 import org.apache.asterix.common.app.SessionConfig;
 import org.apache.asterix.common.config.GlobalConfig;
@@ -48,10 +49,9 @@ import org.apache.asterix.lang.common.base.IParser;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.translator.IStatementExecutor;
-import org.apache.asterix.translator.IStatementExecutor.Stats;
 import org.apache.asterix.translator.IStatementExecutorFactory;
+import org.apache.asterix.translator.IStatementExecutor.Stats;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.hyracks.algebricks.core.algebra.prettyprint.AlgebricksAppendable;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.dataset.IHyracksDataset;
@@ -119,7 +119,7 @@ public class QueryServiceServlet extends HttpServlet {
         }
     }
 
-    private enum ResultFields {
+    public enum ResultFields {
         REQUEST_ID("requestID"),
         SIGNATURE("signature"),
         TYPE("type"),
@@ -139,7 +139,7 @@ public class QueryServiceServlet extends HttpServlet {
         }
     }
 
-    private enum ResultStatus {
+    public enum ResultStatus {
         SUCCESS("success"),
         TIMEOUT("timeout"),
         ERRORS("errors"),
@@ -331,7 +331,7 @@ public class QueryServiceServlet extends HttpServlet {
     }
 
     private static void printError(PrintWriter pw, Throwable e) {
-        Throwable rootCause = ExceptionUtils.getRootCause(e);
+        Throwable rootCause = ResultUtil.getRootCause(e);
         if (rootCause == null) {
             rootCause = e;
         }
@@ -342,7 +342,7 @@ public class QueryServiceServlet extends HttpServlet {
         printField(pw, ErrorField.CODE.str(), "1");
         final String msg = rootCause.getMessage();
         printField(pw, ErrorField.MSG.str(),
-                JSONUtil.escape(rootCause.getClass().getName() + ": " + msg != null ? msg : ""), addStack);
+                JSONUtil.escape(rootCause.getClass().getName() + ": " + (msg != null ? msg : "")), addStack);
         if (addStack) {
             StringWriter sw = new StringWriter();
             PrintWriter stackWriter = new PrintWriter(sw);
@@ -390,7 +390,6 @@ public class QueryServiceServlet extends HttpServlet {
     private void handleRequest(HttpServletRequest request, HttpServletResponse response, String query)
             throws IOException {
         long elapsedStart = System.nanoTime();
-
         final StringWriter stringWriter = new StringWriter();
         final PrintWriter resultWriter = new PrintWriter(stringWriter);
 
@@ -408,6 +407,9 @@ public class QueryServiceServlet extends HttpServlet {
         printSignature(resultWriter);
         printType(resultWriter, sessionConfig);
         try {
+            if (query == null || query.isEmpty()) {
+                throw new AsterixException("Empty request, no statement provided");
+            }
             IHyracksClientConnection hcc;
             IHyracksDataset hds;
             ServletContext context = getServletContext();
@@ -451,10 +453,10 @@ public class QueryServiceServlet extends HttpServlet {
 
         GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, result);
 
+        response.setStatus(respCode);
         response.getWriter().print(result);
         if (response.getWriter().checkError()) {
             LOGGER.warning("Error flushing output writer");
         }
-        response.setStatus(respCode);
     }
 }

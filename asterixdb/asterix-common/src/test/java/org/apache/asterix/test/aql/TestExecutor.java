@@ -30,6 +30,7 @@ import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,10 +44,10 @@ import org.apache.asterix.common.utils.ServletUtil.Servlets;
 import org.apache.asterix.test.server.ITestServer;
 import org.apache.asterix.test.server.TestServerProvider;
 import org.apache.asterix.testframework.context.TestCaseContext;
-import org.apache.asterix.testframework.context.TestFileContext;
 import org.apache.asterix.testframework.context.TestCaseContext.OutputFormat;
-import org.apache.asterix.testframework.xml.TestGroup;
+import org.apache.asterix.testframework.context.TestFileContext;
 import org.apache.asterix.testframework.xml.TestCase.CompilationUnit;
+import org.apache.asterix.testframework.xml.TestGroup;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.http.HttpResponse;
@@ -249,29 +250,33 @@ public class TestExecutor {
         }
     }
 
-    private HttpResponse executeHttpRequest(HttpUriRequest method) throws Exception {
+    protected HttpResponse executeAndCheckHttpRequest(HttpUriRequest method) throws Exception {
+        return checkResponse(executeHttpRequest(method));
+    }
+
+    protected HttpResponse executeHttpRequest(HttpUriRequest method) throws Exception {
         HttpClient client = HttpClients.custom()
                 .setRetryHandler(StandardHttpRequestRetryHandler.INSTANCE)
                 .build();
-        HttpResponse httpResponse;
-
         try {
-            httpResponse = client.execute(method);
+            return client.execute(method);
         } catch (Exception e) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, e.getMessage(), e);
             e.printStackTrace();
             throw e;
         }
-        int statusCode = httpResponse.getStatusLine().getStatusCode();
-        if (statusCode != HttpStatus.SC_OK) {
+    }
+
+    protected HttpResponse checkResponse(HttpResponse httpResponse) throws Exception {
+        if (httpResponse.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
             // QQQ For now, we are indeed assuming we get back JSON errors.
             // In future this may be changed depending on the requested
             // output format sent to the servlet.
             String errorBody = EntityUtils.toString(httpResponse.getEntity());
             try {
                 JSONObject result = new JSONObject(errorBody);
-                String[] errors = {result.getJSONArray("error-code").getString(0), result.getString("summary"),
-                        result.getString("stacktrace")};
+                String[] errors = { result.getJSONArray("error-code").getString(0), result.getString("summary"),
+                        result.getString("stacktrace") };
                 GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, errors[2]);
                 String exceptionMsg = "HTTP operation failed: " + errors[0]
                         + "\nSTATUS LINE: " + httpResponse.getStatusLine()
@@ -293,8 +298,12 @@ public class TestExecutor {
         HttpUriRequest method = constructHttpMethod(str, url, "query", false, params);
         // Set accepted output response type
         method.setHeader("Accept", fmt.mimeType());
-        HttpResponse response = executeHttpRequest(method);
+        HttpResponse response = executeAndCheckHttpRequest(method);
         return response.getEntity().getContent();
+    }
+
+    public InputStream executeQueryService(String str, String url) throws Exception {
+        return executeQueryService(str, OutputFormat.CLEAN_JSON, url, new ArrayList<>());
     }
 
     public InputStream executeQueryService(String str, OutputFormat fmt, String url,
@@ -307,7 +316,7 @@ public class TestExecutor {
         return response.getEntity().getContent();
     }
 
-    private void setFormatParam(List<CompilationUnit.Parameter> params, OutputFormat fmt) {
+    protected void setFormatParam(List<CompilationUnit.Parameter> params, OutputFormat fmt) {
         boolean formatSet = false;
         for (CompilationUnit.Parameter param : params) {
             if ("format".equals(param.getName())) {
@@ -344,7 +353,7 @@ public class TestExecutor {
         return builder.build();
     }
 
-    private HttpUriRequest constructPostMethod(String statement, String endpoint, String stmtParam,
+    protected HttpUriRequest constructPostMethod(String statement, String endpoint, String stmtParam,
             boolean postStmtAsParam, List<CompilationUnit.Parameter> otherParams) {
         RequestBuilder builder = RequestBuilder.post(endpoint);
         if (postStmtAsParam) {
@@ -363,7 +372,7 @@ public class TestExecutor {
     public InputStream executeClusterStateQuery(OutputFormat fmt, String url) throws Exception {
         HttpUriRequest request = RequestBuilder.get(url).setHeader("Accept", fmt.mimeType()).build();
 
-        HttpResponse response = executeHttpRequest(request);
+        HttpResponse response = executeAndCheckHttpRequest(request);
         return response.getEntity().getContent();
     }
 
@@ -376,7 +385,7 @@ public class TestExecutor {
                 .build();
 
         // Execute the method.
-        executeHttpRequest(request);
+        executeAndCheckHttpRequest(request);
     }
 
     // Executes AQL in either async or async-defer mode.
@@ -388,7 +397,7 @@ public class TestExecutor {
                 .setHeader("Accept", fmt.mimeType())
                 .build();
 
-        HttpResponse response = executeHttpRequest(request);
+        HttpResponse response = executeAndCheckHttpRequest(request);
         InputStream resultStream = response.getEntity().getContent();
 
         String theHandle = IOUtils.toString(resultStream, "UTF-8");
@@ -399,7 +408,7 @@ public class TestExecutor {
     }
 
     private InputStream getHandleResult(String handle, OutputFormat fmt) throws Exception {
-        final String url = "http://" + host + ":" + port + getPath(Servlets.QUERY_RESULT);
+        final String url = getEndpoint(Servlets.QUERY_RESULT);
 
         // Create a method instance.
         HttpUriRequest request = RequestBuilder.get(url)
@@ -407,7 +416,7 @@ public class TestExecutor {
                 .setHeader("Accept", fmt.mimeType())
                 .build();
 
-        HttpResponse response = executeHttpRequest(request);
+        HttpResponse response = executeAndCheckHttpRequest(request);
         return response.getEntity().getContent();
     }
 
@@ -424,7 +433,7 @@ public class TestExecutor {
                 .build();
 
         // Execute the method.
-        executeHttpRequest(request);
+        executeAndCheckHttpRequest(request);
     }
 
     // Method that reads a DDL/Update/Query File
@@ -514,7 +523,6 @@ public class TestExecutor {
         executeTest(actualPath, testCaseCtx, pb, isDmlRecoveryTest, null);
     }
 
-
     public void executeTest(TestCaseContext testCaseCtx, TestFileContext ctx, String statement,
             boolean isDmlRecoveryTest, ProcessBuilder pb, CompilationUnit cUnit, MutableInt queryCount,
             List<TestFileContext> expectedResultFileCtxs, File testFile, String actualPath) throws Exception {
@@ -524,9 +532,10 @@ public class TestExecutor {
         switch (ctx.getType()) {
             case "ddl":
                 if (ctx.getFile().getName().endsWith("aql")) {
-                    executeDDL(statement, "http://" + host + ":" + port + getPath(Servlets.AQL_DDL));
+                    executeDDL(statement, getEndpoint(Servlets.AQL_DDL));
                 } else {
-                    executeDDL(statement, "http://" + host + ":" + port + getPath(Servlets.SQLPP_DDL));
+                    InputStream resultStream = executeQueryService(statement, getEndpoint(Servlets.QUERY_SERVICE));
+                    ResultExtractor.extract(resultStream);
                 }
                 break;
             case "update":
@@ -535,9 +544,10 @@ public class TestExecutor {
                     statement = statement.replaceAll("nc1://", "127.0.0.1://../../../../../../asterix-app/");
                 }
                 if (ctx.getFile().getName().endsWith("aql")) {
-                    executeUpdate(statement, "http://" + host + ":" + port + getPath(Servlets.AQL_UPDATE));
+                    executeUpdate(statement, getEndpoint(Servlets.AQL_UPDATE));
                 } else {
-                    executeUpdate(statement, "http://" + host + ":" + port + getPath(Servlets.SQLPP_UPDATE));
+                    InputStream resultStream = executeQueryService(statement, getEndpoint(Servlets.QUERY_SERVICE));
+                    ResultExtractor.extract(resultStream);
                 }
                 break;
             case "query":
@@ -554,26 +564,22 @@ public class TestExecutor {
                 OutputFormat fmt = OutputFormat.forCompilationUnit(cUnit);
                 if (ctx.getFile().getName().endsWith("aql")) {
                     if (ctx.getType().equalsIgnoreCase("query")) {
-                        resultStream = executeQuery(statement, fmt,
-                                "http://" + host + ":" + port + getPath(Servlets.AQL_QUERY), cUnit.getParameter());
+                        resultStream = executeQuery(statement, fmt, getEndpoint(Servlets.AQL_QUERY),
+                                cUnit.getParameter());
                     } else if (ctx.getType().equalsIgnoreCase("async")) {
-                        resultStream = executeAnyAQLAsync(statement, false, fmt,
-                                "http://" + host + ":" + port + getPath(Servlets.AQL));
+                        resultStream = executeAnyAQLAsync(statement, false, fmt, getEndpoint(Servlets.AQL));
                     } else if (ctx.getType().equalsIgnoreCase("asyncdefer")) {
-                        resultStream = executeAnyAQLAsync(statement, true, fmt,
-                                "http://" + host + ":" + port + getPath(Servlets.AQL));
+                        resultStream = executeAnyAQLAsync(statement, true, fmt, getEndpoint(Servlets.AQL));
                     }
                 } else {
                     if (ctx.getType().equalsIgnoreCase("query")) {
-                        resultStream = executeQueryService(statement, fmt,
-                                "http://" + host + ":" + port + getPath(Servlets.QUERY_SERVICE), cUnit.getParameter());
+                        resultStream = executeQueryService(statement, fmt, getEndpoint(Servlets.QUERY_SERVICE),
+                                cUnit.getParameter());
                         resultStream = ResultExtractor.extract(resultStream);
                     } else if (ctx.getType().equalsIgnoreCase("async")) {
-                        resultStream = executeAnyAQLAsync(statement, false, fmt,
-                                "http://" + host + ":" + port + getPath(Servlets.SQLPP));
+                        resultStream = executeAnyAQLAsync(statement, false, fmt, getEndpoint(Servlets.SQLPP));
                     } else if (ctx.getType().equalsIgnoreCase("asyncdefer")) {
-                        resultStream = executeAnyAQLAsync(statement, true, fmt,
-                                "http://" + host + ":" + port + getPath(Servlets.SQLPP));
+                        resultStream = executeAnyAQLAsync(statement, true, fmt, getEndpoint(Servlets.SQLPP));
                     }
                 }
                 if (queryCount.intValue() >= expectedResultFileCtxs.size()) {
@@ -599,14 +605,14 @@ public class TestExecutor {
                 break;
             case "txnqbc": // qbc represents query before crash
                 resultStream = executeQuery(statement, OutputFormat.forCompilationUnit(cUnit),
-                        "http://" + host + ":" + port + getPath(Servlets.AQL_QUERY), cUnit.getParameter());
+                        getEndpoint(Servlets.AQL_QUERY), cUnit.getParameter());
                 qbcFile = getTestCaseQueryBeforeCrashFile(actualPath, testCaseCtx, cUnit);
                 qbcFile.getParentFile().mkdirs();
                 writeOutputToFile(qbcFile, resultStream);
                 break;
             case "txnqar": // qar represents query after recovery
                 resultStream = executeQuery(statement, OutputFormat.forCompilationUnit(cUnit),
-                        "http://" + host + ":" + port + getPath(Servlets.AQL_QUERY), cUnit.getParameter());
+                        getEndpoint(Servlets.AQL_QUERY), cUnit.getParameter());
                 File qarFile = new File(actualPath + File.separator
                         + testCaseCtx.getTestCase().getFilePath().replace(File.separator, "_") + "_" + cUnit.getName()
                         + "_qar.adm");
@@ -617,7 +623,7 @@ public class TestExecutor {
                 break;
             case "txneu": // eu represents erroneous update
                 try {
-                    executeUpdate(statement, "http://" + host + ":" + port + getPath(Servlets.AQL_UPDATE));
+                    executeUpdate(statement, getEndpoint(Servlets.AQL_UPDATE));
                 } catch (Exception e) {
                     // An exception is expected.
                     failed = true;
@@ -645,7 +651,7 @@ public class TestExecutor {
                 break;
             case "errddl": // a ddlquery that expects error
                 try {
-                    executeDDL(statement, "http://" + host + ":" + port + getPath(Servlets.AQL_DDL));
+                    executeDDL(statement, getEndpoint(Servlets.AQL_DDL));
                 } catch (Exception e) {
                     // expected error happens
                     failed = true;
@@ -685,8 +691,7 @@ public class TestExecutor {
             case "cstate": // cluster state query
                 try {
                     fmt = OutputFormat.forCompilationUnit(cUnit);
-                    resultStream = executeClusterStateQuery(fmt,
-                            "http://" + host + ":" + port + getPath(Servlets.CLUSTER_STATE));
+                    resultStream = executeClusterStateQuery(fmt, getEndpoint(Servlets.CLUSTER_STATE));
                     expectedResultFile = expectedResultFileCtxs.get(queryCount.intValue()).getFile();
                     actualResultFile = testCaseCtx.getActualResultFile(cUnit, expectedResultFile, new File(actualPath));
                     actualResultFile.getParentFile().mkdirs();
@@ -699,7 +704,7 @@ public class TestExecutor {
                 }
                 break;
             case "server": // (start <test server name> <port>
-                               // [<arg1>][<arg2>][<arg3>]...|stop (<port>|all))
+                           // [<arg1>][<arg2>][<arg3>]...|stop (<port>|all))
                 try {
                     lines = statement.trim().split("\n");
                     String[] command = lines[lines.length - 1].trim().split(" ");
@@ -747,7 +752,7 @@ public class TestExecutor {
                 }
                 break;
             case "lib": // expected format <dataverse-name> <library-name>
-                            // <library-directory>
+                        // <library-directory>
                         // TODO: make this case work well with entity names containing spaces by
                         // looking for \"
                 lines = statement.split("\n");
@@ -852,5 +857,9 @@ public class TestExecutor {
 
     protected String getPath(Servlets servlet) {
         return servlet.getPath();
+    }
+
+    protected String getEndpoint(Servlets servlet) {
+        return "http://" + host + ":" + port + getPath(servlet);
     }
 }
