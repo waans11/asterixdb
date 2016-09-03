@@ -265,7 +265,7 @@ public class APIFramework {
         // Calculate the number of unique hash entries in the hash table using the given budget.
         double expectedhashTableNumberOfEntry = groupHashTableSize
                 / SerializableHashTable.getExpectedByteSizePerHashValue();
-        // Find the smallest prime number that is greater than expectedhashTableNumberOFEntry.
+        // Find the smallest prime number that is slightly greater than expectedhashTableNumberOFEntry.
         BigInteger tableSizePrimeNumber = BigInteger.valueOf((long) expectedhashTableNumberOfEntry).nextProbablePrime();
         OptimizationConfUtil.getPhysicalOptimizationConfig()
                 .setExternalGroupByTableSize(tableSizePrimeNumber.intValue());
