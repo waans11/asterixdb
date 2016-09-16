@@ -47,7 +47,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     private final FixedSizeFrameTupleAppender appender;
     private BufferInfo tempInfo;
     private final IPartitionedMemoryConstrain constrain;
-    private int totalFrameCount = 0;
 
     public VPartitionTupleBufferManager(IHyracksFrameMgrContext ctx, IPartitionedMemoryConstrain constrain,
             int partitions, int frameLimitInBytes) throws HyracksDataException {
@@ -72,12 +71,11 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         }
         Arrays.fill(numTuples, 0);
         appendFrame.reset(null);
-        totalFrameCount = 0;
     }
 
     @Override
-    public int getFrameCount() {
-        return totalFrameCount;
+    public int getCurrentByteSize() {
+        return framePool.getCurrentlyAllocatedByteSize();
     }
 
     @Override
@@ -108,7 +106,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         if (partition != null) {
             for (int i = 0; i < partition.getNumFrames(); ++i) {
                 framePool.deAllocateBuffer(partition.getFrame(i, tempInfo).getBuffer());
-                totalFrameCount--;
             }
         }
         partitionArray[partitionId].reset();
@@ -172,7 +169,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         if (newBuffer == null) {
             return -1;
         }
-        totalFrameCount++;
         appendFrame.reset(newBuffer);
         appender.reset(appendFrame, true);
         return partitionArray[partition].insertFrame(newBuffer);

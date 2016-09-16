@@ -30,7 +30,10 @@ public interface ISerializableTable {
 
     boolean getTuplePointer(int entry, int offset, TuplePointer tuplePointer);
 
-    int getFrameCount();
+    /**
+     * Return the byte size of entire frames that are currently allocated to the table.
+     */
+    int getCurrentByteSize();
 
     int getTupleCount();
 

@@ -63,6 +63,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             RecordDescriptor inRecordDescriptor, RecordDescriptor outRecordDescriptor, final int framesLimit,
             final int seed) throws HyracksDataException {
         final int tableSize = suggestTableSize;
+        final int budgetByteSize = framesLimit * ctx.getInitialFrameSize();
 
         // We check whether the given table size is within the budget of groupFrameLimit.
         int expectedByteSizeOfHashTableForGroupBy = SerializableHashTable.getExpectedByteSizeOfHashTable(tableSize,
@@ -182,15 +183,14 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 initStateTupleBuilder(accessor, tIndex);
                 int pid = getPartition(entryInHashTable);
 
-
                 if (!bufferManager.insertTuple(pid, stateTupleBuilder.getByteArray(),
                         stateTupleBuilder.getFieldEndOffsets(), 0, stateTupleBuilder.getSize(), pointer)) {
                     return InsertResultType.FAIL;
                 }
                 hashTableForTuplePointer.insert(entryInHashTable, pointer);
-                // If the number of frames allocated to the data table and hash table exceeds the frame limit,
+                // If the byte size of allocated data table and hash table exceeds the budget,
                 // we need to spill a partition to the disk to make some space.
-                if (isUsedNumFramesExceedBudget()) {
+                if (isUsedByteExceedsBudget()) {
                     return InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET;
                 } else {
                     return InsertResultType.SUCCESS;
@@ -259,13 +259,13 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             }
 
             @Override
-            public int getNumFrames() {
-                return bufferManager.getFrameCount() + hashTableForTuplePointer.getFrameCount();
+            public int getCurrentByteSize() {
+                return bufferManager.getCurrentByteSize() + hashTableForTuplePointer.getCurrentByteSize();
             }
 
             @Override
-            public boolean isUsedNumFramesExceedBudget() {
-                return getNumFrames() > framesLimit;
+            public boolean isUsedByteExceedsBudget() {
+                return getCurrentByteSize() > budgetByteSize;
             }
 
             @Override

@@ -55,8 +55,8 @@ public class SerializableHashTable implements ISerializableTable {
     private final int frameCapacity;
     private int currentLargestFrameNumber = 0;
     private int tupleCount = 0;
-    // The number of total frames that are allocated to the headers and contents
-    private int totalFrameCount = 0;
+    // The byte size of total frames that are allocated to the headers and contents
+    private int currentByteSize = 0;
     private TuplePointer tempTuplePointer = new TuplePointer();
     // Keep track of wasted spaces due to the migration of an entry slot in a content frame
     private int wastedIntSpaceCount = 0;
@@ -83,7 +83,7 @@ public class SerializableHashTable implements ISerializableTable {
         frameCapacity = frame.capacity();
         resetFrame(frame);
         contents.add(frame);
-        totalFrameCount++;
+        currentByteSize = frame.getByteCapacity();
         currentOffsetInEachFrameList.add(0);
         this.tableSize = tableSize;
     }
@@ -97,7 +97,7 @@ public class SerializableHashTable implements ISerializableTable {
             headerFrame = new IntSerDeBuffer(ctx.allocateFrame().array());
             headers[headerFrameIndex] = headerFrame;
             resetFrame(headerFrame);
-            totalFrameCount++;
+            currentByteSize += headerFrame.getByteCapacity();
         }
         int contentFrameIndex = headerFrame.getInt(offsetInHeaderFrame);
         if (contentFrameIndex < 0) {
@@ -189,7 +189,7 @@ public class SerializableHashTable implements ISerializableTable {
 
         currentLargestFrameNumber = 0;
         tupleCount = 0;
-        totalFrameCount = 0;
+        currentByteSize = 0;
         wastedIntSpaceCount = 0;
         currentReadPageForGC = 0;
         currentReadIntOffsetInPageForGC = 0;
@@ -201,8 +201,8 @@ public class SerializableHashTable implements ISerializableTable {
     }
 
     @Override
-    public int getFrameCount() {
-        return totalFrameCount;
+    public int getCurrentByteSize() {
+        return currentByteSize;
     }
 
     @Override
@@ -238,7 +238,7 @@ public class SerializableHashTable implements ISerializableTable {
         contents.clear();
         currentOffsetInEachFrameList.clear();
         tupleCount = 0;
-        totalFrameCount = 0;
+        currentByteSize = 0;
         currentLargestFrameNumber = 0;
         ctx.deallocateFrames(nFrames);
     }
@@ -271,7 +271,7 @@ public class SerializableHashTable implements ISerializableTable {
                     resetFrame(newContentFrame);
                     currentLargestFrameNumber++;
                     contents.add(newContentFrame);
-                    totalFrameCount++;
+                    currentByteSize += newContentFrame.getByteCapacity();
                     currentOffsetInEachFrameList.add(0);
                 } else {
                     currentLargestFrameNumber++;
@@ -410,9 +410,9 @@ public class SerializableHashTable implements ISerializableTable {
     }
 
     public static int getExpectedByteSizeOfHashTable(int tableSize, int frameSize) {
-        int numberOfHeaderFrame = (int) Math.ceil(tableSize * 2 / frameSize);
-        int numberOfContentFrame = (int) Math
-                .ceil((getNumberOfEntryInSlot() * 2 * getUnitSize() * tableSize) / frameSize);
+        int numberOfHeaderFrame = (int) ((double) tableSize * 2 / (double) frameSize);
+        int numberOfContentFrame = (int) (((double) getNumberOfEntryInSlot() * 2 * getUnitSize() * tableSize)
+                / (double) frameSize);
         return (numberOfHeaderFrame + numberOfContentFrame) * frameSize;
     }
 
@@ -442,9 +442,9 @@ public class SerializableHashTable implements ISerializableTable {
         // Initialize the reader
         currentReadPageForGC = 0;
         currentReadIntOffsetInPageForGC = 0;
-        int slotCapacity = 0;
-        int slotUsedCount = 0;
-        int capacityInIntCount = 0;
+        int slotCapacity;
+        int slotUsedCount;
+        int capacityInIntCount;
         nextSlotIntPosInPageForGC = 0;
         currentReadContentFrameForGC = contents.get(currentReadPageForGC);
 
@@ -459,8 +459,6 @@ public class SerializableHashTable implements ISerializableTable {
             currentReadIntOffsetInPageForGC = 0;
             nextSlotIntPosInPageForGC = INVALID_VALUE;
             currentReadContentFrameForGC = contents.get(currentReadPageForGC);
-            slotCapacity = INVALID_VALUE;
-            slotUsedCount = INVALID_VALUE;
 
             // Step #2. Advance the reader until it hits the end of the given frame.
             while (currentReadIntOffsetInPageForGC < frameCapacity) {
@@ -520,10 +518,11 @@ public class SerializableHashTable implements ISerializableTable {
 
         if (numberOfFramesToBeDeallocated >= 1) {
             for (int i = 0; i < numberOfFramesToBeDeallocated; i++) {
+                currentByteSize -= contents.get(currentGCWritePageForGC + 1).getByteCapacity();
                 contents.remove(currentGCWritePageForGC + 1);
+
                 currentOffsetInEachFrameList.remove(currentGCWritePageForGC + 1);
             }
-            totalFrameCount -= numberOfFramesToBeDeallocated;
         }
 
         // Reset the current offset in the final page so that the future insertions will work without an issue.
@@ -546,7 +545,7 @@ public class SerializableHashTable implements ISerializableTable {
             int intReadAtThisTime;
             currentReadIntOffsetInPageForGC = nextSlotIntPosInPageForGC;
             while (intToRead > 0) {
-                intReadAtThisTime = Math.min(intToRead, (frameCapacity - currentReadIntOffsetInPageForGC));
+                intReadAtThisTime = Math.min(intToRead, frameCapacity - currentReadIntOffsetInPageForGC);
                 currentReadIntOffsetInPageForGC += intReadAtThisTime;
                 if (currentReadIntOffsetInPageForGC >= frameCapacity
                         && currentReadPageForGC < currentLargestFrameNumber) {
@@ -577,8 +576,8 @@ public class SerializableHashTable implements ISerializableTable {
         int oneTimeIntCapacityForReader;
 
         while (chunksToMove > 0) {
-            oneTimeIntCapacityForWriter = Math.min(chunksToMove, (frameCapacity - tempWriteIntPosInPage));
-            oneTimeIntCapacityForReader = Math.min(chunksToMove, (frameCapacity - tempReadIntPosInPage));
+            oneTimeIntCapacityForWriter = Math.min(chunksToMove, frameCapacity - tempWriteIntPosInPage);
+            oneTimeIntCapacityForReader = Math.min(chunksToMove, frameCapacity - tempReadIntPosInPage);
 
             chunksToMoveAtThisTime = Math.min(oneTimeIntCapacityForWriter, oneTimeIntCapacityForReader);
 
@@ -636,7 +635,7 @@ public class SerializableHashTable implements ISerializableTable {
         int chunksToDeleteAtThisTime;
 
         while (chunksToDelete > 0) {
-            chunksToDeleteAtThisTime = Math.min(chunksToDelete, (frameCapacity - tempReadIntPosInPage));
+            chunksToDeleteAtThisTime = Math.min(chunksToDelete, frameCapacity - tempReadIntPosInPage);
 
             // Clear that part in the Reader
             for (int i = 0; i < chunksToDeleteAtThisTime; i++) {
@@ -724,6 +723,10 @@ public class SerializableHashTable implements ISerializableTable {
 
         public int capacity() {
             return bytes.length / 4;
+        }
+
+        public int getByteCapacity() {
+            return bytes.length;
         }
 
     }

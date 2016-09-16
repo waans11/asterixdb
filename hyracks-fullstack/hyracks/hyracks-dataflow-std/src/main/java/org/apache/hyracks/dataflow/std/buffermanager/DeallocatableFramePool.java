@@ -120,4 +120,9 @@ public class DeallocatableFramePool implements IDeallocatableFramePool {
         buffers.clear();
         allocated = 0;
     }
+
+    @Override
+    public int getCurrentlyAllocatedByteSize() {
+        return allocated;
+    }
 }

@@ -30,8 +30,8 @@ public interface ISpillableTable {
     public enum InsertResultType {
         SUCCESS,
         FAIL,
-        // If a memory budget is given and if an insertion is successful,
-        // but exceeds the given budget, we return this code.
+        // If a memory budget is given and if an insertion is successful, but exceeds the given budget,
+        // we return this code to let the caller does some operation to make some space.
         SUCCESS_BUT_EXCEEDS_BUDGET
     }
 
@@ -75,12 +75,12 @@ public interface ISpillableTable {
     /**
      * Get number of used frames
      */
-    int getNumFrames();
+    int getCurrentByteSize();
 
     /**
      * Returns true if the number of used frames exceed the budget.
      */
-    boolean isUsedNumFramesExceedBudget();
+    boolean isUsedByteExceedsBudget();
 
     /**
      * When the table is full, it will return a proper partition which will be the flush() candidate.

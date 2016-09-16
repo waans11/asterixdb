@@ -20,7 +20,6 @@ package org.apache.asterix.api.common;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.math.BigInteger;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,9 +51,9 @@ import org.apache.asterix.lang.common.rewrites.LangRewritingContext;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
 import org.apache.asterix.lang.common.statement.Query;
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;
-import org.apache.asterix.om.util.AsterixAppContextInfo;
 import org.apache.asterix.optimizer.base.RuleCollections;
 import org.apache.asterix.runtime.job.listener.JobEventListenerFactory;
+import org.apache.asterix.runtime.util.AsterixAppContextInfo;
 import org.apache.asterix.transaction.management.service.transaction.JobIdFactory;
 import org.apache.asterix.translator.CompiledStatements.ICompiledDmlStatement;
 import org.apache.asterix.translator.IStatementExecutor.Stats;
@@ -86,7 +85,6 @@ import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConf
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
-import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 import org.json.JSONException;
 
 /**
@@ -218,8 +216,8 @@ public class APIFramework {
 
         org.apache.asterix.common.transactions.JobId asterixJobId = JobIdFactory.generateJobId();
         queryMetadataProvider.setJobId(asterixJobId);
-        ILangExpressionToPlanTranslator t = translatorFactory.createExpressionToPlanTranslator(queryMetadataProvider,
-                varCounter);
+        ILangExpressionToPlanTranslator t =
+                translatorFactory.createExpressionToPlanTranslator(queryMetadataProvider, varCounter);
 
         ILogicalPlan plan;
         // statement = null when it's a query
@@ -241,13 +239,13 @@ public class APIFramework {
         }
 
         //print the plot for the logical plan
-        AsterixExternalProperties xProps = AsterixAppContextInfo.getInstance().getExternalProperties();
+        AsterixExternalProperties xProps = AsterixAppContextInfo.INSTANCE.getExternalProperties();
         Boolean plot = xProps.getIsPlottingEnabled();
         if (plot) {
             PlanPlotter.printLogicalPlan(plan);
         }
 
-        AsterixCompilerProperties compilerProperties = AsterixAppContextInfo.getInstance().getCompilerProperties();
+        AsterixCompilerProperties compilerProperties = AsterixAppContextInfo.INSTANCE.getCompilerProperties();
         int frameSize = compilerProperties.getFrameSize();
         int sortFrameLimit = (int) (compilerProperties.getSortMemorySize() / frameSize);
         int groupFrameLimit = (int) (compilerProperties.getGroupMemorySize() / frameSize);
@@ -257,21 +255,8 @@ public class APIFramework {
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesExternalGroupBy(groupFrameLimit);
         OptimizationConfUtil.getPhysicalOptimizationConfig().setMaxFramesForJoin(joinFrameLimit);
 
-        // the byte size of hash table of an external hash group-by operator
-        // If this number is too big to fit into group memory size, then a run-time exception will be thrown.
-        // We don't throw an exception here since there may be an optimization that touches this value.
-        long groupHashTableSize = compilerProperties.getGroupHashTableMemorySize();
-
-        // Calculate the number of unique hash entries in the hash table using the given budget.
-        double expectedhashTableNumberOfEntry = groupHashTableSize
-                / SerializableHashTable.getExpectedByteSizePerHashValue();
-        // Find the smallest prime number that is slightly greater than expectedhashTableNumberOFEntry.
-        BigInteger tableSizePrimeNumber = BigInteger.valueOf((long) expectedhashTableNumberOfEntry).nextProbablePrime();
-        OptimizationConfUtil.getPhysicalOptimizationConfig()
-                .setExternalGroupByTableSize(tableSizePrimeNumber.intValue());
-
-        HeuristicCompilerFactoryBuilder builder = new HeuristicCompilerFactoryBuilder(
-                AqlOptimizationContextFactory.INSTANCE);
+        HeuristicCompilerFactoryBuilder builder =
+                new HeuristicCompilerFactoryBuilder(AqlOptimizationContextFactory.INSTANCE);
         builder.setPhysicalOptimizationConfig(OptimizationConfUtil.getPhysicalOptimizationConfig());
         builder.setLogicalRewrites(buildDefaultLogicalRewrites(cExtensionManager));
         builder.setPhysicalRewrites(buildDefaultPhysicalRewrites());
@@ -353,9 +338,9 @@ public class APIFramework {
         builder.setTypeTraitProvider(format.getTypeTraitProvider());
         builder.setNormalizedKeyComputerFactoryProvider(format.getNormalizedKeyComputerFactoryProvider());
 
-        JobEventListenerFactory jobEventListenerFactory = new JobEventListenerFactory(asterixJobId,
-                queryMetadataProvider.isWriteTransaction());
-        JobSpecification spec = compiler.createJob(AsterixAppContextInfo.getInstance(), jobEventListenerFactory);
+        JobEventListenerFactory jobEventListenerFactory =
+                new JobEventListenerFactory(asterixJobId, queryMetadataProvider.isWriteTransaction());
+        JobSpecification spec = compiler.createJob(AsterixAppContextInfo.INSTANCE, jobEventListenerFactory);
 
         if (conf.is(SessionConfig.OOB_HYRACKS_JOB)) {
             printPlanPrefix(conf, "Hyracks job");

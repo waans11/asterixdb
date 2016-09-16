@@ -202,4 +202,9 @@ public class VariableFramePool implements IFramePool {
             return o1.capacity() < o2.capacity() ? -1 : 1;
         }
     };
+
+    @Override
+    public int getCurrentlyAllocatedByteSize() {
+        return allocateMem;
+    }
 }

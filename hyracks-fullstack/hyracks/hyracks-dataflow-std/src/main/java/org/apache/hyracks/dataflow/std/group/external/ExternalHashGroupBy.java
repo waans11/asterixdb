@@ -70,9 +70,9 @@ public class ExternalHashGroupBy {
                     RunFileWriter writer = getPartitionWriterOrCreateOneIfNotExist(partition);
                     flushPartitionToRun(partition, writer);
                     if (result == InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET) {
-                        if (!table.isUsedNumFramesExceedBudget()) {
+                        if (!table.isUsedByteExceedsBudget()) {
                             // If the table conforms to the budget, we can stop here.
-                            // If not, we continue to spill another partitions.
+                            // If not, we continue to spill another partition(s).
                             result = InsertResultType.SUCCESS;
                         }
                     } else {
