@@ -118,8 +118,9 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public void stopCluster() throws Exception {
-        HyracksClientInterfaceFunctions.ClusterShutdownFunction csdf = new HyracksClientInterfaceFunctions.ClusterShutdownFunction();
+    public void stopCluster(boolean terminateNCService) throws Exception {
+        HyracksClientInterfaceFunctions.ClusterShutdownFunction csdf =
+                new HyracksClientInterfaceFunctions.ClusterShutdownFunction(terminateNCService);
         rpci.call(ipcHandle, csdf);
         //give the CC some time to do final settling after it returns our request
         for (int i = 3; ipcHandle.isConnected() && i > 0; i--) {
@@ -130,5 +131,20 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
         if (ipcHandle.isConnected()) {
             throw new IPCException("CC refused to release connection after 9 seconds");
         }
+    }
+
+    @Override
+    public String getNodeDetailsJSON(String nodeId, boolean includeStats, boolean includeConfig) throws Exception {
+        HyracksClientInterfaceFunctions.GetNodeDetailsJSONFunction gjsf =
+                new HyracksClientInterfaceFunctions.GetNodeDetailsJSONFunction(nodeId, includeStats, includeConfig);
+        return (String) rpci.call(ipcHandle, gjsf);
+    }
+
+    @Override
+    public String getThreadDump(String node) throws Exception {
+        HyracksClientInterfaceFunctions.ThreadDumpFunction tdf =
+                new HyracksClientInterfaceFunctions.ThreadDumpFunction(node);
+        return (String)rpci.call(ipcHandle, tdf);
+
     }
 }

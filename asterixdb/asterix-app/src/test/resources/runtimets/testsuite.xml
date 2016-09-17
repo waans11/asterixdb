@@ -21,6 +21,7 @@
              <!ENTITY ComparisonQueries SYSTEM "queries/comparison/ComparisonQueries.xml">
              <!ENTITY RecordsQueries SYSTEM "queries/records/RecordsQueries.xml">
              <!ENTITY DeepEqualQueries SYSTEM "queries/comparison/deep_equal/DeepEqualQueries.xml">
+             <!ENTITY APIQueries SYSTEM "queries/api/APIQueries.xml">
              ]>
 
 <test-suite
@@ -28,6 +29,7 @@
              ResultOffsetPath="results"
              QueryOffsetPath="queries"
              QueryFileExtension=".aql">
+  &APIQueries;
   <test-group name="external-library">
     <test-case FilePath="external-library">
       <compilation-unit name="typed_adapter">
@@ -1251,9 +1253,7 @@
       </compilation-unit>
     </test-case>
   </test-group>
-  <test-group name="comparison">
-    &ComparisonQueries;
-  </test-group>
+  &ComparisonQueries;
   <test-group name="constructor">
     <test-case FilePath="constructor">
       <compilation-unit name="binary_01">
@@ -3179,7 +3179,7 @@
     <test-case FilePath="misc">
       <compilation-unit name="partition-by-nonexistent-field"> <!-- Seriously?? 3 expected errors -->
         <output-dir compare="Text">partition-by-nonexistent-field</output-dir>
-        <expected-error>java.lang.NullPointerException</expected-error>
+        <expected-error>Type not found for partitioning key [id]</expected-error>
         <expected-error>org.apache.hyracks.algebricks.common.exceptions.AlgebricksException: Cannot find dataset</expected-error>
         <expected-error>org.apache.hyracks.algebricks.common.exceptions.AlgebricksException: Could not find dataset</expected-error>
       </compilation-unit>
@@ -3508,6 +3508,18 @@
       <test-case FilePath="open-index-enforced/external-indexing">
         <compilation-unit name="leftouterjoin-rtree">
           <output-dir compare="Text">leftouterjoin-rtree</output-dir>
+        </compilation-unit>
+      </test-case>
+    </test-group>
+    <test-group name="open-index-enforced/type-checking">
+      <test-case FilePath="open-index-enforced/type-checking">
+        <compilation-unit name="enforced-type-delete">
+          <output-dir compare="Text">enforced-type-delete</output-dir>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="open-index-enforced/type-checking">
+        <compilation-unit name="enforced-type-upsert">
+          <output-dir compare="Text">enforced-type-upsert</output-dir>
         </compilation-unit>
       </test-case>
     </test-group>
@@ -4803,11 +4815,14 @@
       </compilation-unit>
     </test-case>-->
   </test-group>
+  &RecordsQueries;
+  &DeepEqualQueries;
   <test-group name="records">
-    &RecordsQueries;
-  </test-group>
-  <test-group name="deep-equal">
-    &DeepEqualQueries;
+      <test-case FilePath="records">
+      <compilation-unit name="closed-nullable-fields_issue1616">
+        <output-dir compare="Text">closed-nullable-fields_issue1616</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="scan">
     <test-case FilePath="scan">

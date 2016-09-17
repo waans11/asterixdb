@@ -24,6 +24,7 @@ public interface ICCMessageBroker extends IMessageBroker {
 
     /**
      * Sends the passed message to the specified {@code nodeId}
+     *
      * @param msg
      * @param nodeId
      * @throws Exception

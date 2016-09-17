@@ -187,8 +187,19 @@ public final class HyracksConnection implements IHyracksClientConnection {
     public JobInfo getJobInfo(JobId jobId) throws Exception {
         return hci.getJobInfo(jobId);
     }
+
     @Override
-    public void stopCluster() throws Exception{
-        hci.stopCluster();
+    public void stopCluster(boolean terminateNCService) throws Exception {
+        hci.stopCluster(terminateNCService);
+    }
+
+    @Override
+    public String getNodeDetailsJSON(String nodeId, boolean includeStats, boolean includeConfig) throws Exception {
+        return hci.getNodeDetailsJSON(nodeId, includeStats, includeConfig);
+    }
+
+    @Override
+    public String getThreadDump(String node) throws Exception {
+        return hci.getThreadDump(node);
     }
 }

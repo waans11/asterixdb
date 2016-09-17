@@ -51,6 +51,7 @@ import org.apache.asterix.common.context.DatasetLifecycleManager;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.library.ILibraryManager;
+import org.apache.asterix.common.metadata.MetadataIndexImmutableProperties;
 import org.apache.asterix.common.replication.IRemoteRecoveryManager;
 import org.apache.asterix.common.replication.IReplicaResourcesManager;
 import org.apache.asterix.common.replication.IReplicationChannel;
@@ -65,13 +66,12 @@ import org.apache.asterix.metadata.MetadataNode;
 import org.apache.asterix.metadata.api.IAsterixStateProxy;
 import org.apache.asterix.metadata.api.IMetadataNode;
 import org.apache.asterix.metadata.bootstrap.MetadataBootstrap;
-import org.apache.asterix.metadata.bootstrap.MetadataIndexImmutableProperties;
-import org.apache.asterix.om.util.AsterixClusterProperties;
 import org.apache.asterix.replication.management.ReplicationChannel;
 import org.apache.asterix.replication.management.ReplicationManager;
 import org.apache.asterix.replication.recovery.RemoteRecoveryManager;
 import org.apache.asterix.replication.storage.ReplicaResourcesManager;
-import org.apache.asterix.transaction.management.resource.GlobalResourceIdFactoryProvider;
+import org.apache.asterix.runtime.transaction.GlobalResourceIdFactoryProvider;
+import org.apache.asterix.runtime.util.AsterixClusterProperties;
 import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepository;
 import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepositoryFactory;
 import org.apache.asterix.transaction.management.service.transaction.TransactionSubsystem;
@@ -105,6 +105,7 @@ public class AsterixNCAppRuntimeContext implements IAsterixAppRuntimeContext, IA
 
     private ILSMMergePolicyFactory metadataMergePolicyFactory;
     private final INCApplicationContext ncApplicationContext;
+    private final IResourceIdFactory resourceIdFactory;
 
     private AsterixCompilerProperties compilerProperties;
     private AsterixExternalProperties externalProperties;
@@ -124,7 +125,6 @@ public class AsterixNCAppRuntimeContext implements IAsterixAppRuntimeContext, IA
 
     private ILSMIOOperationScheduler lsmIOScheduler;
     private PersistentLocalResourceRepository localResourceRepository;
-    private IResourceIdFactory resourceIdFactory;
     private IIOManager ioManager;
     private boolean isShuttingdown;
 
@@ -171,11 +171,13 @@ public class AsterixNCAppRuntimeContext implements IAsterixAppRuntimeContext, IA
         }
         allExtensions.addAll(new AsterixExtensionProperties(propertiesAccessor).getExtensions());
         ncExtensionManager = new NCExtensionManager(allExtensions);
+        resourceIdFactory = new GlobalResourceIdFactoryProvider(ncApplicationContext).createResourceIdFactory();
     }
 
     @Override
     public void initialize(boolean initialRun) throws IOException, ACIDException {
-        Logger.getLogger("org.apache").setLevel(externalProperties.getLogLevel());
+        Logger.getLogger("org.apache.asterix").setLevel(externalProperties.getLogLevel());
+        Logger.getLogger("org.apache.hyracks").setLevel(externalProperties.getLogLevel());
 
         threadExecutor = new AsterixThreadExecutor(ncApplicationContext.getThreadFactory());
         fileMapManager = new AsterixFileMapManager();
@@ -192,7 +194,7 @@ public class AsterixNCAppRuntimeContext implements IAsterixAppRuntimeContext, IA
 
         ILocalResourceRepositoryFactory persistentLocalResourceRepositoryFactory =
                 new PersistentLocalResourceRepositoryFactory(
-                ioManager, ncApplicationContext.getNodeId(), metadataProperties);
+                        ioManager, ncApplicationContext.getNodeId(), metadataProperties);
 
         localResourceRepository = (PersistentLocalResourceRepository) persistentLocalResourceRepositoryFactory
                 .createRepository();
@@ -208,7 +210,6 @@ public class AsterixNCAppRuntimeContext implements IAsterixAppRuntimeContext, IA
             //delete any storage data before the resource factory is initialized
             localResourceRepository.deleteStorageData(true);
         }
-        initializeResourceIdFactory();
 
         datasetLifecycleManager = new DatasetLifecycleManager(storageProperties, localResourceRepository,
                 MetadataIndexImmutableProperties.FIRST_AVAILABLE_USER_DATASET_ID, txnSubsystem.getLogManager(),
@@ -289,6 +290,7 @@ public class AsterixNCAppRuntimeContext implements IAsterixAppRuntimeContext, IA
         lccm.register((ILifeCycleComponent) datasetLifecycleManager);
         lccm.register((ILifeCycleComponent) txnSubsystem.getTransactionManager());
         lccm.register((ILifeCycleComponent) txnSubsystem.getLockManager());
+
     }
 
     @Override
@@ -438,11 +440,6 @@ public class AsterixNCAppRuntimeContext implements IAsterixAppRuntimeContext, IA
     @Override
     public ILibraryManager getLibraryManager() {
         return libraryManager;
-    }
-
-    @Override
-    public void initializeResourceIdFactory() throws HyracksDataException {
-        resourceIdFactory = new GlobalResourceIdFactoryProvider(ncApplicationContext).createResourceIdFactory();
     }
 
     @Override

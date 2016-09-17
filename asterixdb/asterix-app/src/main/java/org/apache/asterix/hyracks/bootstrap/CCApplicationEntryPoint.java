@@ -18,6 +18,9 @@
  */
 package org.apache.asterix.hyracks.bootstrap;
 
+import static org.apache.asterix.api.http.servlet.ServletConstants.ASTERIX_BUILD_PROP_ATTR;
+import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_CONNECTION_ATTR;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -25,9 +28,12 @@ import java.util.logging.Logger;
 
 import javax.servlet.Servlet;
 
+import org.apache.asterix.active.ActiveLifecycleListener;
 import org.apache.asterix.api.http.servlet.APIServlet;
 import org.apache.asterix.api.http.servlet.AQLAPIServlet;
 import org.apache.asterix.api.http.servlet.ClusterAPIServlet;
+import org.apache.asterix.api.http.servlet.ClusterCCDetailsAPIServlet;
+import org.apache.asterix.api.http.servlet.ClusterNodeDetailsAPIServlet;
 import org.apache.asterix.api.http.servlet.ConnectorAPIServlet;
 import org.apache.asterix.api.http.servlet.DDLAPIServlet;
 import org.apache.asterix.api.http.servlet.FeedServlet;
@@ -39,8 +45,8 @@ import org.apache.asterix.api.http.servlet.QueryWebInterfaceServlet;
 import org.apache.asterix.api.http.servlet.ShutdownAPIServlet;
 import org.apache.asterix.api.http.servlet.UpdateAPIServlet;
 import org.apache.asterix.api.http.servlet.VersionAPIServlet;
+import org.apache.asterix.app.cc.AsterixResourceIdManager;
 import org.apache.asterix.app.cc.CompilerExtensionManager;
-import org.apache.asterix.app.external.ActiveLifecycleListener;
 import org.apache.asterix.app.external.ExternalLibraryUtils;
 import org.apache.asterix.common.api.AsterixThreadFactory;
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
@@ -56,8 +62,8 @@ import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.api.IAsterixStateProxy;
 import org.apache.asterix.metadata.bootstrap.AsterixStateProxy;
 import org.apache.asterix.metadata.cluster.ClusterManager;
-import org.apache.asterix.om.util.AsterixAppContextInfo;
-import org.apache.asterix.om.util.AsterixClusterProperties;
+import org.apache.asterix.runtime.util.AsterixAppContextInfo;
+import org.apache.asterix.runtime.util.AsterixClusterProperties;
 import org.apache.hyracks.api.application.ICCApplicationContext;
 import org.apache.hyracks.api.application.ICCApplicationEntryPoint;
 import org.apache.hyracks.api.client.HyracksConnection;
@@ -68,9 +74,7 @@ import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-
-import static org.apache.asterix.api.http.servlet.ServletConstants.ASTERIX_BUILD_PROP_ATTR;
-import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_CONNECTION_ATTR;
+import org.eclipse.jetty.servlet.ServletMapping;
 
 public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
 
@@ -94,11 +98,12 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
         appCtx.setThreadFactory(new AsterixThreadFactory(new LifeCycleComponentManager()));
         GlobalRecoveryManager.instantiate((HyracksConnection) getNewHyracksClientConnection());
         ILibraryManager libraryManager = new ExternalLibraryManager();
+        AsterixResourceIdManager resourceIdManager = new AsterixResourceIdManager();
         ExternalLibraryUtils.setUpExternaLibraries(libraryManager, false);
         AsterixAppContextInfo.initialize(appCtx, getNewHyracksClientConnection(), GlobalRecoveryManager.instance(),
-                libraryManager);
+                libraryManager, resourceIdManager);
         ccExtensionManager = new CompilerExtensionManager(getExtensions());
-        AsterixAppContextInfo.getInstance().setExtensionManager(ccExtensionManager);
+        AsterixAppContextInfo.INSTANCE.setExtensionManager(ccExtensionManager);
 
         if (System.getProperty("java.rmi.server.hostname") == null) {
             System.setProperty("java.rmi.server.hostname",
@@ -108,10 +113,10 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
         setAsterixStateProxy(AsterixStateProxy.registerRemoteObject());
         appCtx.setDistributedState(proxy);
 
-        AsterixMetadataProperties metadataProperties = AsterixAppContextInfo.getInstance().getMetadataProperties();
+        AsterixMetadataProperties metadataProperties = AsterixAppContextInfo.INSTANCE.getMetadataProperties();
         MetadataManager.instantiate(new MetadataManager(proxy, metadataProperties));
 
-        AsterixAppContextInfo.getInstance().getCCApplicationContext()
+        AsterixAppContextInfo.INSTANCE.getCCApplicationContext()
                 .addJobLifecycleListener(ActiveLifecycleListener.INSTANCE);
 
         servers = configureServers();
@@ -127,11 +132,11 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
     }
 
     protected List<AsterixExtension> getExtensions() {
-        return AsterixAppContextInfo.getInstance().getExtensionProperties().getExtensions();
+        return AsterixAppContextInfo.INSTANCE.getExtensionProperties().getExtensions();
     }
 
     protected List<Server> configureServers() throws Exception {
-        AsterixExternalProperties externalProperties = AsterixAppContextInfo.getInstance().getExternalProperties();
+        AsterixExternalProperties externalProperties = AsterixAppContextInfo.INSTANCE.getExternalProperties();
 
         List<Server> serverList = new ArrayList<>();
         serverList.add(setupWebServer(externalProperties));
@@ -190,7 +195,7 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
 
         IHyracksClientConnection hcc = getNewHyracksClientConnection();
         context.setAttribute(HYRACKS_CONNECTION_ATTR, hcc);
-        context.setAttribute(ASTERIX_BUILD_PROP_ATTR, AsterixAppContextInfo.getInstance());
+        context.setAttribute(ASTERIX_BUILD_PROP_ATTR, AsterixAppContextInfo.INSTANCE);
 
         jsonAPIServer.setHandler(context);
 
@@ -214,6 +219,8 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
         addServlet(context, Servlets.SHUTDOWN);
         addServlet(context, Servlets.VERSION);
         addServlet(context, Servlets.CLUSTER_STATE);
+        addServlet(context, Servlets.CLUSTER_STATE_NODE_DETAIL);
+        addServlet(context, Servlets.CLUSTER_STATE_CC_DETAIL);
 
         return jsonAPIServer;
     }
@@ -233,8 +240,13 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
         return queryWebServer;
     }
 
-    protected void addServlet(ServletContextHandler context, Servlet servlet, String path) {
-        context.addServlet(new ServletHolder(servlet), path);
+    protected void addServlet(ServletContextHandler context, Servlet servlet, String... paths) {
+        final ServletHolder holder = new ServletHolder(servlet);
+        context.getServletHandler().addServlet(holder);
+        ServletMapping mapping = new ServletMapping();
+        mapping.setServletName(holder.getName());
+        mapping.setPathSpecs(paths);
+        context.getServletHandler().addServletMapping(mapping);
     }
 
     protected void addServlet(ServletContextHandler context, Servlets key) {
@@ -282,6 +294,10 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
                 return new VersionAPIServlet();
             case CLUSTER_STATE:
                 return new ClusterAPIServlet();
+            case CLUSTER_STATE_NODE_DETAIL:
+                return new ClusterNodeDetailsAPIServlet();
+            case CLUSTER_STATE_CC_DETAIL:
+                return new ClusterCCDetailsAPIServlet();
             default:
                 throw new IllegalStateException(String.valueOf(key));
         }

@@ -20,9 +20,14 @@ package org.apache.asterix.active.message;
 
 import java.io.Serializable;
 
-import org.apache.asterix.common.messaging.AbstractApplicationMessage;
+import org.apache.asterix.active.ActiveManager;
+import org.apache.asterix.common.api.IAsterixAppRuntimeContext;
+import org.apache.asterix.common.messaging.api.IApplicationMessage;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.service.IControllerService;
+import org.apache.hyracks.control.nc.NodeControllerService;
 
-public class ActiveManagerMessage extends AbstractApplicationMessage {
+public class ActiveManagerMessage implements IApplicationMessage {
     public static final byte STOP_ACTIVITY = 0x00;
 
     private static final long serialVersionUID = 1L;
@@ -36,11 +41,6 @@ public class ActiveManagerMessage extends AbstractApplicationMessage {
         this.payload = payload;
     }
 
-    @Override
-    public ApplicationMessageType getMessageType() {
-        return ApplicationMessageType.ACTIVE_MANAGER_MESSAGE;
-    }
-
     public Serializable getPayload() {
         return payload;
     }
@@ -51,5 +51,18 @@ public class ActiveManagerMessage extends AbstractApplicationMessage {
 
     public String getSrc() {
         return src;
+    }
+
+    @Override
+    public void handle(IControllerService cs) throws HyracksDataException {
+        NodeControllerService ncs = (NodeControllerService) cs;
+        IAsterixAppRuntimeContext appContext =
+                (IAsterixAppRuntimeContext) ncs.getApplicationContext().getApplicationObject();
+        ((ActiveManager) appContext.getActiveManager()).submit(this);
+    }
+
+    @Override
+    public String toString() {
+        return ActiveManagerMessage.class.getSimpleName();
     }
 }

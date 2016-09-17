@@ -185,7 +185,22 @@ public interface IHyracksClientConnection {
 
     /**
      * Shuts down all NCs and then the CC.
+     * @param terminateNCService
      */
-    public void stopCluster() throws Exception;
+    public void stopCluster(boolean terminateNCService) throws Exception;
 
+    /**
+     * Get details of specified node as JSON object
+     * @param nodeId
+     *              id the subject node
+     * @param includeStats
+     * @param includeConfig @return serialized JSON containing the node details
+     * @throws Exception
+     */
+    public String getNodeDetailsJSON(String nodeId, boolean includeStats, boolean includeConfig) throws Exception;
+
+    /**
+     * Gets thread dump from the specified node as a serialized JSON string
+     */
+    public String getThreadDump(String node) throws Exception;
 }

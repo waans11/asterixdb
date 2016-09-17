@@ -1750,7 +1750,7 @@ Expression RelExpr()throws ParseException:
   IExpressionAnnotation annotation = null;
 }
 {
-    operand = IsExpr()
+    operand = BetweenExpr()
     {
       if (operand instanceof VariableExpr) {
         String hint = getHint(token);
@@ -1761,7 +1761,7 @@ Expression RelExpr()throws ParseException:
     }
 
     (
-      LOOKAHEAD(2)( <LT> | <GT> | <LE> | <GE> | <EQ> | <NE> |<SIMILAR> | (<NOT> { not = true; })? (<LIKE>|<IN>))
+      LOOKAHEAD(2)( <LT> | <GT> | <LE> | <GE> | <EQ> | <NE> | <LG> |<SIMILAR> | (<NOT> { not = true; })? (<LIKE>|<IN>))
         {
           String mhint = getHint(token);
           if (mhint != null) {
@@ -1772,7 +1772,10 @@ Expression RelExpr()throws ParseException:
             }
           }
           String operator = token.image.toLowerCase();
-          if(not){
+          if (operator.equals("<>")){
+              operator = "!=";
+          }
+          if (not) {
             operator = "not_" + operator;
           }
           if (op == null) {
@@ -1788,7 +1791,7 @@ Expression RelExpr()throws ParseException:
           }
         }
 
-       operand = IsExpr()
+       operand = BetweenExpr()
       {
          broadcast = false;
          if (operand instanceof VariableExpr) {
@@ -1807,6 +1810,63 @@ Expression RelExpr()throws ParseException:
        }
        return op==null? operand: op;
      }
+}
+
+Expression BetweenExpr()throws ParseException:
+{
+  boolean not = false;
+  OperatorExpr op = null;
+  Expression operand = null;
+  IExpressionAnnotation annotation = null;
+}
+{
+    operand = IsExpr()
+    (
+      LOOKAHEAD(2)
+      (<NOT> { not = true; })? <BETWEEN>
+        {
+          String mhint = getHint(token);
+          if (mhint != null) {
+            if (mhint.equals(INDEXED_NESTED_LOOP_JOIN_HINT)) {
+                annotation = IndexedNLJoinExpressionAnnotation.INSTANCE;
+            } else if (mhint.equals(SKIP_SECONDARY_INDEX_SEARCH_HINT)) {
+                annotation = SkipSecondaryIndexSearchExpressionAnnotation.INSTANCE;
+            }
+          }
+          String operator = token.image.toLowerCase();
+          if(not){
+            operator = "not_" + operator;
+          }
+          if (op == null) {
+            op = new OperatorExpr();
+            op.addOperand(operand);
+            op.setCurrentop(true);
+          }
+          try{
+            op.addOperator(operator);
+          } catch (AsterixException e){
+            throw new ParseException(e.getMessage());
+          }
+        }
+
+       operand = IsExpr()
+       {
+         op.addOperand(operand);
+       }
+
+       <AND>
+       operand = IsExpr()
+       {
+         op.addOperand(operand);
+       }
+    )?
+
+    {
+       if (annotation != null) {
+         op.addHint(annotation);
+       }
+       return op==null? operand: op;
+    }
 }
 
 Expression IsExpr() throws ParseException:
@@ -2854,7 +2914,7 @@ QuantifiedExpression QuantifiedExpression()throws ParseException:
     createNewScope();
   }
 
-   (      (<SOME>  {  qc.setQuantifier(QuantifiedExpression.Quantifier.SOME);    })
+   (      ((<ANY>|<SOME>)  {  qc.setQuantifier(QuantifiedExpression.Quantifier.SOME);    })
         | (<EVERY> {  qc.setQuantifier(QuantifiedExpression.Quantifier.EVERY);    }))
     var = Variable() <IN> inExpr = Expression()
     {
@@ -2936,6 +2996,7 @@ TOKEN [IGNORE_CASE]:
 {
   <ALL : "all">
   | <AND : "and">
+  | <ANY : "any">
   | <APPLY : "apply">
   | <AS : "as">
   | <ASC : "asc">
@@ -3072,6 +3133,7 @@ TOKEN :
   | <GE : ">=">
   | <EQ : "=">
   | <NE : "!=">
+  | <LG : "<>">
   | <SIMILAR : "~=">
 }
 
@@ -3211,6 +3273,32 @@ SKIP:
 SKIP:
 {
     <"//" (~["\n","\r"])* ("\n"|"\r"|"\r\n")?>
+}
+
+<DEFAULT,IN_DBL_BRACE>
+SKIP:
+{
+    <"--" (~["\n"])* "\n">
+}
+
+
+<DEFAULT,IN_DBL_BRACE>
+SKIP:
+{
+    <"--" (~["\n","\r"])* ("\n"|"\r"|"\r\n")?>
+}
+
+<DEFAULT,IN_DBL_BRACE>
+SKIP:
+{
+    <"#" (~["\n"])* "\n">
+}
+
+
+<DEFAULT,IN_DBL_BRACE>
+SKIP:
+{
+    <"#" (~["\n","\r"])* ("\n"|"\r"|"\r\n")?>
 }
 
 <DEFAULT,IN_DBL_BRACE>

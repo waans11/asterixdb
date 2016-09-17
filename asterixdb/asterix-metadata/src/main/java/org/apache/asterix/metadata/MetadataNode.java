@@ -35,6 +35,7 @@ import org.apache.asterix.common.config.IAsterixPropertiesProvider;
 import org.apache.asterix.common.dataflow.AsterixLSMIndexUtil;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.functions.FunctionSignature;
+import org.apache.asterix.common.metadata.MetadataIndexImmutableProperties;
 import org.apache.asterix.common.transactions.AbstractOperationCallback;
 import org.apache.asterix.common.transactions.DatasetId;
 import org.apache.asterix.common.transactions.IRecoveryManager.ResourceType;
@@ -52,7 +53,6 @@ import org.apache.asterix.metadata.api.IMetadataExtension;
 import org.apache.asterix.metadata.api.IMetadataIndex;
 import org.apache.asterix.metadata.api.IMetadataNode;
 import org.apache.asterix.metadata.api.IValueExtractor;
-import org.apache.asterix.metadata.bootstrap.MetadataIndexImmutableProperties;
 import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
 import org.apache.asterix.metadata.entities.CompactionPolicy;
 import org.apache.asterix.metadata.entities.Dataset;
@@ -407,7 +407,7 @@ public class MetadataNode implements IMetadataNode {
             throws ACIDException, HyracksDataException, IndexException {
         long resourceID = metadataIndex.getResourceID();
         String resourceName = metadataIndex.getFile().toString();
-        ILSMIndex lsmIndex = (ILSMIndex) datasetLifecycleManager.getIndex(resourceName);
+        ILSMIndex lsmIndex = (ILSMIndex) datasetLifecycleManager.get(resourceName);
         try {
             datasetLifecycleManager.open(resourceName);
 
@@ -674,7 +674,7 @@ public class MetadataNode implements IMetadataNode {
             throws ACIDException, HyracksDataException, IndexException {
         long resourceID = metadataIndex.getResourceID();
         String resourceName = metadataIndex.getFile().toString();
-        ILSMIndex lsmIndex = (ILSMIndex) datasetLifecycleManager.getIndex(resourceName);
+        ILSMIndex lsmIndex = (ILSMIndex) datasetLifecycleManager.get(resourceName);
         try {
             datasetLifecycleManager.open(resourceName);
             // prepare a Callback for logging
@@ -1066,7 +1066,7 @@ public class MetadataNode implements IMetadataNode {
         try {
             IMetadataIndex index = MetadataPrimaryIndexes.DATAVERSE_DATASET;
             String resourceName = index.getFile().toString();
-            IIndex indexInstance = datasetLifecycleManager.getIndex(resourceName);
+            IIndex indexInstance = datasetLifecycleManager.get(resourceName);
             datasetLifecycleManager.open(resourceName);
             IIndexAccessor indexAccessor = indexInstance.createAccessor(NoOpOperationCallback.INSTANCE,
                     NoOpOperationCallback.INSTANCE);
@@ -1088,7 +1088,7 @@ public class MetadataNode implements IMetadataNode {
             datasetLifecycleManager.close(resourceName);
 
             index = MetadataPrimaryIndexes.DATASET_DATASET;
-            indexInstance = datasetLifecycleManager.getIndex(resourceName);
+            indexInstance = datasetLifecycleManager.get(resourceName);
             datasetLifecycleManager.open(resourceName);
             indexAccessor = indexInstance.createAccessor(NoOpOperationCallback.INSTANCE,
                     NoOpOperationCallback.INSTANCE);
@@ -1113,7 +1113,7 @@ public class MetadataNode implements IMetadataNode {
             datasetLifecycleManager.close(resourceName);
 
             index = MetadataPrimaryIndexes.INDEX_DATASET;
-            indexInstance = datasetLifecycleManager.getIndex(resourceName);
+            indexInstance = datasetLifecycleManager.get(resourceName);
             datasetLifecycleManager.open(resourceName);
             indexAccessor = indexInstance.createAccessor(NoOpOperationCallback.INSTANCE,
                     NoOpOperationCallback.INSTANCE);
@@ -1149,7 +1149,7 @@ public class MetadataNode implements IMetadataNode {
             throw new MetadataException("No file for Index " + index.getDataverseName() + "." + index.getIndexName());
         }
         String resourceName = index.getFile().toString();
-        IIndex indexInstance = datasetLifecycleManager.getIndex(resourceName);
+        IIndex indexInstance = datasetLifecycleManager.get(resourceName);
         datasetLifecycleManager.open(resourceName);
         IIndexAccessor indexAccessor = indexInstance.createAccessor(NoOpOperationCallback.INSTANCE,
                 NoOpOperationCallback.INSTANCE);
@@ -1187,7 +1187,7 @@ public class MetadataNode implements IMetadataNode {
         int mostRecentDatasetId = MetadataIndexImmutableProperties.FIRST_AVAILABLE_USER_DATASET_ID;
         try {
             String resourceName = MetadataPrimaryIndexes.DATASET_DATASET.getFile().toString();
-            IIndex indexInstance = datasetLifecycleManager.getIndex(resourceName);
+            IIndex indexInstance = datasetLifecycleManager.get(resourceName);
             datasetLifecycleManager.open(resourceName);
             try {
                 IIndexAccessor indexAccessor = indexInstance.createAccessor(NoOpOperationCallback.INSTANCE,

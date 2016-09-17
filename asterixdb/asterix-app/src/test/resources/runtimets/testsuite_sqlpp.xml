@@ -933,6 +933,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="comparison">
+      <compilation-unit name="datetime_range_between">
+        <output-dir compare="Text">datetime_range</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="comparison">
       <compilation-unit name="datetime_tzeq">
         <output-dir compare="Text">datetime_tzeq</output-dir>
       </compilation-unit>
@@ -1053,6 +1058,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="comparison">
+      <compilation-unit name="int_not_between">
+        <output-dir compare="Text">int_not_between</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="comparison">
       <compilation-unit name="lt_01">
         <output-dir compare="Text">lt_01</output-dir>
       </compilation-unit>
@@ -1064,6 +1074,11 @@
     </test-case>
     <test-case FilePath="comparison">
       <compilation-unit name="neq_01">
+        <output-dir compare="Text">neq_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="comparison">
+      <compilation-unit name="neq_02">
         <output-dir compare="Text">neq_01</output-dir>
       </compilation-unit>
     </test-case>
@@ -3024,9 +3039,9 @@
     <test-case FilePath="misc">
       <compilation-unit name="partition-by-nonexistent-field">
         <output-dir compare="Text">partition-by-nonexistent-field</output-dir>
-        <expected-error>java.lang.NullPointerException</expected-error>
-        <expected-error>Cannot find dataset</expected-error>
-        <expected-error>Cannot find dataset testds in dataverse test nor an alias with name testds</expected-error>
+        <expected-error>Type not found for partitioning key [id]</expected-error>
+        <expected-error>Cannot find dataset testds in dataverse test</expected-error>
+        <expected-error>Cannot find dataset testds in dataverse test nor an alias with name testds!</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="misc">
@@ -3117,6 +3132,11 @@
       <compilation-unit name="query-ASTERIXDB-1577">
         <output-dir compare="Text">query-ASTERIXDB-1577</output-dir>
         <expected-error>The first argument of a field access should be a RECORD, but it is</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="uuid">
+        <output-dir compare="Text">uuid</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -4152,6 +4172,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="numeric">
+      <compilation-unit name="power">
+        <output-dir compare="Text">power</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="numeric">
       <compilation-unit name="round-half-to-even0">
         <output-dir compare="Text">round-half-to-even0</output-dir>
       </compilation-unit>
@@ -4262,6 +4287,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="numeric">
+      <compilation-unit name="trunc">
+        <output-dir compare="Text">trunc</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="numeric">
       <compilation-unit name="unary-minus_double_02">
         <output-dir compare="Text">unary-minus_double_02</output-dir>
       </compilation-unit>
@@ -4300,6 +4330,11 @@
     <test-case FilePath="numeric">
       <compilation-unit name="atan">
         <output-dir compare="Text">atan</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="numeric">
+      <compilation-unit name="atan2">
+        <output-dir compare="Text">atan2</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="numeric">
@@ -4637,6 +4672,11 @@
     </test-case>
   </test-group>
   <test-group name="quantifiers">
+    <test-case FilePath="quantifiers">
+      <compilation-unit name="anysat_01">
+        <output-dir compare="Text">somesat_01</output-dir>
+      </compilation-unit>
+    </test-case>
     <test-case FilePath="quantifiers">
       <compilation-unit name="everysat_01">
         <output-dir compare="Text">everysat_01</output-dir>
@@ -5641,6 +5681,16 @@
   </test-group>
   <test-group name="subquery">
     <test-case FilePath="subquery">
+      <compilation-unit name="aggregate_join">
+        <output-dir compare="Text">aggregate_join</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="subquery">
+      <compilation-unit name="aggregate_join_external">
+        <output-dir compare="Text">aggregate_join_external</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="subquery">
       <compilation-unit name="gby_inline">
         <output-dir compare="Text">gby_inline</output-dir>
       </compilation-unit>
@@ -5725,6 +5775,11 @@
     <test-case FilePath="subquery">
       <compilation-unit name="query-ASTERIXDB-1571-4">
         <output-dir compare="Text">query-ASTERIXDB-1571-4</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="subquery">
+      <compilation-unit name="query-ASTERIXDB-1572">
+        <output-dir compare="Text">query-ASTERIXDB-1572</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="subquery">
@@ -5841,8 +5896,58 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1581">
+        <output-dir compare="Text">query-ASTERIXDB-1581</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1581-2">
+        <output-dir compare="Text">query-ASTERIXDB-1581-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1581-3">
+        <output-dir compare="Text">query-ASTERIXDB-1581-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1581-4">
+        <output-dir compare="Text">query-ASTERIXDB-1581-4</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1581-5">
+        <output-dir compare="Text">query-ASTERIXDB-1581-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1581-6">
+        <output-dir compare="Text">query-ASTERIXDB-1581-6</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1581-correlated">
+          <output-dir compare="Text">query-ASTERIXDB-1581-correlated</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1581-correlated-2">
+        <output-dir compare="Text">query-ASTERIXDB-1581-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1591">
+        <output-dir compare="Text">query-ASTERIXDB-1591</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
       <compilation-unit name="query-ASTERIXDB-1596">
         <output-dir compare="Text">query-ASTERIXDB-1596</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="query-ASTERIXDB-1602">
+        <output-dir compare="Text">query-ASTERIXDB-1602</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -8020,6 +8125,11 @@
     <test-case FilePath="union">
       <compilation-unit name="query-ASTERIXDB-1354-2">
         <output-dir compare="Text">query-ASTERIXDB-1354-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="union">
+      <compilation-unit name="query-ASTERIXDB-1629">
+        <output-dir compare="Text">query-ASTERIXDB-1629</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>

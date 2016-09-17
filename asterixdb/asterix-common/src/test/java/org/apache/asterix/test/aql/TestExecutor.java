@@ -29,6 +29,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.Inet4Address;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,6 +39,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.utils.ServletUtil.Servlets;
@@ -59,7 +62,6 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.client.StandardHttpRequestRetryHandler;
 import org.apache.http.util.EntityUtils;
-import org.json.JSONException;
 import org.json.JSONObject;
 
 public class TestExecutor {
@@ -71,6 +73,9 @@ public class TestExecutor {
     // see
     // https://stackoverflow.com/questions/417142/what-is-the-maximum-length-of-a-url-in-different-browsers/417184
     private static final long MAX_URL_LENGTH = 2000l;
+    private static final Pattern JAVA_BLOCK_COMMENT_PATTERN =
+            Pattern.compile("/\\*.*\\*/", Pattern.MULTILINE | Pattern.DOTALL);
+    private static final Pattern REGEX_LINES_PATTERN = Pattern.compile("^(-)?/(.*)/([im]*)$");
     private static Method managixExecuteMethod = null;
     private static final HashMap<Integer, ITestServer> runningTestServers = new HashMap<>();
 
@@ -87,7 +92,7 @@ public class TestExecutor {
     }
 
     public TestExecutor() {
-        this("127.0.0.1", 19002);
+        this(Inet4Address.getLoopbackAddress().getHostAddress(), 19002);
     }
 
     public void setLibrarian(ITestLibrarian librarian) {
@@ -115,6 +120,14 @@ public class TestExecutor {
                 new InputStreamReader(new FileInputStream(expectedFile), "UTF-8"));
         BufferedReader readerActual = new BufferedReader(
                 new InputStreamReader(new FileInputStream(actualFile), "UTF-8"));
+        boolean regex = false;
+        if (actualFile.toString().endsWith(".regex")) {
+            runScriptAndCompareWithResultRegex(scriptFile, expectedFile, actualFile);
+            return;
+        } else if (actualFile.toString().endsWith(".regexadm")) {
+            regex = true;
+        }
+
         String lineExpected, lineActual;
         int num = 1;
         try {
@@ -136,7 +149,7 @@ public class TestExecutor {
                     throw new Exception("Result for " + scriptFile + " changed at line " + num + ":\n< " + lineExpected
                             + "\n> " + lineActual);
                 }
-                if (!equalStrings(lineSplitsExpected[0], lineSplitsActual[0])) {
+                if (!equalStrings(lineSplitsExpected[0], lineSplitsActual[0], regex)) {
                     throw new Exception("Result for " + scriptFile + " changed at line " + num + ":\n< " + lineExpected
                             + "\n> " + lineActual);
                 }
@@ -154,7 +167,7 @@ public class TestExecutor {
                             // (for metadata tests)
                             continue;
                         }
-                        if (!equalStrings(splitsByCommaExpected[j], splitsByCommaActual[j])) {
+                        if (!equalStrings(splitsByCommaExpected[j], splitsByCommaActual[j], regex)) {
                             throw new Exception("Result for " + scriptFile + " changed at line " + num + ":\n< "
                                     + lineExpected + "\n> " + lineActual);
                         }
@@ -177,54 +190,80 @@ public class TestExecutor {
 
     }
 
-    private boolean equalStrings(String s1, String s2) {
-        String[] rowsOne = s1.split("\n");
-        String[] rowsTwo = s2.split("\n");
+    private boolean equalStrings(String expected, String actual, boolean regexMatch) {
+        String[] rowsExpected = expected.split("\n");
+        String[] rowsActual = actual.split("\n");
 
-        for (int i = 0; i < rowsOne.length; i++) {
-            String row1 = rowsOne[i];
-            String row2 = rowsTwo[i];
+        for (int i = 0; i < rowsExpected.length; i++) {
+            String expectedRow = rowsExpected[i];
+            String actualRow = rowsActual[i];
 
-            if (row1.equals(row2)) {
+            if (regexMatch) {
+                if (actualRow.matches(expectedRow)) {
+                    continue;
+                }
+            } else if (actualRow.equals(expectedRow)) {
                 continue;
             }
 
-            String[] fields1 = row1.split(" ");
-            String[] fields2 = row2.split(" ");
+            String[] expectedFields = expectedRow.split(" ");
+            String[] actualFields = actualRow.split(" ");
 
             boolean bagEncountered = false;
-            Set<String> bagElements1 = new HashSet<String>();
-            Set<String> bagElements2 = new HashSet<String>();
+            Set<String> expectedBagElements = new HashSet<>();
+            Set<String> actualBagElements = new HashSet<>();
 
-            for (int j = 0; j < fields1.length; j++) {
-                if (j >= fields2.length) {
+            for (int j = 0; j < expectedFields.length; j++) {
+                if (j >= actualFields.length) {
                     return false;
-                } else if (fields1[j].equals(fields2[j])) {
-                    bagEncountered = fields1[j].equals("{{");
-                    if (fields1[j].startsWith("}}")) {
-                        if (!bagElements1.equals(bagElements2)) {
+                } else if (expectedFields[j].equals(actualFields[j])) {
+                    bagEncountered = expectedFields[j].equals("{{");
+                    if (expectedFields[j].startsWith("}}")) {
+                        if (regexMatch) {
+                            if (expectedBagElements.size() != actualBagElements.size()) {
+                                return false;
+                            }
+                            int [] expectedHits = new int [expectedBagElements.size()];
+                            int [] actualHits = new int [actualBagElements.size()];
+                            int k = 0;
+                            for (String expectedElement : expectedBagElements) {
+                                int l = 0;
+                                for (String actualElement : actualBagElements) {
+                                    if (actualElement.matches(expectedElement)) {
+                                        expectedHits[k]++;
+                                        actualHits[l]++;
+                                    }
+                                    l++;
+                                }
+                                k++;
+                            }
+                            for (int m = 0; m < expectedHits.length; m++) {
+                                if (expectedHits[m] == 0 || actualHits[m] == 0) {
+                                    return false;
+                                }
+                            }
+                        } else if (!expectedBagElements.equals(actualBagElements)) {
                             return false;
                         }
                         bagEncountered = false;
-                        bagElements1.clear();
-                        bagElements2.clear();
+                        expectedBagElements.clear();
+                        actualBagElements.clear();
                     }
-                    continue;
-                } else if (fields1[j].indexOf('.') < 0) {
+                } else if (expectedFields[j].indexOf('.') < 0) {
                     if (bagEncountered) {
-                        bagElements1.add(fields1[j].replaceAll(",$", ""));
-                        bagElements2.add(fields2[j].replaceAll(",$", ""));
+                        expectedBagElements.add(expectedFields[j].replaceAll(",$", ""));
+                        actualBagElements.add(actualFields[j].replaceAll(",$", ""));
                         continue;
                     }
                     return false;
                 } else {
                     // If the fields are floating-point numbers, test them
                     // for equality safely
-                    fields1[j] = fields1[j].split(",")[0];
-                    fields2[j] = fields2[j].split(",")[0];
+                    expectedFields[j] = expectedFields[j].split(",")[0];
+                    actualFields[j] = actualFields[j].split(",")[0];
                     try {
-                        Double double1 = Double.parseDouble(fields1[j]);
-                        Double double2 = Double.parseDouble(fields2[j]);
+                        Double double1 = Double.parseDouble(expectedFields[j]);
+                        Double double2 = Double.parseDouble(actualFields[j]);
                         float float1 = (float) double1.doubleValue();
                         float float2 = (float) double2.doubleValue();
 
@@ -242,6 +281,56 @@ public class TestExecutor {
         }
         return true;
     }
+
+    public void runScriptAndCompareWithResultRegex(File scriptFile, File expectedFile, File actualFile)
+            throws Exception {
+        System.err.println("Expected results file: " + expectedFile.toString());
+        String lineExpected, lineActual;
+        int num = 1;
+        try (BufferedReader readerExpected = new BufferedReader(
+                new InputStreamReader(new FileInputStream(expectedFile), "UTF-8"));
+             BufferedReader readerActual = new BufferedReader(
+                new InputStreamReader(new FileInputStream(actualFile), "UTF-8")))
+        {
+            StringBuilder actual = new StringBuilder();
+            while ((lineActual = readerActual.readLine()) != null) {
+                actual.append(lineActual).append('\n');
+            }
+            while ((lineExpected = readerExpected.readLine()) != null) {
+                if ("".equals(lineExpected.trim())) {
+                    continue;
+                }
+                Matcher m = REGEX_LINES_PATTERN.matcher(lineExpected);
+                if (!m.matches()) {
+                    throw new IllegalArgumentException("Each line of regex file must conform to: [-]/regex/[flags]: "
+                            + expectedFile);
+                }
+                String negateStr = m.group(1);
+                String expression = m.group(2);
+                String flagStr = m.group(3);
+                boolean negate = "-".equals(negateStr);
+                int flags = Pattern.MULTILINE;
+                if (flagStr.contains("m")) {
+                    flags |= Pattern.DOTALL;
+                }
+                if (flagStr.contains("i")) {
+                    flags |= Pattern.CASE_INSENSITIVE;
+                }
+                Pattern linePattern = Pattern.compile(expression, flags);
+                boolean match = linePattern.matcher(actual).find();
+                if (match && !negate || negate && !match) {
+                    continue;
+                }
+                throw new Exception("Result for " + scriptFile + ": expected pattern '" + expression +
+                        "' not found in result.");
+            }
+        } catch (Exception e) {
+            System.err.println("Actual results file: " + actualFile.toString());
+            throw e;
+        }
+
+    }
+
 
     // For tests where you simply want the byte-for-byte output.
     private static void writeOutputToFile(File actualFile, InputStream resultStream) throws Exception {
@@ -269,26 +358,26 @@ public class TestExecutor {
 
     protected HttpResponse checkResponse(HttpResponse httpResponse) throws Exception {
         if (httpResponse.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-            // QQQ For now, we are indeed assuming we get back JSON errors.
-            // In future this may be changed depending on the requested
-            // output format sent to the servlet.
             String errorBody = EntityUtils.toString(httpResponse.getEntity());
+            String exceptionMsg;
             try {
+                // First try to parse the response for a JSON error response.
+
                 JSONObject result = new JSONObject(errorBody);
                 String[] errors = { result.getJSONArray("error-code").getString(0), result.getString("summary"),
                         result.getString("stacktrace") };
                 GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, errors[2]);
-                String exceptionMsg = "HTTP operation failed: " + errors[0]
+                exceptionMsg = "HTTP operation failed: " + errors[0]
                         + "\nSTATUS LINE: " + httpResponse.getStatusLine()
                         + "\nSUMMARY: " + errors[1] + "\nSTACKTRACE: " + errors[2];
-                throw new Exception(exceptionMsg);
-            } catch (JSONException e) {
+            } catch (Exception e) {
+                // whoops, not JSON (e.g. 404) - just include the body
                 GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, errorBody);
-                String exceptionMsg = "HTTP operation failed: response is not valid-JSON (see nested exception)"
+                exceptionMsg = "HTTP operation failed:"
                         + "\nSTATUS LINE: " + httpResponse.getStatusLine()
                         + "\nERROR_BODY: " + errorBody;
-                throw new Exception(exceptionMsg, e);
             }
+            throw new Exception(exceptionMsg);
         }
         return httpResponse;
     }
@@ -403,8 +492,7 @@ public class TestExecutor {
         String theHandle = IOUtils.toString(resultStream, "UTF-8");
 
         // take the handle and parse it so results can be retrieved
-        InputStream handleResult = getHandleResult(theHandle, fmt);
-        return handleResult;
+        return getHandleResult(theHandle, fmt);
     }
 
     private InputStream getHandleResult(String handle, OutputFormat fmt) throws Exception {
@@ -491,8 +579,7 @@ public class TestExecutor {
         int beginIndex = queryPath.lastIndexOf(targetWord) + targetWordSize;
         int endIndex = queryPath.lastIndexOf(File.separator);
         String prefix = queryPath.substring(beginIndex, endIndex);
-        String scriptPath = scriptBasePath + prefix + File.separator + scriptFileName;
-        return scriptPath;
+        return scriptBasePath + prefix + File.separator + scriptFileName;
     }
 
     private static String getProcessOutput(Process p) throws Exception {
@@ -679,29 +766,33 @@ public class TestExecutor {
                 }
                 break;
             case "vmgx": // a managix command that will be executed on vagrant cc node
-                try {
-                    String output = executeVagrantManagix(pb, statement);
-                    if (output.contains("ERROR")) {
-                        throw new Exception(output);
-                    }
-                } catch (Exception e) {
-                    throw new Exception("Test \"" + testFile + "\" FAILED!\n", e);
+                String output = executeVagrantManagix(pb, statement);
+                if (output.contains("ERROR")) {
+                    throw new Exception(output);
                 }
                 break;
             case "cstate": // cluster state query
-                try {
-                    fmt = OutputFormat.forCompilationUnit(cUnit);
-                    resultStream = executeClusterStateQuery(fmt, getEndpoint(Servlets.CLUSTER_STATE));
-                    expectedResultFile = expectedResultFileCtxs.get(queryCount.intValue()).getFile();
-                    actualResultFile = testCaseCtx.getActualResultFile(cUnit, expectedResultFile, new File(actualPath));
-                    actualResultFile.getParentFile().mkdirs();
-                    writeOutputToFile(actualResultFile, resultStream);
-                    runScriptAndCompareWithResult(testFile, new PrintWriter(System.err), expectedResultFile,
-                            actualResultFile);
-                    queryCount.increment();
-                } catch (Exception e) {
-                    throw new Exception("Test \"" + testFile + "\" FAILED!\n", e);
-                }
+                fmt = OutputFormat.forCompilationUnit(cUnit);
+                String extra = stripJavaComments(statement).trim();
+                resultStream = executeClusterStateQuery(fmt, getEndpoint(Servlets.CLUSTER_STATE) + extra);
+                expectedResultFile = expectedResultFileCtxs.get(queryCount.intValue()).getFile();
+                actualResultFile = testCaseCtx.getActualResultFile(cUnit, expectedResultFile, new File(actualPath));
+                actualResultFile.getParentFile().mkdirs();
+                writeOutputToFile(actualResultFile, resultStream);
+                runScriptAndCompareWithResult(testFile, new PrintWriter(System.err), expectedResultFile,
+                        actualResultFile);
+                queryCount.increment();
+                break;
+            case "version": // version servlet
+                fmt = OutputFormat.forCompilationUnit(cUnit);
+                resultStream = executeClusterStateQuery(fmt, getEndpoint(Servlets.VERSION));
+                expectedResultFile = expectedResultFileCtxs.get(queryCount.intValue()).getFile();
+                actualResultFile = testCaseCtx.getActualResultFile(cUnit, expectedResultFile, new File(actualPath));
+                actualResultFile.getParentFile().mkdirs();
+                writeOutputToFile(actualResultFile, resultStream);
+                runScriptAndCompareWithResult(testFile, new PrintWriter(System.err), expectedResultFile,
+                        actualResultFile);
+                queryCount.increment();
                 break;
             case "server": // (start <test server name> <port>
                            // [<arg1>][<arg2>][<arg3>]...|stop (<port>|all))
@@ -809,15 +900,15 @@ public class TestExecutor {
                     executeTest(testCaseCtx, ctx, statement, isDmlRecoveryTest, pb, cUnit, queryCount,
                             expectedResultFileCtxs, testFile, actualPath);
                 } catch (Exception e) {
-                    System.err.println("testFile " + testFile.toString() + " raised an exception:");
+                    System.err.println("testFile " + testFile.toString() + " raised an exception: " + e);
                     boolean unExpectedFailure = false;
                     numOfErrors++;
+                    String expectedError = null;
                     if (cUnit.getExpectedError().size() < numOfErrors) {
                         unExpectedFailure = true;
                     } else {
                         // Get the expected exception
-                        String expectedError = cUnit.getExpectedError().get(numOfErrors - 1);
-                        System.err.println("+++++\n" + expectedError + "\n+++++\n");
+                        expectedError = cUnit.getExpectedError().get(numOfErrors - 1);
                         if (e.toString().contains(expectedError)) {
                             System.err.println("...but that was expected.");
                         } else {
@@ -827,6 +918,9 @@ public class TestExecutor {
                     if (unExpectedFailure) {
                         e.printStackTrace();
                         System.err.println("...Unexpected!");
+                        if (expectedError != null) {
+                            System.err.println("Expected to find the following in error text:\n+++++\n" + expectedError + "\n+++++");
+                        }
                         if (failedGroup != null) {
                             failedGroup.getTestCase().add(testCaseCtx.getTestCase());
                         }
@@ -861,5 +955,9 @@ public class TestExecutor {
 
     protected String getEndpoint(Servlets servlet) {
         return "http://" + host + ":" + port + getPath(servlet);
+    }
+
+    public static String stripJavaComments(String text) {
+        return JAVA_BLOCK_COMMENT_PATTERN.matcher(text).replaceAll("");
     }
 }

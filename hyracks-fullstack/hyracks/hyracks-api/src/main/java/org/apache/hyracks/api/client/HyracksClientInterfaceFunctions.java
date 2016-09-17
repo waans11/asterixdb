@@ -45,7 +45,9 @@ public class HyracksClientInterfaceFunctions {
         GET_NODE_CONTROLLERS_INFO,
         CLI_DEPLOY_BINARY,
         CLI_UNDEPLOY_BINARY,
-        CLUSTER_SHUTDOWN
+        CLUSTER_SHUTDOWN,
+        GET_NODE_DETAILS_JSON,
+        THREAD_DUMP
     }
 
     public abstract static class Function implements Serializable {
@@ -287,11 +289,66 @@ public class HyracksClientInterfaceFunctions {
 
     public static class ClusterShutdownFunction extends Function {
         private static final long serialVersionUID = 1L;
+        private final boolean terminateNCService;
+
+        public ClusterShutdownFunction(boolean terminateNCService) {
+            this.terminateNCService = terminateNCService;
+        }
 
         @Override
         public FunctionId getFunctionId() {
             return FunctionId.CLUSTER_SHUTDOWN;
         }
+
+        public boolean isTerminateNCService() {
+            return terminateNCService;
+        }
     }
 
+    public static class GetNodeDetailsJSONFunction extends Function {
+        private static final long serialVersionUID = 1L;
+        private final String nodeId;
+        private final boolean includeStats;
+        private final boolean includeConfig;
+
+        public GetNodeDetailsJSONFunction(String nodeId, boolean includeStats, boolean includeConfig) {
+            this.nodeId = nodeId;
+            this.includeStats = includeStats;
+            this.includeConfig = includeConfig;
+        }
+
+        public String getNodeId() {
+            return nodeId;
+        }
+
+        public boolean isIncludeStats() {
+            return includeStats;
+        }
+
+        public boolean isIncludeConfig() {
+            return includeConfig;
+        }
+
+        @Override
+        public FunctionId getFunctionId() {
+            return FunctionId.GET_NODE_DETAILS_JSON;
+        }
+    }
+
+    public static class ThreadDumpFunction extends Function {
+        private final String node;
+
+        public ThreadDumpFunction(String node) {
+            this.node = node;
+        }
+
+        @Override
+        public FunctionId getFunctionId() {
+            return FunctionId.THREAD_DUMP;
+        }
+
+        public String getNode() {
+            return node;
+        }
+    }
 }
