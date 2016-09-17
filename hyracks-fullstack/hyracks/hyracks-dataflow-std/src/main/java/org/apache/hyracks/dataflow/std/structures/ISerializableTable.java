@@ -43,7 +43,7 @@ public interface ISerializableTable {
 
     void close();
 
-    boolean isGarbageCollectioNeeded();
+    boolean isGarbageCollectionNeeded();
 
     int executeGarbageCollection(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
             throws HyracksDataException;

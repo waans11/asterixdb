@@ -50,9 +50,10 @@ public interface ISpillableTable {
 
     /**
      * Insert the specific tuple into the table.
+     *
      * @param accessor
      * @param tIndex
-     * @return
+     * @return the result of an insertion - success, fail, or succeeded but exceeded the memory budget
      * @throws HyracksDataException
      */
     InsertResultType insert(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException;
@@ -78,7 +79,7 @@ public interface ISpillableTable {
     int getCurrentByteSize();
 
     /**
-     * Returns true if the number of used frames exceed the budget.
+     * Returns true if the number of used bytes exceed the budget.
      */
     boolean isUsedByteExceedsBudget();
 

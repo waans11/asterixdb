@@ -19,6 +19,7 @@
 package org.apache.hyracks.dataflow.std.structures;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.hyracks.api.context.IHyracksFrameMgrContext;
@@ -43,8 +44,9 @@ public class SerializableHashTable implements ISerializableTable {
     private static final int INT_SIZE = 4;
     // Initial entry slot size
     private static final int INIT_ENTRY_SIZE = 4;
-    private static double garbageCollectionThreshold = 0.10;
-    private static int INVALID_VALUE = -1;
+    private static int INVALID_VALUE = 0xFFFFFFFF;
+    private static byte INVALID_BYTE_VALUE = (byte) 0xFF;
+    private double garbageCollectionThreshold;
 
     // Header frame array
     private IntSerDeBuffer[] headers;
@@ -62,16 +64,12 @@ public class SerializableHashTable implements ISerializableTable {
     private int wastedIntSpaceCount = 0;
     private int tableSize;
 
-    // For garbage collection
-    int currentReadPageForGC = 0;
-    int currentReadIntOffsetInPageForGC = 0;
-    int nextSlotIntPosInPageForGC = 0;
-    int currentGCWritePageForGC = 0;
-    int currentWriteIntOffsetInPageForGC = 0;
-    IntSerDeBuffer currentReadContentFrameForGC;
-    IntSerDeBuffer currentWriteContentFrameForGC;
-
     public SerializableHashTable(int tableSize, final IHyracksFrameMgrContext ctx) throws HyracksDataException {
+        this(tableSize, ctx, 0.1);
+    }
+
+    public SerializableHashTable(int tableSize, final IHyracksFrameMgrContext ctx, double garbageCollectionThreshold)
+            throws HyracksDataException {
         this.ctx = ctx;
         int frameSize = ctx.getInitialFrameSize();
 
@@ -86,7 +84,9 @@ public class SerializableHashTable implements ISerializableTable {
         currentByteSize = frame.getByteCapacity();
         currentOffsetInEachFrameList.add(0);
         this.tableSize = tableSize;
+        this.garbageCollectionThreshold = garbageCollectionThreshold;
     }
+
 
     @Override
     public void insert(int entry, TuplePointer pointer) throws HyracksDataException {
@@ -131,10 +131,9 @@ public class SerializableHashTable implements ISerializableTable {
                 int entrySlotCapacity = frame.getInt(offsetInContentFrame);
                 int entryUsedCountInSlot = frame.getInt(offsetInContentFrame + 1);
                 // Set used count as -1 in the slot so that the slot space could be reclaimed.
-                frame.writeInt(offsetInContentFrame + 1, INVALID_VALUE);
-                // Also reset the header to content frame pointer.
-                header.writeInt(offsetInHeaderFrame, INVALID_VALUE);
-                header.writeInt(offsetInHeaderFrame + 1, INVALID_VALUE);
+                frame.writeInvalidVal(offsetInContentFrame + 1, 1);
+                // Also reset the header (frmaeIdx, offset) to content frame pointer.
+                header.writeInvalidVal(offsetInHeaderFrame, 2);
 
                 tupleCount -= entryUsedCountInSlot;
                 wastedIntSpaceCount += ((entrySlotCapacity + 1) * 2);
@@ -191,13 +190,6 @@ public class SerializableHashTable implements ISerializableTable {
         tupleCount = 0;
         currentByteSize = 0;
         wastedIntSpaceCount = 0;
-        currentReadPageForGC = 0;
-        currentReadIntOffsetInPageForGC = 0;
-        nextSlotIntPosInPageForGC = 0;
-        currentGCWritePageForGC = 0;
-        currentWriteIntOffsetInPageForGC = 0;
-        currentReadContentFrameForGC = null;
-        currentWriteContentFrameForGC = null;
     }
 
     @Override
@@ -258,9 +250,11 @@ public class SerializableHashTable implements ISerializableTable {
             // So, if there is not enough space for this, we just move on to the next page.
             if ((lastOffsetInCurrentFrame + 4) > frameCapacity) {
                 // Swipe the region that can't be used.
-                for (int i = 0; i < frameCapacity - lastOffsetInCurrentFrame; i++) {
-                    lastContentFrame.writeInt(lastOffsetInCurrentFrame + i, INVALID_VALUE);
-                }
+                lastContentFrame.writeInvalidVal(lastOffsetInCurrentFrame, frameCapacity - lastOffsetInCurrentFrame);
+                // Temp
+                //                for (int i = 0; i < frameCapacity - lastOffsetInCurrentFrame; i++) {
+                //                    lastContentFrame.writeInt(lastOffsetInCurrentFrame + i, INVALID_VALUE);
+                //                }
                 currentFrameNumber++;
                 lastOffsetInCurrentFrame = 0;
                 currentFrameNumberChanged = true;
@@ -344,12 +338,11 @@ public class SerializableHashTable implements ISerializableTable {
 
             // New capacity: double the original capacity
             int capacity = (entrySlotCapacity + 1) * 2;
-            // Temporarily set the header as -1 for the slot.
-            header.writeInt(offsetInHeaderFrame, INVALID_VALUE);
-            header.writeInt(offsetInHeaderFrame + 1, INVALID_VALUE);
+            // Temporarily set the header (frameIdx, offset) as (-1,-1) for the slot.
+            header.writeInvalidVal(offsetInHeaderFrame, 2);
             // Mark the old slot as obsolete - set the used count as -1 so that its space can be reclaimed
             // when a garbage collection is executed.
-            contentFrame.writeInt(offsetInContentFrame + 1, INVALID_VALUE);
+            contentFrame.writeInvalidVal(offsetInContentFrame + 1, 1);
             // Get the location of the initial entry.
             int fIndex = contentFrame.getInt(offsetInContentFrame + 2);
             int tIndex = contentFrame.getInt(offsetInContentFrame + 3);
@@ -381,8 +374,11 @@ public class SerializableHashTable implements ISerializableTable {
     }
 
     private void resetFrame(IntSerDeBuffer frame) {
-        for (int i = 0; i < frameCapacity; i++)
-            frame.writeInt(i, INVALID_VALUE);
+        Arrays.fill(frame.bytes, INVALID_BYTE_VALUE);
+        // Temp
+        //        for (int i = 0; i < frameCapacity; i++) {
+        //            frame.writeInt(i, INVALID_VALUE);
+        //        }
     }
 
     private int getHeaderFrameIndex(int entry) {
@@ -417,7 +413,7 @@ public class SerializableHashTable implements ISerializableTable {
     }
 
     @Override
-    public boolean isGarbageCollectioNeeded() {
+    public boolean isGarbageCollectionNeeded() {
         return wastedIntSpaceCount >= frameCapacity * (currentLargestFrameNumber + 1) * garbageCollectionThreshold;
     }
 
@@ -436,149 +432,163 @@ public class SerializableHashTable implements ISerializableTable {
     @Override
     public int executeGarbageCollection(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
             throws HyracksDataException {
-        // For calculating the original hash value
-        TuplePointer tmpTuplePointerForGC = new TuplePointer();
+        // Keeps the garbage collection related variable
+        GarbageCollectionInfo gcInfo = new GarbageCollectionInfo();
 
-        // Initialize the reader
-        currentReadPageForGC = 0;
-        currentReadIntOffsetInPageForGC = 0;
         int slotCapacity;
         int slotUsedCount;
         int capacityInIntCount;
-        nextSlotIntPosInPageForGC = 0;
-        currentReadContentFrameForGC = contents.get(currentReadPageForGC);
-
-        // Initialize the writer
-        currentGCWritePageForGC = 0;
-        currentWriteIntOffsetInPageForGC = 0;
-        currentWriteContentFrameForGC = contents.get(currentGCWritePageForGC);
+        int nextSlotIntPosInPageForGC;
+        boolean currentPageChanged;
+        IntSerDeBuffer currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
+        IntSerDeBuffer currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
 
         // Step #1. Read a content frame until it reaches the end of content frames.
-        while (currentReadPageForGC <= currentLargestFrameNumber) {
+        while (gcInfo.currentReadPageForGC <= currentLargestFrameNumber) {
 
-            currentReadIntOffsetInPageForGC = 0;
+            gcInfo.currentReadIntOffsetInPageForGC = 0;
             nextSlotIntPosInPageForGC = INVALID_VALUE;
-            currentReadContentFrameForGC = contents.get(currentReadPageForGC);
+            currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
 
             // Step #2. Advance the reader until it hits the end of the given frame.
-            while (currentReadIntOffsetInPageForGC < frameCapacity) {
+            while (gcInfo.currentReadIntOffsetInPageForGC < frameCapacity) {
                 nextSlotIntPosInPageForGC = findNextSlotInPage(currentReadContentFrameForGC,
-                        currentReadIntOffsetInPageForGC);
+                        gcInfo.currentReadIntOffsetInPageForGC);
 
-                // Found a valid slot?
-                if (nextSlotIntPosInPageForGC != INVALID_VALUE) {
-                    // Read the given slot information
-                    slotCapacity = currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC);
-                    slotUsedCount = currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC + 1);
-                    capacityInIntCount = (slotCapacity + 1) * 2;
-
-                    // Used count should not be -1 (spilled to the disk or migrated).
-                    if (slotUsedCount != INVALID_VALUE) {
-
-                        // To prepare hash pointer update, read the first tuple pointer in the old slot.
-                        tmpTuplePointerForGC.reset(currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC + 2),
-                                currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC + 3));
-
-                        // Check whether there is at least some space to put some part of the slot.
-                        // If not, advance the write pointer to the next page.
-                        if ((currentWriteIntOffsetInPageForGC + 4) > frameCapacity
-                                && currentGCWritePageForGC < currentLargestFrameNumber) {
-                            // Swipe the region that can't be used.
-                            for (int i = 0; i < frameCapacity - currentWriteIntOffsetInPageForGC; i++) {
-                                currentWriteContentFrameForGC.writeInt(currentWriteIntOffsetInPageForGC + i,
-                                        INVALID_VALUE);
-                            }
-                            currentGCWritePageForGC++;
-                            currentWriteContentFrameForGC = contents.get(currentGCWritePageForGC);
-                            currentWriteIntOffsetInPageForGC = 0;
-                        }
-
-                        // Migrate this slot to the current offset in Writer's Frame if possible.
-                        MigrateSlot(bufferAccessor, tpc, capacityInIntCount, tmpTuplePointerForGC);
-                    } else {
-                        // A useless slot (either migrated or deleted) is found. Reset the space
-                        // so it will be occupied by the next valid slot.
-                        reclaimSlotSpace(nextSlotIntPosInPageForGC, capacityInIntCount);
-                    }
-                } else {
+                if (nextSlotIntPosInPageForGC == INVALID_VALUE) {
                     // There isn't a valid slot in the page. Exit the loop #2 and read the next frame.
                     break;
+                }
+
+                // Valid slot found. Read the given slot information
+                slotCapacity = currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC);
+                slotUsedCount = currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC + 1);
+                capacityInIntCount = (slotCapacity + 1) * 2;
+
+                // Used count should not be -1 (spilled to the disk or migrated).
+                if (slotUsedCount != INVALID_VALUE) {
+                    // To prepare hash pointer (header -> content) update, read the first tuple pointer in the old slot.
+                    tempTuplePointer.reset(currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC + 2),
+                            currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC + 3));
+
+                    // Check whether there is at least some space to put some part of the slot.
+                    // If not, advance the write pointer to the next page.
+                    if ((gcInfo.currentWriteIntOffsetInPageForGC + 4) > frameCapacity
+                            && gcInfo.currentGCWritePageForGC < currentLargestFrameNumber) {
+                        // Swipe the region that can't be used.
+                        currentWriteContentFrameForGC.writeInvalidVal(gcInfo.currentWriteIntOffsetInPageForGC,
+                                frameCapacity - gcInfo.currentWriteIntOffsetInPageForGC);
+                        gcInfo.currentGCWritePageForGC++;
+                        currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
+                        gcInfo.currentWriteIntOffsetInPageForGC = 0;
+                    }
+
+                    // Migrate this slot to the current offset in Writer's Frame if possible.
+                    currentPageChanged = MigrateSlot(gcInfo, bufferAccessor, tpc, capacityInIntCount,
+                            nextSlotIntPosInPageForGC);
+
+                    if (currentPageChanged) {
+                        currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
+                        currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
+                    }
+                } else {
+                    // A useless slot (either migrated or deleted) is found. Reset the space
+                    // so it will be occupied by the next valid slot.
+                    currentPageChanged = resetSlotSpace(gcInfo, nextSlotIntPosInPageForGC, capacityInIntCount);
+
+                    if (currentPageChanged) {
+                        currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
+                    }
+
                 }
             }
 
             // We reach the end of a frame. Advance the Reader.
-            if (currentReadPageForGC == currentLargestFrameNumber) {
+            if (gcInfo.currentReadPageForGC == currentLargestFrameNumber) {
                 break;
             }
-            currentReadPageForGC++;
+            gcInfo.currentReadPageForGC++;
         }
 
         // Done reading all frames. So, deallocate unnecessary frames.
-        int numberOfFramesToBeDeallocated = currentReadPageForGC - currentGCWritePageForGC;
+        int numberOfFramesToBeDeallocated = gcInfo.currentReadPageForGC - gcInfo.currentGCWritePageForGC;
 
         if (numberOfFramesToBeDeallocated >= 1) {
             for (int i = 0; i < numberOfFramesToBeDeallocated; i++) {
-                currentByteSize -= contents.get(currentGCWritePageForGC + 1).getByteCapacity();
-                contents.remove(currentGCWritePageForGC + 1);
+                currentByteSize -= contents.get(gcInfo.currentGCWritePageForGC + 1).getByteCapacity();
+                contents.remove(gcInfo.currentGCWritePageForGC + 1);
 
-                currentOffsetInEachFrameList.remove(currentGCWritePageForGC + 1);
+                currentOffsetInEachFrameList.remove(gcInfo.currentGCWritePageForGC + 1);
             }
         }
 
         // Reset the current offset in the final page so that the future insertions will work without an issue.
-        currentLargestFrameNumber = currentGCWritePageForGC;
-        currentOffsetInEachFrameList.set(currentGCWritePageForGC, currentWriteIntOffsetInPageForGC);
+        currentLargestFrameNumber = gcInfo.currentGCWritePageForGC;
+        currentOffsetInEachFrameList.set(gcInfo.currentGCWritePageForGC, gcInfo.currentWriteIntOffsetInPageForGC);
+
+        wastedIntSpaceCount = 0;
+        tempTuplePointer.reset(INVALID_VALUE, INVALID_VALUE);
 
         return numberOfFramesToBeDeallocated;
     }
 
     /**
      * Migrate the current slot to the designated place and reset the current space using INVALID_VALUE.
+     *
+     * @return true if the current page has been changed. false if the current page has not been changed.
      */
-    private void MigrateSlot(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc, int capacityInIntCount,
-            TuplePointer tempTuplePointer) throws HyracksDataException {
+    private boolean MigrateSlot(GarbageCollectionInfo gcInfo, ITuplePointerAccessor bufferAccessor,
+            ITuplePartitionComputer tpc, int capacityInIntCount, int nextSlotIntPosInPageForGC)
+            throws HyracksDataException {
+        boolean currentPageChanged = false;
         // If the reader and writer indicate the same slot location, a move is not required.
-        if (currentReadPageForGC == currentGCWritePageForGC
-                && currentWriteIntOffsetInPageForGC == currentReadIntOffsetInPageForGC) {
-
+        if (gcInfo.isReaderWriterAtTheSamePos()) {
             int intToRead = capacityInIntCount;
             int intReadAtThisTime;
-            currentReadIntOffsetInPageForGC = nextSlotIntPosInPageForGC;
+            gcInfo.currentReadIntOffsetInPageForGC = nextSlotIntPosInPageForGC;
             while (intToRead > 0) {
-                intReadAtThisTime = Math.min(intToRead, frameCapacity - currentReadIntOffsetInPageForGC);
-                currentReadIntOffsetInPageForGC += intReadAtThisTime;
-                if (currentReadIntOffsetInPageForGC >= frameCapacity
-                        && currentReadPageForGC < currentLargestFrameNumber) {
-                    currentReadPageForGC++;
-                    currentReadIntOffsetInPageForGC = 0;
+                intReadAtThisTime = Math.min(intToRead, frameCapacity - gcInfo.currentReadIntOffsetInPageForGC);
+                gcInfo.currentReadIntOffsetInPageForGC += intReadAtThisTime;
+                if (gcInfo.currentReadIntOffsetInPageForGC >= frameCapacity
+                        && gcInfo.currentReadPageForGC < currentLargestFrameNumber) {
+                    gcInfo.currentReadPageForGC++;
+                    gcInfo.currentReadIntOffsetInPageForGC = 0;
+                    currentPageChanged = true;
                 }
                 intToRead -= intReadAtThisTime;
             }
 
-            currentReadContentFrameForGC = contents.get(currentReadPageForGC);
-            currentGCWritePageForGC = currentReadPageForGC;
-            currentWriteIntOffsetInPageForGC = currentReadIntOffsetInPageForGC;
-            currentWriteContentFrameForGC = contents.get(currentGCWritePageForGC);
+            gcInfo.currentGCWritePageForGC = gcInfo.currentReadPageForGC;
+            gcInfo.currentWriteIntOffsetInPageForGC = gcInfo.currentReadIntOffsetInPageForGC;
 
-            return;
+            return currentPageChanged;
         }
 
-        int tempWriteIntPosInPage = currentWriteIntOffsetInPageForGC;
+        // The reader is ahead of the writer. We can migrate the given slot towards to the beginning of
+        // the content frame(s).
+        int tempWriteIntPosInPage = gcInfo.currentWriteIntOffsetInPageForGC;
         int tempReadIntPosInPage = nextSlotIntPosInPageForGC;
         int chunksToMove = capacityInIntCount;
         int chunksToMoveAtThisTime;
+
         // To keep the original writing page that is going to be used for updating the header to content frame,
         // we declare a local variable.
-        int tempWritePage = currentGCWritePageForGC;
+        int tempWritePage = gcInfo.currentGCWritePageForGC;
 
         // Keeps the maximum INT chunks that writer/reader can write in the current page.
         int oneTimeIntCapacityForWriter;
         int oneTimeIntCapacityForReader;
 
+        IntSerDeBuffer currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
+        IntSerDeBuffer currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
+
+        // Move the slot.
         while (chunksToMove > 0) {
             oneTimeIntCapacityForWriter = Math.min(chunksToMove, frameCapacity - tempWriteIntPosInPage);
             oneTimeIntCapacityForReader = Math.min(chunksToMove, frameCapacity - tempReadIntPosInPage);
 
+            // Since the location of Reader and Writer are different, we can only move a minimum chunk
+            // before the current page of either Reader or Writer changes.
             chunksToMoveAtThisTime = Math.min(oneTimeIntCapacityForWriter, oneTimeIntCapacityForReader);
 
             // Moves a part of the slot from the Reader to Writer
@@ -589,9 +599,10 @@ public class SerializableHashTable implements ISerializableTable {
             // Clear that part in the Reader
             for (int i = 0; i < chunksToMoveAtThisTime; i++) {
                 // Do not blindly put -1 since there might be overlapping between writer and reader.
-                if ((currentReadPageForGC != tempWritePage)
+                if ((gcInfo.currentReadPageForGC != tempWritePage)
                         || (tempReadIntPosInPage + i >= tempWriteIntPosInPage + chunksToMoveAtThisTime)) {
-                    currentReadContentFrameForGC.writeInt(tempReadIntPosInPage + i, INVALID_VALUE);
+                    currentReadContentFrameForGC.writeInvalidVal(tempReadIntPosInPage + i, chunksToMoveAtThisTime - i);
+                    break;
                 }
             }
 
@@ -602,60 +613,68 @@ public class SerializableHashTable implements ISerializableTable {
             // Once the writer pointer hits the end of the page, we move to the next content page.
             if (tempWriteIntPosInPage >= frameCapacity && tempWritePage < currentLargestFrameNumber) {
                 tempWritePage++;
+                currentPageChanged = true;
                 currentWriteContentFrameForGC = contents.get(tempWritePage);
                 tempWriteIntPosInPage = 0;
             }
 
             // Once the reader pointer hits the end of the page, we move to the next content page.
-            if (tempReadIntPosInPage >= frameCapacity && currentReadPageForGC < currentLargestFrameNumber) {
-                currentReadPageForGC++;
-                currentReadContentFrameForGC = contents.get(currentReadPageForGC);
+            if (tempReadIntPosInPage >= frameCapacity && gcInfo.currentReadPageForGC < currentLargestFrameNumber) {
+                gcInfo.currentReadPageForGC++;
+                currentPageChanged = true;
+                currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
                 tempReadIntPosInPage = 0;
             }
 
             chunksToMove -= chunksToMoveAtThisTime;
         }
 
-        updateHeaderToContentPointerInHeaderFrame(bufferAccessor, tpc, tempTuplePointer, currentGCWritePageForGC,
-                currentWriteIntOffsetInPageForGC);
+        updateHeaderToContentPointerInHeaderFrame(bufferAccessor, tpc, tempTuplePointer, gcInfo.currentGCWritePageForGC,
+                gcInfo.currentWriteIntOffsetInPageForGC);
 
-        currentGCWritePageForGC = tempWritePage;
-        currentWriteIntOffsetInPageForGC = tempWriteIntPosInPage;
-        currentReadIntOffsetInPageForGC = tempReadIntPosInPage;
+        gcInfo.currentGCWritePageForGC = tempWritePage;
+        gcInfo.currentWriteIntOffsetInPageForGC = tempWriteIntPosInPage;
+        gcInfo.currentReadIntOffsetInPageForGC = tempReadIntPosInPage;
 
+        return currentPageChanged;
     }
 
     /**
-     * Completely remove the slot in the given content frame(s) and reclaim the space.
+     * Completely remove the slot in the given content frame(s) and reset the space.
      * For this method, we assume that this slot is not moved to somewhere else.
+     *
+     * @return true if the current page has been changed. false if the current page has not been changed.
      */
-    private void reclaimSlotSpace(int slotIntPos, int capacityInIntCount) {
+    private boolean resetSlotSpace(GarbageCollectionInfo gcInfo, int slotIntPos, int capacityInIntCount) {
+        boolean currentPageChanged = false;
         int tempReadIntPosInPage = slotIntPos;
         int chunksToDelete = capacityInIntCount;
         int chunksToDeleteAtThisTime;
+        IntSerDeBuffer currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
 
         while (chunksToDelete > 0) {
             chunksToDeleteAtThisTime = Math.min(chunksToDelete, frameCapacity - tempReadIntPosInPage);
 
             // Clear that part in the Reader
-            for (int i = 0; i < chunksToDeleteAtThisTime; i++) {
-                currentReadContentFrameForGC.writeInt(tempReadIntPosInPage + i, INVALID_VALUE);
-            }
+            currentReadContentFrameForGC.writeInvalidVal(tempReadIntPosInPage, chunksToDeleteAtThisTime);
 
             // Advance the pointer
             tempReadIntPosInPage += chunksToDeleteAtThisTime;
 
             // Once the reader pointer hits the end of the page, we move to the next content page.
-            if (tempReadIntPosInPage >= frameCapacity && currentReadPageForGC < currentLargestFrameNumber) {
-                currentReadPageForGC++;
-                currentReadContentFrameForGC = contents.get(currentReadPageForGC);
+            if (tempReadIntPosInPage >= frameCapacity && gcInfo.currentReadPageForGC < currentLargestFrameNumber) {
+                gcInfo.currentReadPageForGC++;
+                currentPageChanged = true;
+                currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
                 tempReadIntPosInPage = 0;
             }
 
             chunksToDelete -= chunksToDeleteAtThisTime;
         }
 
-        currentReadIntOffsetInPageForGC = tempReadIntPosInPage;
+        gcInfo.currentReadIntOffsetInPageForGC = tempReadIntPosInPage;
+
+        return currentPageChanged;
     }
 
     /**
@@ -681,7 +700,7 @@ public class SerializableHashTable implements ISerializableTable {
 
 
     /**
-     * Try to find a next valid slot in the given content frame.
+     * Try to find the next valid slot position in the given content frame from the current position.
      */
     private int findNextSlotInPage(IntSerDeBuffer frame, int readIntPosAtPage) {
         // Sanity check
@@ -721,6 +740,11 @@ public class SerializableHashTable implements ISerializableTable {
             bytes[offset++] = (byte) (value);
         }
 
+        public void writeInvalidVal(int intPos, int intRange) {
+            int offset = intPos * 4;
+            Arrays.fill(bytes, offset, offset + INT_SIZE * intRange, INVALID_BYTE_VALUE);
+        }
+
         public int capacity() {
             return bytes.length / 4;
         }
@@ -730,4 +754,28 @@ public class SerializableHashTable implements ISerializableTable {
         }
 
     }
+
+    /**
+     * Keeps the garbage collection related variables
+     */
+    private static class GarbageCollectionInfo {
+        // For garbage collection
+        int currentReadPageForGC;
+        int currentReadIntOffsetInPageForGC;
+        int currentGCWritePageForGC;
+        int currentWriteIntOffsetInPageForGC;
+
+        public GarbageCollectionInfo() {
+            currentReadPageForGC = 0;
+            currentReadIntOffsetInPageForGC = 0;
+            currentGCWritePageForGC = 0;
+            currentWriteIntOffsetInPageForGC = 0;
+        }
+
+        public boolean isReaderWriterAtTheSamePos() {
+            return currentReadPageForGC == currentGCWritePageForGC
+                    && currentReadIntOffsetInPageForGC == currentWriteIntOffsetInPageForGC;
+        }
+    }
+
 }
