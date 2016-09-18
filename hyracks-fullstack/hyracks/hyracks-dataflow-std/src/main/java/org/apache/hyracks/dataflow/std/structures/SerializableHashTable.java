@@ -406,12 +406,12 @@ public class SerializableHashTable implements ISerializableTable {
 
     @Override
     public boolean isGarbageCollectionNeeded() {
-        return wastedIntSpaceCount >= frameCapacity * (currentLargestFrameNumber + 1) * garbageCollectionThreshold;
+        return wastedIntSpaceCount > frameCapacity * (currentLargestFrameNumber + 1) * garbageCollectionThreshold;
     }
 
     /**
      * Conduct a garbage collection. The steps are as follows.
-     * #1. Initialize the Reader and Writer.
+     * #1. Initialize the Reader and Writer. The frame index is zero at this moment.
      * #2. Read a content frame. Find and read a slot data. Check the number of used count for the slot.
      * If it's not -1 (meaning that it is being used now), we move it to to the
      * current offset of the Writer frame. Update the corresponding h() value pointer for this location
