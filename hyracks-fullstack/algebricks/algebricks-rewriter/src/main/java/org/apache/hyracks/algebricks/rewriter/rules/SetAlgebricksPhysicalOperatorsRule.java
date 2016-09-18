@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.algebricks.rewriter.rules;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -86,6 +87,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.WriteResult
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import org.apache.hyracks.algebricks.rewriter.util.JoinUtils;
+import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 
 public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule {
 
@@ -164,10 +166,16 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
 
                                 boolean hasIntermediateAgg = generateMergeAggregationExpressions(gby, context);
                                 if (hasIntermediateAgg) {
+                                    // Calculate the group-by table size (number of entries)
+                                    // based on a rough estimation.
+                                    int memoryBudget = physicalOptimizationConfig.getMaxFramesExternalGroupBy()
+                                            * physicalOptimizationConfig.getFrameSize();
+                                    int numberOfGroupByColumns = gby.getGroupByList().size();
+
                                     ExternalGroupByPOperator externalGby = new ExternalGroupByPOperator(
                                             gby.getGroupByList(),
                                             physicalOptimizationConfig.getMaxFramesExternalGroupBy(),
-                                            physicalOptimizationConfig.getExternalGroupByTableSize(),
+                                            calculateGroupByTableEntrySize(memoryBudget, numberOfGroupByColumns),
                                             (long) physicalOptimizationConfig.getMaxFramesExternalGroupBy()
                                                     * physicalOptimizationConfig.getFrameSize());
                                     op.setPhysicalOperator(externalGby);
@@ -186,6 +194,7 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                             columnList.add(varRef.getVariableReference());
                         }
                     }
+
                     if (topLevelOp) {
                         op.setPhysicalOperator(new PreclusteredGroupByPOperator(columnList));
                     } else {
@@ -394,6 +403,47 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
             }
             keys.add(((VariableReferenceExpression) e).getVariableReference());
         }
+    }
+
+    /**
+     * Based on a rough estimation of a tuple (each field size: 4 bytes) and possible hash values
+     * for the given number of group-by columns, calculate the number of hash entries for the hash table in Group-by.
+     * We assume that the group-by table consists of hash table that stores hash value of tuple pointer and data table
+     * actually stores the aggregated tuple.
+     *
+     * @param memoryBudget
+     * @param numberOfGroupByColumns
+     * @return group-by table size (the cardinality of group-by table)
+     */
+    public static int calculateGroupByTableEntrySize(int memoryBudget, int numberOfGroupByColumns) {
+        // Estimate a tuple size with n fields:
+        // (4:tuple offset in a frame, 4n:each field offset in a tuple, 4n:each field size 4 bytes)
+        int tupleByteSize = 4 + 8 * numberOfGroupByColumns;
+
+        int maxNumberOfTuplesInDataTable = memoryBudget / tupleByteSize;
+
+        // To calculate possible hash values, we count the number of bits.
+        // We assume that each field consists of 4 bytes.
+        int numberOfBits = numberOfGroupByColumns * 4 * 8;
+        // Too high range that is greater than Long.MAXVALUE is not necessary for our calculation.
+        numberOfBits = Math.min(63, numberOfBits);
+        // Possible number of unique hash entries
+        long possibleNumberOfHashEntries = 2 << numberOfBits;
+
+        // Between # of entries in Data table and # of possible hash values, we choose smaller one.
+        long groupByTableSize = Math.min(possibleNumberOfHashEntries, maxNumberOfTuplesInDataTable);
+        long groupByTableByteSize = groupByTableSize * SerializableHashTable.getExpectedByteSizePerHashValue();
+
+        double hashTableRatio = (double) groupByTableByteSize / (groupByTableByteSize + memoryBudget);
+
+        long finalGroupByTableByteSize = (long) (hashTableRatio * memoryBudget);
+
+        long finalGroupByTableSize = finalGroupByTableByteSize
+                / SerializableHashTable.getExpectedByteSizePerHashValue();
+
+        BigInteger groupByPrimeNumberTableSize = BigInteger.valueOf((long) finalGroupByTableSize).nextProbablePrime();
+
+        return groupByPrimeNumberTableSize.intValue();
     }
 
     private static LogicalVariable getKeysAndLoad(Mutable<ILogicalExpression> payloadExpr,

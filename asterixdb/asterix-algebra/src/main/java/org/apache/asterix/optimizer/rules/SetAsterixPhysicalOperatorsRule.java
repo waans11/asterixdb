@@ -62,6 +62,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.Preclustere
 import org.apache.hyracks.algebricks.core.algebra.properties.INodeDomain;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
+import org.apache.hyracks.algebricks.rewriter.rules.SetAlgebricksPhysicalOperatorsRule;
 import org.apache.hyracks.algebricks.rewriter.util.JoinUtils;
 
 public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
@@ -148,10 +149,18 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                                                         expr.getFunctionIdentifier(), expr.getArguments());
                                         aggOp.getExpressions().get(i).setValue(serialAggExpr);
                                     }
+
+                                    // Calculate the group-by table size (number of entries)
+                                    // based on a rough estimation.
+                                    int memoryBudget = physicalOptimizationConfig.getMaxFramesExternalGroupBy()
+                                            * physicalOptimizationConfig.getFrameSize();
+                                    int numberOfGroupByColumns = gby.getGroupByList().size();
+
                                     ExternalGroupByPOperator externalGby = new ExternalGroupByPOperator(
                                             gby.getGroupByList(),
                                             physicalOptimizationConfig.getMaxFramesExternalGroupBy(),
-                                            physicalOptimizationConfig.getExternalGroupByTableSize(),
+                                            SetAlgebricksPhysicalOperatorsRule.calculateGroupByTableEntrySize(
+                                                    memoryBudget, numberOfGroupByColumns),
                                             (long) physicalOptimizationConfig.getMaxFramesExternalGroupBy()
                                                     * physicalOptimizationConfig.getFrameSize());
                                     generateMergeAggregationExpressions(gby, context);
