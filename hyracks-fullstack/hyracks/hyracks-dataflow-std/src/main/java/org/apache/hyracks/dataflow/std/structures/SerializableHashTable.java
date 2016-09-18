@@ -251,10 +251,6 @@ public class SerializableHashTable implements ISerializableTable {
             if ((lastOffsetInCurrentFrame + 4) > frameCapacity) {
                 // Swipe the region that can't be used.
                 lastContentFrame.writeInvalidVal(lastOffsetInCurrentFrame, frameCapacity - lastOffsetInCurrentFrame);
-                // Temp
-                //                for (int i = 0; i < frameCapacity - lastOffsetInCurrentFrame; i++) {
-                //                    lastContentFrame.writeInt(lastOffsetInCurrentFrame + i, INVALID_VALUE);
-                //                }
                 currentFrameNumber++;
                 lastOffsetInCurrentFrame = 0;
                 currentFrameNumberChanged = true;
@@ -375,10 +371,6 @@ public class SerializableHashTable implements ISerializableTable {
 
     private void resetFrame(IntSerDeBuffer frame) {
         Arrays.fill(frame.bytes, INVALID_BYTE_VALUE);
-        // Temp
-        //        for (int i = 0; i < frameCapacity; i++) {
-        //            frame.writeInt(i, INVALID_VALUE);
-        //        }
     }
 
     private int getHeaderFrameIndex(int entry) {
