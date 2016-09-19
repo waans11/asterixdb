@@ -432,14 +432,13 @@ public class SerializableHashTable implements ISerializableTable {
         int capacityInIntCount;
         int nextSlotIntPosInPageForGC;
         boolean currentPageChanged;
-        IntSerDeBuffer currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
+        IntSerDeBuffer currentReadContentFrameForGC;
         IntSerDeBuffer currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
 
         // Step #1. Read a content frame until it reaches the end of content frames.
         while (gcInfo.currentReadPageForGC <= currentLargestFrameNumber) {
 
             gcInfo.currentReadIntOffsetInPageForGC = 0;
-            nextSlotIntPosInPageForGC = INVALID_VALUE;
             currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
 
             // Step #2. Advance the reader until it hits the end of the given frame.
