@@ -18,11 +18,6 @@
  */
 package org.apache.asterix.external.util;
 
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hive.ql.io.RCFileInputFormat;
-import org.apache.hadoop.mapred.SequenceFileInputFormat;
-import org.apache.hadoop.mapred.TextInputFormat;
-
 public class ExternalDataConstants {
     // TODO: Remove unused variables.
     /**
@@ -93,6 +88,8 @@ public class ExternalDataConstants {
     public static final String KEY_VALUE_FORMAT = "value-format";
     // a boolean indicating whether the feed is a change feed
     public static final String KEY_IS_CHANGE_FEED = "change-feed";
+    // a boolean indicating whether the feed use upsert
+    public static final String KEY_IS_UPSERT_FEED = "upsert-feed";
     // an integer representing the number of keys in a change feed
     public static final String KEY_KEY_SIZE = "key-size";
     // a boolean indicating whether the feed produces records with metadata
@@ -101,13 +98,17 @@ public class ExternalDataConstants {
     public static final String KEY_RECORD_FORMAT = "record-format";
     public static final String KEY_META_TYPE_NAME = "meta-type-name";
     public static final String READER_STREAM = "stream";
+    public static final String KEY_HTTP_PROXY_HOST = "http-proxy-host";
+    public static final String KEY_HTTP_PROXY_PORT = "http-proxy-port";
+    public static final String KEY_HTTP_PROXY_USER = "http-proxy-user";
+    public static final String KEY_HTTP_PROXY_PASSWORD = "http-proxy-password";
     /**
      * HDFS class names
      */
-    public static final String CLASS_NAME_TEXT_INPUT_FORMAT = TextInputFormat.class.getName();
-    public static final String CLASS_NAME_SEQUENCE_INPUT_FORMAT = SequenceFileInputFormat.class.getName();
-    public static final String CLASS_NAME_RC_INPUT_FORMAT = RCFileInputFormat.class.getName();
-    public static final String CLASS_NAME_HDFS_FILESYSTEM = DistributedFileSystem.class.getName();
+    public static final String CLASS_NAME_TEXT_INPUT_FORMAT = "org.apache.hadoop.mapred.TextInputFormat";
+    public static final String CLASS_NAME_SEQUENCE_INPUT_FORMAT = "org.apache.hadoop.mapred.SequenceFileInputFormat";
+    public static final String CLASS_NAME_RC_INPUT_FORMAT = "org.apache.hadoop.hive.ql.io.RCFileInputFormat";
+    public static final String CLASS_NAME_HDFS_FILESYSTEM = "org.apache.hadoop.hdfs.DistributedFileSystem";
     /**
      * input formats aliases
      */
@@ -126,6 +127,7 @@ public class ExternalDataConstants {
     public static final String READER_PUSH_TWITTER = "push_twitter";
     public static final String READER_TWITTER_PULL = "twitter_pull";
     public static final String READER_PULL_TWITTER = "pull_twitter";
+    public static final String READER_USER_STREAM_TWITTER = "twitter_user_stream";
 
     public static final String CLUSTER_LOCATIONS = "cluster-locations";
     public static final String SCHEDULER = "hdfs-scheduler";
@@ -168,7 +170,6 @@ public class ExternalDataConstants {
     public static final String ALIAS_LOCALFS_PUSH_ADAPTER = "push_localfs";
     public static final String ALIAS_HDFS_ADAPTER = "hdfs";
     public static final String ALIAS_SOCKET_ADAPTER = "socket_adapter";
-    public static final String ALIAS_TWITTER_FIREHOSE_ADAPTER = "twitter_firehose";
     public static final String ALIAS_SOCKET_CLIENT_ADAPTER = "socket_client";
     public static final String ALIAS_RSS_ADAPTER = "rss";
     public static final String ALIAS_FILE_FEED_ADAPTER = "file_feed";

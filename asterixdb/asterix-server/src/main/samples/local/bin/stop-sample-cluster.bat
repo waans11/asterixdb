@@ -24,7 +24,8 @@ if NOT DEFINED JAVA_HOME (
 )
 
 REM ensure JAVA_HOME has no spaces nor quotes, since appassembler can't handle them
-for %%I in (%JAVA_HOME%) do (
+set JAVA_HOME=%JAVA_HOME:"=%
+for %%I in ("%JAVA_HOME%") do (
   set JAVA_HOME=%%~sI
 )
 
@@ -36,7 +37,7 @@ cd %CLUSTERDIR%\..\..
 set INSTALLDIR=%cd%
 
 call %INSTALLDIR%\bin\${HELPER_COMMAND} get_cluster_state -quiet
-if %ERRORLEVEL% EQU 0 (
+if %ERRORLEVEL% NEQ 1 (
   call %INSTALLDIR%\bin\${HELPER_COMMAND} shutdown_cluster_all
 ) else (
   echo WARNING: sample cluster does not appear to be running, will attempt to wait for

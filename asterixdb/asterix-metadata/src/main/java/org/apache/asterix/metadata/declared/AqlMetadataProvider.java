@@ -92,8 +92,8 @@ import org.apache.asterix.runtime.job.listener.JobEventListenerFactory;
 import org.apache.asterix.runtime.operators.AsterixLSMInvertedIndexUpsertOperatorDescriptor;
 import org.apache.asterix.runtime.operators.AsterixLSMTreeUpsertOperatorDescriptor;
 import org.apache.asterix.runtime.util.AsterixAppContextInfo;
-import org.apache.asterix.runtime.util.ClusterStateManager;
 import org.apache.asterix.runtime.util.AsterixRuntimeComponentsProvider;
+import org.apache.asterix.runtime.util.ClusterStateManager;
 import org.apache.asterix.transaction.management.opcallbacks.LockThenSearchOperationCallbackFactory;
 import org.apache.asterix.transaction.management.opcallbacks.PrimaryIndexInstantSearchOperationCallbackFactory;
 import org.apache.asterix.transaction.management.opcallbacks.PrimaryIndexModificationOperationCallbackFactory;
@@ -415,6 +415,10 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             throw new AsterixException(e);
         }
         return format;
+    }
+
+    public Dataverse findDataverse(String dataverseName) throws AsterixException {
+        return MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverseName);
     }
 
     public Triple<IOperatorDescriptor, AlgebricksPartitionConstraint, IAdapterFactory> buildFeedIntakeRuntime(
@@ -1093,7 +1097,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 
     @Override
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> getUpsertRuntime(
-            IDataSource<AqlSourceId> dataSource, IOperatorSchema propagatedSchema, IVariableTypeEnvironment typeEnv,
+            IDataSource<AqlSourceId> dataSource, IOperatorSchema inputSchema, IVariableTypeEnvironment typeEnv,
             List<LogicalVariable> primaryKeys, LogicalVariable payload, List<LogicalVariable> filterKeys,
             List<LogicalVariable> additionalNonFilterFields, RecordDescriptor recordDesc, JobGenContext context,
             JobSpecification spec) throws AlgebricksException {
@@ -1115,22 +1119,22 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         int i = 0;
         // set the keys' permutations
         for (LogicalVariable varKey : primaryKeys) {
-            int idx = propagatedSchema.findVariable(varKey);
+            int idx = inputSchema.findVariable(varKey);
             fieldPermutation[i] = idx;
             bloomFilterKeyFields[i] = i;
             i++;
         }
         // set the record permutation
-        fieldPermutation[i++] = propagatedSchema.findVariable(payload);
+        fieldPermutation[i++] = inputSchema.findVariable(payload);
         // set the filters' permutations.
         if (numFilterFields > 0) {
-            int idx = propagatedSchema.findVariable(filterKeys.get(0));
+            int idx = inputSchema.findVariable(filterKeys.get(0));
             fieldPermutation[i++] = idx;
         }
 
         if (additionalNonFilterFields != null) {
             for (LogicalVariable var : additionalNonFilterFields) {
-                int idx = propagatedSchema.findVariable(var);
+                int idx = inputSchema.findVariable(var);
                 fieldPermutation[i++] = idx;
             }
         }
@@ -1191,22 +1195,19 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                     + (dataset.hasMetaPart() ? 2 : 1) + numFilterFields];
             ISerializerDeserializer[] outputSerDes = new ISerializerDeserializer[recordDesc.getFieldCount()
                     + (dataset.hasMetaPart() ? 2 : 1) + numFilterFields];
-            for (int j = 0; j < recordDesc.getFieldCount(); j++) {
-                outputTypeTraits[j] = recordDesc.getTypeTraits()[j];
-                outputSerDes[j] = recordDesc.getFields()[j];
-            }
-            outputSerDes[outputSerDes.length - (dataset.hasMetaPart() ? 2 : 1) - numFilterFields] = FormatUtils
-                    .getDefaultFormat().getSerdeProvider().getSerializerDeserializer(itemType);
-            outputTypeTraits[outputTypeTraits.length - (dataset.hasMetaPart() ? 2 : 1) - numFilterFields] = FormatUtils
-                    .getDefaultFormat().getTypeTraitProvider().getTypeTrait(itemType);
 
+            // add the previous record first
+            int f = 0;
+            outputSerDes[f] = FormatUtils.getDefaultFormat().getSerdeProvider().getSerializerDeserializer(itemType);
+            f++;
+            // add the previous meta second
             if (dataset.hasMetaPart()) {
-                outputSerDes[outputSerDes.length - 1 - numFilterFields] = FormatUtils.getDefaultFormat()
-                        .getSerdeProvider().getSerializerDeserializer(metaItemType);
-                outputTypeTraits[outputTypeTraits.length - 1 - numFilterFields] = FormatUtils.getDefaultFormat()
-                        .getTypeTraitProvider().getTypeTrait(metaItemType);
+                outputSerDes[f] = FormatUtils.getDefaultFormat().getSerdeProvider().getSerializerDeserializer(
+                        metaItemType);
+                outputTypeTraits[f] = FormatUtils.getDefaultFormat().getTypeTraitProvider().getTypeTrait(metaItemType);
+                f++;
             }
-
+            // add the previous filter third
             int fieldIdx = -1;
             if (numFilterFields > 0) {
                 String filterField = DatasetUtils.getFilterField(dataset).get(0);
@@ -1216,10 +1217,15 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                     }
                 }
                 fieldIdx = i;
-                outputTypeTraits[outputTypeTraits.length - 1] = FormatUtils.getDefaultFormat().getTypeTraitProvider()
-                        .getTypeTrait(itemType.getFieldTypes()[fieldIdx]);
-                outputSerDes[outputSerDes.length - 1] = FormatUtils.getDefaultFormat().getSerdeProvider()
+                outputTypeTraits[f] = FormatUtils.getDefaultFormat().getTypeTraitProvider().getTypeTrait(itemType
+                        .getFieldTypes()[fieldIdx]);
+                outputSerDes[f] = FormatUtils.getDefaultFormat().getSerdeProvider()
                         .getSerializerDeserializer(itemType.getFieldTypes()[fieldIdx]);
+                f++;
+            }
+            for (int j = 0; j < recordDesc.getFieldCount(); j++) {
+                outputTypeTraits[j + f] = recordDesc.getTypeTraits()[j];
+                outputSerDes[j + f] = recordDesc.getFields()[j];
             }
 
             RecordDescriptor outputRecordDesc = new RecordDescriptor(outputSerDes, outputTypeTraits);
@@ -1829,7 +1835,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         // One token (+ optional partitioning field) + primary keys: [token,
         // number of token, PK]
         int numKeys = primaryKeys.size() + secondaryKeys.size();
-        int numTokenKeyPairFields = (!isPartitioned) ? 1 + primaryKeys.size() : 2 + primaryKeys.size();
         int numFilterFields = DatasetUtils.getFilterField(dataset) == null ? 0 : 1;
 
         // generate field permutations
@@ -1956,8 +1961,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 }
 
                 filterFieldsForNonBulkLoadOps = new int[numFilterFields];
-                filterFieldsForNonBulkLoadOps[0] = numTokenKeyPairFields;
-                invertedIndexFieldsForNonBulkLoadOps = new int[numTokenKeyPairFields];
+                //for non-bulk-loads, there is only <SK,PK,F> in the incoming tuples
+                filterFieldsForNonBulkLoadOps[0] = numKeys;
+                invertedIndexFieldsForNonBulkLoadOps = new int[numKeys];
                 for (int k = 0; k < invertedIndexFieldsForNonBulkLoadOps.length; k++) {
                     invertedIndexFieldsForNonBulkLoadOps[k] = k;
                 }

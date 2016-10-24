@@ -17,7 +17,7 @@
  ! under the License.
  !-->
 <!DOCTYPE test-suite [
-  <!ENTITY RecordsQueries SYSTEM "queries_sqlpp/records/RecordsQueries.xml">
+  <!ENTITY RecordsQueries SYSTEM "queries_sqlpp/objects/ObjectsQueries.xml">
 
 ]>
 <test-suite xmlns="urn:xml.testframework.asterix.apache.org" ResultOffsetPath="results" QueryOffsetPath="queries_sqlpp" QueryFileExtension=".sqlpp">
@@ -2446,7 +2446,7 @@
     <test-case FilePath="global-aggregate">
       <compilation-unit name="q07_error">
         <output-dir compare="Text">q01</output-dir>
-        <expected-error>COUNT is a SQL-92 aggregate function. The SQL++ core aggregate function coll_count could potentially express the intent.</expected-error>
+        <expected-error>COUNT is a SQL-92 aggregate function. The SQL++ core aggregate function array_count could potentially express the intent.</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="global-aggregate">
@@ -3142,6 +3142,16 @@
       <compilation-unit name="query-ASTERIXDB-1577">
         <output-dir compare="Text">query-ASTERIXDB-1577</output-dir>
         <expected-error>The first argument of a field access should be a RECORD, but it is</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="query-ASTERIXDB-1671">
+        <output-dir compare="Text">query-ASTERIXDB-1671</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="query-ASTERIXDB-1671-2">
+        <output-dir compare="Text">query-ASTERIXDB-1671</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="misc">
@@ -4004,6 +4014,11 @@
         <output-dir compare="Text">is</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="null-missing">
+      <compilation-unit name="query-ASTERIXDB-1689">
+        <output-dir compare="Text">query-ASTERIXDB-1689</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="numeric">
     <test-case FilePath="numeric">
@@ -4387,6 +4402,11 @@
         <output-dir compare="Text">sign</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="numeric">
+      <compilation-unit name="non-finite">
+        <output-dir compare="Clean-JSON">non-finite</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="open-closed">
     <!--
@@ -4695,6 +4715,11 @@
     <test-case FilePath="quantifiers">
       <compilation-unit name="query-ASTERIXDB-1005">
         <output-dir compare="Text">query-ASTERIXDB-1005</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="quantifiers">
+      <compilation-unit name="query-ASTERIXDB-1674">
+        <output-dir compare="Text">query-ASTERIXDB-1674</output-dir>
       </compilation-unit>
     </test-case>
     <!--
@@ -5814,6 +5839,11 @@
         <output-dir compare="Text">query-ASTERIXDB-1597</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="subquery">
+      <compilation-unit name="query-ASTERIXDB-1674">
+        <output-dir compare="Text">query-ASTERIXDB-1674</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="subset-collection">
     <test-case FilePath="subset-collection">
@@ -5958,6 +5988,181 @@
     <test-case FilePath="tpcds">
       <compilation-unit name="query-ASTERIXDB-1602">
         <output-dir compare="Text">query-ASTERIXDB-1602</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q03">
+        <output-dir compare="Text">q03</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q07">
+        <output-dir compare="Text">q07</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q15">
+        <output-dir compare="Text">q15</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q19">
+        <output-dir compare="Text">q19</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q21">
+        <output-dir compare="Text">q21</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q24a">
+        <output-dir compare="Text">q24a</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q24b">
+        <output-dir compare="Text">q24b</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q25">
+        <output-dir compare="Text">q25</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q26">
+        <output-dir compare="Text">q26</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q29">
+        <output-dir compare="Text">q29</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q30">
+        <output-dir compare="Text">q30</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q31">
+        <output-dir compare="Text">q31</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q34">
+        <output-dir compare="Text">q34</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q37">
+        <output-dir compare="Text">q37</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q41">
+        <output-dir compare="Text">q41</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q42">
+        <output-dir compare="Text">q42</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q43">
+        <output-dir compare="Text">q43</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q45">
+        <output-dir compare="Text">q45</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q46">
+        <output-dir compare="Text">q46</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q50">
+        <output-dir compare="Text">q50</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q52">
+        <output-dir compare="Text">q52</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q55">
+        <output-dir compare="Text">q55</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q59">
+        <output-dir compare="Text">q59</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q62">
+        <output-dir compare="Text">q62</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q68">
+        <output-dir compare="Text">q68</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q73">
+        <output-dir compare="Text">q73</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q79">
+        <output-dir compare="Text">q79</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q81">
+        <output-dir compare="Text">q81</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q82">
+        <output-dir compare="Text">q82</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q88">
+        <output-dir compare="Text">q88</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q91">
+        <output-dir compare="Text">q91</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q94">
+        <output-dir compare="Text">q94</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q95">
+        <output-dir compare="Text">q95</output-dir>
+      </compilation-unit>
+    </test-case>
+     <test-case FilePath="tpcds">
+      <compilation-unit name="q96">
+        <output-dir compare="Text">q96</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q98">
+        <output-dir compare="Text">q98</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -7002,6 +7207,17 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="user-defined-functions">
+      <compilation-unit name="query-ASTERIXDB-1652">
+        <expected-error>In function call "test.length(...)", the dataverse "test" cannot be found!</expected-error>
+        <output-dir compare="Text">query-ASTERIXDB-1652-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="user-defined-functions">
+      <compilation-unit name="query-ASTERIXDB-1652-2">
+        <output-dir compare="Text">query-ASTERIXDB-1652-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="user-defined-functions">
       <compilation-unit name="query-issue218-2">
         <output-dir compare="Text">query-issue218-2</output-dir>
       </compilation-unit>
@@ -7024,7 +7240,7 @@
     <test-case FilePath="user-defined-functions">
       <compilation-unit name="query-issue455">
         <output-dir compare="Text">query-issue455</output-dir>
-        <expected-error>function test.printName@0 is undefined</expected-error>
+        <expected-error>function test.printName@0 is not defined</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="user-defined-functions">
@@ -7196,7 +7412,7 @@
     <test-case FilePath="user-defined-functions">
       <compilation-unit name="f01">
         <output-dir compare="Text">f01</output-dir>
-        <expected-error>function test.int8@0 is undefined</expected-error>
+        <expected-error>function test.tinyint@0 is not defined</expected-error>
       </compilation-unit>
     </test-case>
     <!-- This test case is not valid anymore since we do not required "IMPORT_PRIVATE_FUNCTIONS" flag anymore -->
@@ -7710,6 +7926,31 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="types">
+      <compilation-unit name="isarray">
+        <output-dir compare="Text">isarray</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="types">
+      <compilation-unit name="isboolean">
+        <output-dir compare="Text">isboolean</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="types">
+      <compilation-unit name="isnumber">
+        <output-dir compare="Text">isnumber</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="types">
+      <compilation-unit name="isobject">
+        <output-dir compare="Text">isobject</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="types">
+      <compilation-unit name="isstring">
+        <output-dir compare="Text">isstring</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="types">
       <compilation-unit name="record01">
         <output-dir compare="Text">record01</output-dir>
       </compilation-unit>
@@ -8115,6 +8356,12 @@
       <compilation-unit name="union_negative_2">
         <output-dir compare="Text">union</output-dir>
         <expected-error>Cannot find dataset t in dataverse TinySocial nor an alias with name t</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="union">
+      <compilation-unit name="union_negative_3">
+        <output-dir compare="Text">union</output-dir>
+        <expected-error>Operation UNION with set semantics is not supported.</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="union">

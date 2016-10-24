@@ -38,7 +38,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.DistinctOper
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DistributeResultOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.EmptyTupleSourceOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExchangeOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExtensionOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.DelegateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IndexInsertDeleteUpsertOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
@@ -52,13 +52,13 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.MaterializeO
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.NestedTupleSourceOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.PartitioningSplitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ProjectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ReplicateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.RunningAggregateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ScriptOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SinkOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SubplanOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.TokenizeOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
@@ -227,14 +227,6 @@ public class UsedVariableVisitor implements ILogicalOperatorVisitor<Void, Void> 
     public Void visitOrderOperator(OrderOperator op, Void arg) {
         for (Pair<IOrder, Mutable<ILogicalExpression>> oe : op.getOrderExpressions()) {
             oe.second.getValue().getUsedVariables(usedVariables);
-        }
-        return null;
-    }
-
-    @Override
-    public Void visitPartitioningSplitOperator(PartitioningSplitOperator op, Void arg) {
-        for (Mutable<ILogicalExpression> e : op.getExpressions()) {
-            e.getValue().getUsedVariables(usedVariables);
         }
         return null;
     }
@@ -436,9 +428,12 @@ public class UsedVariableVisitor implements ILogicalOperatorVisitor<Void, Void> 
 
     @Override
     public Void visitReplicateOperator(ReplicateOperator op, Void arg) throws AlgebricksException {
-        for (Mutable<ILogicalOperator> outputOp : op.getOutputs()) {
-            VariableUtilities.getUsedVariables(outputOp.getValue(), usedVariables);
-        }
+        return null;
+    }
+
+    @Override
+    public Void visitSplitOperator(SplitOperator op, Void arg) throws AlgebricksException {
+        op.getBranchingExpression().getValue().getUsedVariables(usedVariables);
         return null;
     }
 
@@ -448,7 +443,7 @@ public class UsedVariableVisitor implements ILogicalOperatorVisitor<Void, Void> 
     }
 
     @Override
-    public Void visitExtensionOperator(ExtensionOperator op, Void arg) throws AlgebricksException {
+    public Void visitDelegateOperator(DelegateOperator op, Void arg) throws AlgebricksException {
         op.getDelegate().getUsedVariables(usedVariables);
         return null;
     }

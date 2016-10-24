@@ -12,6 +12,7 @@ asterixdb/asterix-app/src/test/resources/externallib
 asterixdb/asterix-app/library
 asterixdb/asterix-app/data/csv/beer.csv
 asterixdb/asterix-installer/src/test/resources/clusterts/asterix-installer-*-SNAPSHOT-binary-assembly
+asterixdb/asterix-installer/ittest/
 *-coredump
 *.pyc
 *.iml

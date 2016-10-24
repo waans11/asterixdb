@@ -62,7 +62,7 @@ import org.apache.asterix.messaging.CCMessageBroker;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.api.IAsterixStateProxy;
 import org.apache.asterix.metadata.bootstrap.AsterixStateProxy;
-import org.apache.asterix.metadata.cluster.ClusterManager;
+import org.apache.asterix.metadata.cluster.ClusterManagerProvider;
 import org.apache.asterix.runtime.util.AsterixAppContextInfo;
 import org.apache.hyracks.api.application.ICCApplicationContext;
 import org.apache.hyracks.api.application.ICCApplicationEntryPoint;
@@ -71,6 +71,7 @@ import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.lifecycle.LifeCycleComponentManager;
 import org.apache.hyracks.api.messages.IMessageBroker;
 import org.apache.hyracks.control.cc.ClusterControllerService;
+import org.apache.hyracks.control.common.controllers.CCConfig;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -88,33 +89,35 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
 
     @Override
     public void start(ICCApplicationContext ccAppCtx, String[] args) throws Exception {
-        IMessageBroker messageBroker = new CCMessageBroker((ClusterControllerService) ccAppCtx.getControllerService());
+        final ClusterControllerService controllerService = (ClusterControllerService) ccAppCtx.getControllerService();
+        IMessageBroker messageBroker = new CCMessageBroker(controllerService);
         this.appCtx = ccAppCtx;
 
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Starting Asterix cluster controller");
         }
 
-        appCtx.setThreadFactory(new AsterixThreadFactory(new LifeCycleComponentManager()));
+        appCtx.setThreadFactory(new AsterixThreadFactory(appCtx.getThreadFactory(), new LifeCycleComponentManager()));
         GlobalRecoveryManager.instantiate((HyracksConnection) getNewHyracksClientConnection());
         ILibraryManager libraryManager = new ExternalLibraryManager();
         AsterixResourceIdManager resourceIdManager = new AsterixResourceIdManager();
         ExternalLibraryUtils.setUpExternaLibraries(libraryManager, false);
         AsterixAppContextInfo.initialize(appCtx, getNewHyracksClientConnection(), GlobalRecoveryManager.instance(),
-                libraryManager, resourceIdManager);
+                libraryManager, resourceIdManager, () -> MetadataManager.INSTANCE);
         ccExtensionManager = new CompilerExtensionManager(getExtensions());
         AsterixAppContextInfo.INSTANCE.setExtensionManager(ccExtensionManager);
 
-        if (System.getProperty("java.rmi.server.hostname") == null) {
-            System.setProperty("java.rmi.server.hostname",
-                    ((ClusterControllerService) ccAppCtx.getControllerService()).getCCConfig().clusterNetIpAddress);
-        }
+        final CCConfig ccConfig = controllerService.getCCConfig();
 
-        setAsterixStateProxy(AsterixStateProxy.registerRemoteObject());
+        if (System.getProperty("java.rmi.server.hostname") == null) {
+            System.setProperty("java.rmi.server.hostname", ccConfig.clusterNetIpAddress);
+        }
+        AsterixMetadataProperties metadataProperties = AsterixAppContextInfo.INSTANCE.getMetadataProperties();
+
+        setAsterixStateProxy(AsterixStateProxy.registerRemoteObject(metadataProperties.getMetadataCallbackPort()));
         appCtx.setDistributedState(proxy);
 
-        AsterixMetadataProperties metadataProperties = AsterixAppContextInfo.INSTANCE.getMetadataProperties();
-        MetadataManager.instantiate(new MetadataManager(proxy, metadataProperties));
+        MetadataManager.initialize(proxy, metadataProperties);
 
         AsterixAppContextInfo.INSTANCE.getCCApplicationContext()
                 .addJobLifecycleListener(ActiveLifecycleListener.INSTANCE);
@@ -125,7 +128,7 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
             server.start();
         }
 
-        ClusterManager.INSTANCE.registerSubscriber(GlobalRecoveryManager.instance());
+        ClusterManagerProvider.getClusterManager().registerSubscriber(GlobalRecoveryManager.instance());
 
         ccAppCtx.addClusterLifecycleListener(ClusterLifecycleListener.INSTANCE);
         ccAppCtx.setMessageBroker(messageBroker);
@@ -320,13 +323,7 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
 
     @Override
     public void startupCompleted() throws Exception {
-        // Notify Zookeeper that the startup is complete
-        ILookupService zookeeperService = ClusterManager.getLookupService();
-        if (zookeeperService != null) {
-            // Our asterix app runtimes tests don't use zookeeper
-            zookeeperService.reportClusterState(ClusterProperties.INSTANCE.getCluster().getInstanceName(),
-                    ClusterState.ACTIVE);
-        }
+        ClusterManagerProvider.getClusterManager().notifyStartupCompleted();
     }
 
     public static synchronized void setAsterixStateProxy(IAsterixStateProxy proxy) {

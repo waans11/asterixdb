@@ -25,8 +25,8 @@ use `orders-aggreg`;
 
 create type `orders-aggreg`.OrderType as
  closed {
-  oid : int32,
-  cid : int32,
+  oid : integer,
+  cid : integer,
   orderstatus : string,
   orderpriority : string,
   clerk : string,

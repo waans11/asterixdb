@@ -28,6 +28,7 @@ import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.lang.common.expression.CallExpr;
 import org.apache.asterix.lang.common.expression.ListConstructor;
+import org.apache.asterix.lang.common.util.CommonFunctionMapUtil;
 import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -36,32 +37,16 @@ import org.apache.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 public class FunctionMapUtil {
 
     private final static String CORE_AGGREGATE_PREFIX = "coll_";
-    private final static String SQL_PREFIX = "sql-";
-
-    // Maps from a SQL function name to an AQL function name (i.e., AsterixDB internal name).
-    private static final Map<String, String> FUNCTION_NAME_MAP = new HashMap<>();
-
-    static {
-        FUNCTION_NAME_MAP.put("ceil", "ceiling"); //SQL: ceil,  AQL: ceiling
-        FUNCTION_NAME_MAP.put("length", "string-length"); // SQL: length,  AQL: string-length
-        FUNCTION_NAME_MAP.put("lower", "lowercase"); // SQL: lower, AQL: lowercase
-        FUNCTION_NAME_MAP.put("substr", "substring"); // SQL: substr,  AQL: substring
-        FUNCTION_NAME_MAP.put("upper", "uppercase"); //SQL: upper, AQL: uppercase
-        FUNCTION_NAME_MAP.put("title", "initcap"); //SQL: title, SQL/AQL: initcap
-        FUNCTION_NAME_MAP.put("regexp_contains", "matches"); //SQL: regexp_contains, AQL: matches
-        FUNCTION_NAME_MAP.put("regexp_like", "regexp-like"); //SQL: regexp_like, AQL: regexp-like
-        FUNCTION_NAME_MAP.put("regexp_position", "regexp-position"); //SQL: regexp_position, AQL: regexp-position
-        FUNCTION_NAME_MAP.put("regexp_replace", "replace"); //SQL: regexp_replace, AQL: replace
-        FUNCTION_NAME_MAP.put("power", "caret"); //SQL: pow, AQL: caret
-    }
+    private final static String CORE_SQL_AGGREGATE_PREFIX = "array_";
+    private final static String INTERNAL_SQL_AGGREGATE_PREFIX = "sql-";
 
     // Maps from a variable-arg SQL function names to an internal list-arg function name.
     private static final Map<String, String> LIST_INPUT_FUNCTION_MAP = new HashMap<>();
 
     static {
         LIST_INPUT_FUNCTION_MAP.put("concat", "string-concat");
-        LIST_INPUT_FUNCTION_MAP.put("greatest", CORE_AGGREGATE_PREFIX + SQL_PREFIX + "max");
-        LIST_INPUT_FUNCTION_MAP.put("least", CORE_AGGREGATE_PREFIX + SQL_PREFIX + "min");
+        LIST_INPUT_FUNCTION_MAP.put("greatest", CORE_SQL_AGGREGATE_PREFIX + "max");
+        LIST_INPUT_FUNCTION_MAP.put("least", CORE_SQL_AGGREGATE_PREFIX + "min");
     }
 
     /**
@@ -92,11 +77,15 @@ public class FunctionMapUtil {
      */
     public static boolean isCoreAggregateFunction(FunctionSignature fs) {
         String name = fs.getName().toLowerCase();
-        if (!name.startsWith(CORE_AGGREGATE_PREFIX)) {
+        boolean coreAgg = name.startsWith(CORE_AGGREGATE_PREFIX);
+        boolean coreSqlAgg = name.startsWith(CORE_SQL_AGGREGATE_PREFIX);
+        if (!coreAgg && !coreSqlAgg) {
             return false;
         }
-        IFunctionInfo finfo = FunctionUtil.getFunctionInfo(new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-                name.substring(CORE_AGGREGATE_PREFIX.length()), fs.getArity()));
+        String internalName = coreAgg ? name.substring(CORE_AGGREGATE_PREFIX.length())
+                : (INTERNAL_SQL_AGGREGATE_PREFIX + name.substring(CORE_SQL_AGGREGATE_PREFIX.length()));
+        IFunctionInfo finfo = FunctionUtil
+                .getFunctionInfo(new FunctionIdentifier(FunctionConstants.ASTERIX_NS, internalName, fs.getArity()));
         if (finfo == null) {
             return false;
         }
@@ -115,7 +104,7 @@ public class FunctionMapUtil {
         if (!isSql92AggregateFunction(fs)) {
             return fs;
         }
-        return new FunctionSignature(fs.getNamespace(), CORE_AGGREGATE_PREFIX + SQL_PREFIX + fs.getName(),
+        return new FunctionSignature(fs.getNamespace(), CORE_SQL_AGGREGATE_PREFIX + fs.getName(),
                 fs.getArity());
     }
 
@@ -128,14 +117,14 @@ public class FunctionMapUtil {
      */
     public static FunctionSignature normalizeBuiltinFunctionSignature(FunctionSignature fs, boolean checkSql92Aggregate)
             throws AsterixException {
-        String mappedName = internalizeBuiltinScalarFunctionName(fs.getName());
         if (isCoreAggregateFunction(fs)) {
-            mappedName = internalizeCoreAggregateFunctionName(mappedName);
+            return internalizeCoreAggregateFunctionName(fs);
         } else if (checkSql92Aggregate && isSql92AggregateFunction(fs)) {
             throw new AsterixException(fs.getName()
-                    + " is a SQL-92 aggregate function. The SQL++ core aggregate function " + CORE_AGGREGATE_PREFIX
+                    + " is a SQL-92 aggregate function. The SQL++ core aggregate function " + CORE_SQL_AGGREGATE_PREFIX
                     + fs.getName().toLowerCase() + " could potentially express the intent.");
         }
+        String mappedName = CommonFunctionMapUtil.normalizeBuiltinFunctionSignature(fs).getName();
         return new FunctionSignature(fs.getNamespace(), mappedName, fs.getArity());
     }
 
@@ -159,33 +148,20 @@ public class FunctionMapUtil {
     }
 
     /**
-     * Removes the "coll_" prefix for user-facing SQL++ core aggregate function names.
+     * Removes the "array_" prefix for user-facing SQL++ core aggregate function names.
      *
-     * @param name,
-     *            the name of a user-facing SQL++ core aggregate function name.
-     * @return the AsterixDB internal function name for the aggregate function.
+     * @param fs,
+     *            a user-facing SQL++ core aggregate function signature.
+     * @return the AsterixDB internal function signature for the aggregate function.
      * @throws AsterixException
      */
-    private static String internalizeCoreAggregateFunctionName(String name) throws AsterixException {
-        String lowerCaseName = name.toLowerCase();
-        return lowerCaseName.substring(CORE_AGGREGATE_PREFIX.length());
+    private static FunctionSignature internalizeCoreAggregateFunctionName(FunctionSignature fs)
+            throws AsterixException {
+        String name = fs.getName().toLowerCase();
+        boolean coreAgg = name.startsWith(CORE_AGGREGATE_PREFIX);
+        String lowerCaseName = coreAgg ? name.substring(CORE_AGGREGATE_PREFIX.length())
+                : (INTERNAL_SQL_AGGREGATE_PREFIX + name.substring(CORE_SQL_AGGREGATE_PREFIX.length()));
+        return new FunctionSignature(fs.getNamespace(), lowerCaseName, fs.getArity());
     }
 
-    /**
-     * Note: function name normalization can ONLY be called
-     * after all user-defined functions (by either "DECLARE FUNCTION" or "CREATE FUNCTION")
-     * are inlined, because user-defined function names are case-sensitive.
-     *
-     * @param name
-     *            the user-input function name in the query.
-     * @return the mapped internal name.
-     */
-    private static String internalizeBuiltinScalarFunctionName(String name) {
-        String lowerCaseName = name.toLowerCase();
-        String mappedName = FUNCTION_NAME_MAP.get(lowerCaseName);
-        if (mappedName != null) {
-            return mappedName;
-        }
-        return lowerCaseName;
-    }
 }

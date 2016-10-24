@@ -18,22 +18,33 @@
  */
 package org.apache.asterix.external.util;
 
-import org.apache.asterix.common.exceptions.AsterixException;
-import twitter4j.FilterQuery;
-import twitter4j.Twitter;
-import twitter4j.TwitterFactory;
-import twitter4j.TwitterStream;
-import twitter4j.TwitterStreamFactory;
-import twitter4j.conf.ConfigurationBuilder;
-
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.apache.asterix.common.exceptions.AsterixException;
+
+import twitter4j.DirectMessage;
+import twitter4j.FilterQuery;
+import twitter4j.StallWarning;
+import twitter4j.Status;
+import twitter4j.StatusDeletionNotice;
+import twitter4j.StatusListener;
+import twitter4j.Twitter;
+import twitter4j.TwitterFactory;
+import twitter4j.TwitterObjectFactory;
+import twitter4j.TwitterStream;
+import twitter4j.TwitterStreamFactory;
+import twitter4j.User;
+import twitter4j.UserList;
+import twitter4j.UserStreamListener;
+import twitter4j.conf.ConfigurationBuilder;
 
 public class TwitterUtil {
 
@@ -65,12 +76,11 @@ public class TwitterUtil {
     /**
      * Gets more than one bounding box from a sequences of coordinates
      * (following Twitter formats) + predefined location names, as US and EU.
-     *
      * E.g., for EU and US, we would use -29.7, 79.2, 36.7, 72.0; -124.848974,
-     *      -66.885444, 24.396308, 49.384358.
+     * -66.885444, 24.396308, 49.384358.
      *
      * @param locationValue
-     *          String value of the location coordinates or names (comma-separated)
+     *            String value of the location coordinates or names (comma-separated)
      * @return
      * @throws AsterixException
      */
@@ -219,7 +229,23 @@ public class TwitterUtil {
         cb.setOAuthConsumerSecret(oAuthConsumerSecret);
         cb.setOAuthAccessToken(oAuthAccessToken);
         cb.setOAuthAccessTokenSecret(oAuthAccessTokenSecret);
+        configureProxy(cb, configuration);
         return cb;
+    }
+
+    private static void configureProxy(ConfigurationBuilder cb, Map<String, String> configuration) {
+        final String httpProxyHost = configuration.get(ExternalDataConstants.KEY_HTTP_PROXY_HOST);
+        final String httpProxyPort = configuration.get(ExternalDataConstants.KEY_HTTP_PROXY_PORT);
+        if (httpProxyHost != null && httpProxyPort != null) {
+            cb.setHttpProxyHost(httpProxyHost);
+            cb.setHttpProxyPort(Integer.parseInt(httpProxyPort));
+            final String httpProxyUser = configuration.get(ExternalDataConstants.KEY_HTTP_PROXY_USER);
+            final String httpProxyPassword = configuration.get(ExternalDataConstants.KEY_HTTP_PROXY_PASSWORD);
+            if (httpProxyUser != null && httpProxyPassword != null) {
+                cb.setHttpProxyUser(httpProxyUser);
+                cb.setHttpProxyPassword(httpProxyPassword);
+            }
+        }
     }
 
     public static void initializeConfigurationWithAuthInfo(Map<String, String> configuration) throws AsterixException {
@@ -273,6 +299,189 @@ public class TwitterUtil {
     public static final class SearchAPIConstants {
         public static final String QUERY = "query";
         public static final String INTERVAL = "interval";
+    }
+
+    public static UserTweetsListener getUserTweetsListener() {
+        return new UserTweetsListener();
+    }
+
+    public static TweetListener getTweetListener() {
+        return new TweetListener();
+    }
+
+    public static class UserTweetsListener implements UserStreamListener {
+
+        private LinkedBlockingQueue<String> inputQ;
+
+        public void setInputQ(LinkedBlockingQueue<String> inputQ) {
+            this.inputQ = inputQ;
+        }
+
+        @Override
+        public void onDeletionNotice(long l, long l1) {
+            //do nothing
+        }
+
+        @Override
+        public void onFriendList(long[] longs) {
+            //do nothing
+        }
+
+        @Override
+        public void onFavorite(User user, User user1, Status status) {
+            //do nothing
+        }
+
+        @Override
+        public void onUnfavorite(User user, User user1, Status status) {
+            //do nothing
+        }
+
+        @Override
+        public void onFollow(User user, User user1) {
+            //do nothing
+        }
+
+        @Override
+        public void onUnfollow(User user, User user1) {
+            //do nothing
+        }
+
+        @Override
+        public void onDirectMessage(DirectMessage directMessage) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserListMemberAddition(User user, User user1, UserList userList) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserListMemberDeletion(User user, User user1, UserList userList) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserListSubscription(User user, User user1, UserList userList) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserListUnsubscription(User user, User user1, UserList userList) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserListCreation(User user, UserList userList) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserListUpdate(User user, UserList userList) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserListDeletion(User user, UserList userList) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserProfileUpdate(User user) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserSuspension(long l) {
+            //do nothing
+        }
+
+        @Override
+        public void onUserDeletion(long l) {
+            //do nothing
+        }
+
+        @Override
+        public void onBlock(User user, User user1) {
+            //do nothing
+        }
+
+        @Override
+        public void onUnblock(User user, User user1) {
+            //do nothing
+        }
+
+        @Override
+        public void onStatus(Status status) {
+            String jsonTweet = TwitterObjectFactory.getRawJSON(status);
+            inputQ.add(jsonTweet);
+        }
+
+        @Override
+        public void onDeletionNotice(StatusDeletionNotice statusDeletionNotice) {
+            //do nothing
+        }
+
+        @Override
+        public void onTrackLimitationNotice(int i) {
+            //do nothing
+        }
+
+        @Override
+        public void onScrubGeo(long l, long l1) {
+            //do nothing
+        }
+
+        @Override
+        public void onStallWarning(StallWarning stallWarning) {
+            //do nothing
+        }
+
+        @Override
+        public void onException(Exception e) {
+            //do nothing
+        }
+    }
+
+    public static class TweetListener implements StatusListener {
+
+        private LinkedBlockingQueue<String> inputQ;
+
+        public void setInputQ(LinkedBlockingQueue<String> inputQ) {
+            this.inputQ = inputQ;
+        }
+
+        @Override
+        public void onStatus(Status tweet) {
+            String jsonTweet = TwitterObjectFactory.getRawJSON(tweet);
+            inputQ.add(jsonTweet);
+        }
+
+        @Override
+        public void onException(Exception arg0) {
+            // do nothing
+        }
+
+        @Override
+        public void onDeletionNotice(StatusDeletionNotice arg0) {
+            // do nothing
+        }
+
+        @Override
+        public void onScrubGeo(long arg0, long arg1) {
+            // do nothing
+        }
+
+        @Override
+        public void onStallWarning(StallWarning arg0) {
+            // do nothing
+        }
+
+        @Override
+        public void onTrackLimitationNotice(int arg0) {
+            // do nothing
+        }
     }
 
 }

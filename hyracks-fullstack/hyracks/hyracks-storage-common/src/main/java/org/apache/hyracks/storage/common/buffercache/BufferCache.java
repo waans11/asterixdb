@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
@@ -74,6 +75,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
     private final Queue<BufferCacheHeaderHelper> headerPageCache = new ConcurrentLinkedQueue<>();
 
     //DEBUG
+    private Level fileOpsLevel = Level.FINE;
     private ArrayList<CachedPage> confiscatedPages;
     private Lock confiscateLock;
     private HashMap<CachedPage, StackTraceElement[]> confiscatedPagesOwner;
@@ -81,6 +83,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
     //!DEBUG
     private IIOReplicationManager ioReplicationManager;
     private final List<ICachedPageInternal> cachedPages = new ArrayList<>();
+    private final AtomicLong masterPinCount = new AtomicLong();
 
     private boolean closed;
 
@@ -789,8 +792,8 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
 
     @Override
     public void createFile(FileReference fileRef) throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Creating file: " + fileRef + " in cache: " + this);
+        if (LOGGER.isLoggable(fileOpsLevel)) {
+            LOGGER.log(fileOpsLevel, "Creating file: " + fileRef + " in cache: " + this);
         }
         synchronized (fileInfoMap) {
             fileMapManager.registerFile(fileRef);
@@ -799,8 +802,8 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
 
     @Override
     public int createMemFile() throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Creating memory file in cache: " + this);
+        if (LOGGER.isLoggable(fileOpsLevel)) {
+            LOGGER.log(fileOpsLevel, "Creating memory file in cache: " + this);
         }
         int fileId;
         synchronized (fileInfoMap) {
@@ -815,8 +818,8 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
 
     @Override
     public void openFile(int fileId) throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Opening file: " + fileId + " in cache: " + this);
+        if (LOGGER.isLoggable(fileOpsLevel)) {
+            LOGGER.log(fileOpsLevel, "Opening file: " + fileId + " in cache: " + this);
         }
         synchronized (fileInfoMap) {
             BufferedFileHandle fInfo;
@@ -916,8 +919,8 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
 
     @Override
     public void closeFile(int fileId) throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Closing file: " + fileId + " in cache: " + this);
+        if (LOGGER.isLoggable(fileOpsLevel)) {
+            LOGGER.log(fileOpsLevel, "Closing file: " + fileId + " in cache: " + this);
         }
         if (LOGGER.isLoggable(Level.FINE)) {
             LOGGER.fine(dumpState());
@@ -932,8 +935,8 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
                 throw new HyracksDataException("Closed fileId: " + fileId + " more times than it was opened.");
             }
         }
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Closed file: " + fileId + " in cache: " + this);
+        if (LOGGER.isLoggable(fileOpsLevel)) {
+            LOGGER.log(fileOpsLevel, "Closed file: " + fileId + " in cache: " + this);
         }
     }
 
@@ -954,8 +957,8 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
 
     @Override
     public synchronized void deleteFile(int fileId, boolean flushDirtyPages) throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Deleting file: " + fileId + " in cache: " + this);
+        if (LOGGER.isLoggable(fileOpsLevel)) {
+            LOGGER.log(fileOpsLevel, "Deleting file: " + fileId + " in cache: " + this);
         }
         synchronized (fileInfoMap) {
             sweepAndFlush(fileId, flushDirtyPages);
@@ -997,8 +1000,8 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
     @Override
     public synchronized void deleteMemFile(int fileId) throws HyracksDataException {
         //TODO: possible sanity chcecking here like in above?
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Deleting memory file: " + fileId + " in cache: " + this);
+        if (LOGGER.isLoggable(fileOpsLevel)) {
+            LOGGER.log(fileOpsLevel, "Deleting memory file: " + fileId + " in cache: " + this);
         }
         synchronized (virtualFiles) {
             virtualFiles.remove(fileId);
@@ -1244,6 +1247,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
 
     private ICachedPage getPageLoop(long dpid, int multiplier, boolean confiscate)
             throws HyracksDataException {
+        final long startingPinCount = masterPinCount.get();
         int cycleCount = 0;
         try {
             while (true) {
@@ -1251,6 +1255,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
                 int startCleanedCount = cleanerThread.cleanedCount;
                 ICachedPage page = confiscate ? confiscateInner(dpid, multiplier) : findPageInner(dpid);
                 if (page != null) {
+                    masterPinCount.incrementAndGet();
                     return page;
                 }
                 // no page available to confiscate. try kicking the cleaner thread.
@@ -1285,13 +1290,15 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
                 if (cycleCount > MAX_PIN_ATTEMPT_CYCLES) {
                     cycleCount = 0; // suppress warning below
                     throw new HyracksDataException("Unable to find free page in buffer cache after "
-                            + MAX_PIN_ATTEMPT_CYCLES + " cycles (buffer cache undersized?)");
+                            + MAX_PIN_ATTEMPT_CYCLES + " cycles (buffer cache undersized?); "
+                            + (masterPinCount.get() - startingPinCount) + " successful pins since start of cycle");
                 }
             }
         } finally {
             if (cycleCount > PIN_ATTEMPT_CYCLES_WARNING_THRESHOLD && LOGGER.isLoggable(Level.WARNING)) {
                 LOGGER.warning("Took " + cycleCount + " cycles to find free page in buffer cache.  (buffer cache " +
-                        "undersized?)");
+                        "undersized?); " + (masterPinCount.get() - startingPinCount) +
+                        " successful pins since start of cycle");
             }
         }
     }

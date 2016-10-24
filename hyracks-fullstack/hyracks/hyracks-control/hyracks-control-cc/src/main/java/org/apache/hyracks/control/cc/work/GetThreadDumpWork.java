@@ -20,13 +20,21 @@ package org.apache.hyracks.control.cc.work;
 
 import java.lang.management.ManagementFactory;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
+import org.apache.hyracks.control.common.utils.ThreadDumpHelper;
+import org.apache.hyracks.control.common.work.AbstractWork;
 import org.apache.hyracks.control.common.work.IResultCallback;
-import org.apache.hyracks.control.common.work.ThreadDumpWork;
 
-public class GetThreadDumpWork extends ThreadDumpWork {
+public class GetThreadDumpWork extends AbstractWork {
+    private static final Logger LOGGER = Logger.getLogger(GetThreadDumpWork.class.getName());
+    public static final int TIMEOUT_SECS = 60;
+
     private final ClusterControllerService ccs;
     private final String nodeId;
     private final IResultCallback<String> callback;
@@ -41,10 +49,15 @@ public class GetThreadDumpWork extends ThreadDumpWork {
     }
 
     @Override
-    protected void doRun() throws Exception {
+    public void run() {
         if (nodeId == null) {
             // null nodeId means the request is for the cluster controller
-            callback.setValue(takeDump(ManagementFactory.getThreadMXBean()));
+            try {
+                callback.setValue(ThreadDumpHelper.takeDumpJSON(ManagementFactory.getThreadMXBean()));
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Exception taking CC thread dump", e);
+                callback.setException(e);
+            }
         } else {
             final NodeControllerState ncState = ccs.getNodeMap().get(nodeId);
             if (ncState == null) {
@@ -52,7 +65,30 @@ public class GetThreadDumpWork extends ThreadDumpWork {
                 callback.setValue(null);
             } else {
                 ccs.addThreadDumpRun(run.getRequestId(), run);
-                ncState.getNodeController().takeThreadDump(run.getRequestId());
+                try {
+                    ncState.getNodeController().takeThreadDump(run.getRequestId());
+                } catch (Exception e) {
+                    ccs.removeThreadDumpRun(run.getRequestId());
+                    callback.setException(e);
+                }
+                final long requestTime = System.currentTimeMillis();
+                ccs.getExecutor().execute(() -> {
+                    try {
+                        final long queueTime = System.currentTimeMillis() - requestTime;
+                        final long sleepTime = TimeUnit.SECONDS.toMillis(TIMEOUT_SECS) - queueTime;
+                        if (sleepTime > 0) {
+                            Thread.sleep(sleepTime);
+                        }
+                        if (ccs.removeThreadDumpRun(run.getRequestId()) != null) {
+                            LOGGER.log(Level.WARNING, "Timed out thread dump request " + run.getRequestId()
+                                    + " for node " + nodeId);
+                            callback.setException(new TimeoutException("Thread dump request for node " + nodeId
+                                    + " timed out after " + TIMEOUT_SECS + " seconds."));
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
             }
         }
     }

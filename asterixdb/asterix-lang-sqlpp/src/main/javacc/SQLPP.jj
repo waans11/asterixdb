@@ -11,7 +11,7 @@ PARSER_BEGIN(SQLPPParser)
 package org.apache.asterix.lang.sqlpp.parser;
 
 // For SQL++ ParserTokenManager
-import org.apache.xerces.util.IntStack;
+import java.util.ArrayDeque;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -298,7 +298,10 @@ class SQLPPParser extends ScopeChecker implements IParser {
                 message += fixQuotes(tokenImage[0]);
                 break;
             }
-            message += fixQuotes(tokenImage[tok.kind]) + " ";
+            final String fixedTokenImage = tokenImage[tok.kind];
+            if (! tok.image.equalsIgnoreCase(stripQuotes(fixedTokenImage))) {
+                message += fixQuotes(fixedTokenImage) + " ";
+            }
             message += quot + addEscapes(tok.image) + quot;
             tok = tok.next;
         }
@@ -414,7 +417,7 @@ TypeDecl TypeSpecification(String hint, boolean dgen) throws ParseException:
 }
 {
   <TYPE> nameComponents = TypeName() ifNotExists = IfNotExists()
-  <AS> typeExpr = TypeExpr()
+  <AS> typeExpr = RecordTypeDef()
     {
       long numValues = -1;
       String filename = null;
@@ -683,14 +686,12 @@ CreateDataverseStatement DataverseSpecification() throws ParseException :
 {
   String dvName = null;
   boolean ifNotExists = false;
-  String format = null;
 }
 {
   <DATAVERSE> dvName = Identifier()
   ifNotExists = IfNotExists()
-  ( LOOKAHEAD(1) <WITH> <FORMAT> format = ConstantString() )?
     {
-      return new CreateDataverseStatement(new Identifier(dvName), format, ifNotExists);
+      return new CreateDataverseStatement(new Identifier(dvName), null, ifNotExists);
     }
 }
 
@@ -968,7 +969,7 @@ InsertStatement InsertStatement() throws ParseException:
   <INSERT> <INTO> nameComponents = QualifiedName() query = Query(false)
     {
       query.setTopLevel(true);
-      return new InsertStatement(nameComponents.first, nameComponents.second, query, getVarCounter());
+      return new InsertStatement(nameComponents.first, nameComponents.second, query, getVarCounter(), null, null);
     }
 }
 
@@ -2187,15 +2188,27 @@ Expression Literal() throws ParseException:
     }
   | <INTEGER_LITERAL>
     {
-      lit.setValue(new LongIntegerLiteral(new Long(token.image)));
+        try {
+            lit.setValue(new LongIntegerLiteral(Long.valueOf(token.image)));
+        } catch (NumberFormatException e) {
+            throw new ParseException("Could not parse numeric literal \"" + token.image +'"');
+        }
     }
   | <FLOAT_LITERAL>
     {
-      lit.setValue(new FloatLiteral(new Float(token.image)));
+        try {
+            lit.setValue(new FloatLiteral(Float.valueOf(token.image)));
+        } catch (NumberFormatException e) {
+            throw new ParseException("Could not parse numeric literal \"" + token.image +'"');
+        }
     }
   | <DOUBLE_LITERAL>
     {
-      lit.setValue(new DoubleLiteral(new Double(token.image)));
+        try {
+            lit.setValue(new DoubleLiteral(Double.valueOf(token.image)));
+        } catch (NumberFormatException e) {
+            throw new ParseException("Could not parse numeric literal \"" + token.image +'"');
+        }
     }
   | <MISSING>
     {
@@ -2967,7 +2980,7 @@ QuantifiedExpression QuantifiedExpression()throws ParseException:
       quantifiedList.add(pair);
     }
     )*
-     <SATISFIES> satisfiesExpr = Expression()
+     <SATISFIES> satisfiesExpr = Expression() (<END>)?
      {
        qc.setSatisfiesExpr(satisfiesExpr);
        qc.setQuantifiedList(quantifiedList);
@@ -3011,7 +3024,7 @@ LetClause WithElement() throws ParseException:
 TOKEN_MGR_DECLS:
 {
     public int commentDepth = 0;
-    public IntStack lexerStateStack = new IntStack();
+    public ArrayDeque<Integer> lexerStateStack = new ArrayDeque<Integer>();
 
     public void pushState() {
       lexerStateStack.push( curLexState );
@@ -3074,7 +3087,6 @@ TOKEN [IGNORE_CASE]:
   | <FILTER : "filter">
   | <FLATTEN : "flatten">
   | <FOR : "for">
-  | <FORMAT : "format">
   | <FROM : "from">
   | <FULL : "full">
   | <FUNCTION : "function">

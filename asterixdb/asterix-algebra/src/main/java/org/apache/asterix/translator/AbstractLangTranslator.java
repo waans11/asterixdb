@@ -33,10 +33,8 @@ import org.apache.asterix.lang.common.statement.DropDatasetStatement;
 import org.apache.asterix.lang.common.statement.InsertStatement;
 import org.apache.asterix.lang.common.statement.NodeGroupDropStatement;
 import org.apache.asterix.metadata.dataset.hints.DatasetHints;
-import org.apache.asterix.metadata.entities.AsterixBuiltinTypeMap;
 import org.apache.asterix.metadata.entities.Dataverse;
 import org.apache.asterix.metadata.utils.MetadataConstants;
-import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.runtime.util.AsterixAppContextInfo;
 import org.apache.asterix.runtime.util.ClusterStateManager;
 import org.apache.hyracks.algebricks.common.utils.Pair;
@@ -48,8 +46,6 @@ import org.apache.hyracks.algebricks.common.utils.Pair;
 public abstract class AbstractLangTranslator {
 
     private static final Logger LOGGER = Logger.getLogger(AbstractLangTranslator.class.getName());
-
-    protected static final Map<String, BuiltinType> builtinTypeMap = AsterixBuiltinTypeMap.getBuiltinTypes();
 
     public void validateOperation(Dataverse defaultDataverse, Statement stmt) throws AsterixException {
 
@@ -69,7 +65,7 @@ public abstract class AbstractLangTranslator {
                 }
             }
             if (!ClusterStateManager.INSTANCE.getState().equals(ClusterState.ACTIVE)) {
-                throw new AsterixException(" Asterix Cluster is in " + ClusterState.UNUSABLE + " state."
+                throw new AsterixException("Cluster is in " + ClusterState.UNUSABLE + " state."
                         + "\n One or more Node Controllers have left or haven't joined yet.\n");
             } else {
                 if (LOGGER.isLoggable(Level.INFO)) {
@@ -79,7 +75,7 @@ public abstract class AbstractLangTranslator {
         }
 
         if (ClusterStateManager.INSTANCE.getState().equals(ClusterState.UNUSABLE)) {
-            throw new AsterixException(" Asterix Cluster is in " + ClusterState.UNUSABLE + " state."
+            throw new AsterixException("Cluster is in " + ClusterState.UNUSABLE + " state."
                     + "\n One or more Node Controllers have left.\n");
         }
 
@@ -87,8 +83,7 @@ public abstract class AbstractLangTranslator {
             int maxWaitCycles = AsterixAppContextInfo.INSTANCE.getExternalProperties().getMaxWaitClusterActive();
             int waitCycleCount = 0;
             try {
-                while (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted()
-                        && waitCycleCount < maxWaitCycles) {
+                while (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted() && waitCycleCount < maxWaitCycles) {
                     Thread.sleep(1000);
                     waitCycleCount++;
                 }
@@ -98,7 +93,7 @@ public abstract class AbstractLangTranslator {
                 }
             }
             if (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted()) {
-                throw new AsterixException(" Asterix Cluster Global recovery is not yet complete and The system is in "
+                throw new AsterixException("Cluster Global recovery is not yet complete and the system is in "
                         + ClusterState.ACTIVE + " state");
             }
         }

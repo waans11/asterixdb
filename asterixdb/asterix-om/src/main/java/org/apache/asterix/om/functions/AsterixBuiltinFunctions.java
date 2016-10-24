@@ -55,6 +55,7 @@ import org.apache.asterix.om.typecomputer.impl.AYearMonthDurationTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.AnyTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.BooleanFunctionTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.BooleanOnlyTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.BooleanOrMissingTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.CastTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.ClosedRecordConstructorResultType;
 import org.apache.asterix.om.typecomputer.impl.CollectionMemberResultType;
@@ -68,7 +69,7 @@ import org.apache.asterix.om.typecomputer.impl.InjectFailureTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.LocalAvgTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.MinMaxAggTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NonTaggedGetItemResultType;
-import org.apache.asterix.om.typecomputer.impl.NotMissingTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.NotUnknownTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NullableDoubleTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NumericAddSubMulDivTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NumericAggTypeComputer;
@@ -87,6 +88,7 @@ import org.apache.asterix.om.typecomputer.impl.OrderedListOfAnyTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.PropagateTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.RecordAddFieldsTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.RecordMergeTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.RecordPairsTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.RecordRemoveFieldsTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.ScalarVersionOfAggregateResultType;
 import org.apache.asterix.om.typecomputer.impl.StringBooleanTypeComputer;
@@ -165,18 +167,18 @@ public class AsterixBuiltinFunctions {
     public static final FunctionIdentifier DEEP_EQUAL = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "deep-equal", 2);
 
-    // records
+    // objects
     public static final FunctionIdentifier RECORD_MERGE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "record-merge", 2);
+            "object-merge", 2);
     public static final FunctionIdentifier REMOVE_FIELDS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "record-remove-fields", 2);
+            "object-remove-fields", 2);
     public static final FunctionIdentifier ADD_FIELDS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "record-add-fields", 2);
+            "object-add-fields", 2);
 
     public static final FunctionIdentifier CLOSED_RECORD_CONSTRUCTOR = new FunctionIdentifier(
-            FunctionConstants.ASTERIX_NS, "closed-record-constructor", FunctionIdentifier.VARARGS);
+            FunctionConstants.ASTERIX_NS, "closed-object-constructor", FunctionIdentifier.VARARGS);
     public static final FunctionIdentifier OPEN_RECORD_CONSTRUCTOR = new FunctionIdentifier(
-            FunctionConstants.ASTERIX_NS, "open-record-constructor", FunctionIdentifier.VARARGS);
+            FunctionConstants.ASTERIX_NS, "open-object-constructor", FunctionIdentifier.VARARGS);
     public static final FunctionIdentifier FIELD_ACCESS_BY_INDEX = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "field-access-by-index", 2);
     public static final FunctionIdentifier FIELD_ACCESS_BY_NAME = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -184,9 +186,11 @@ public class AsterixBuiltinFunctions {
     public static final FunctionIdentifier FIELD_ACCESS_NESTED = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "field-access-nested", 2);
     public static final FunctionIdentifier GET_RECORD_FIELDS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "get-record-fields", 1);
+            "get-object-fields", 1);
     public static final FunctionIdentifier GET_RECORD_FIELD_VALUE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "get-record-field-value", 2);
+            "get-object-field-value", 2);
+    public static final FunctionIdentifier RECORD_PAIRS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "object-pairs", FunctionIdentifier.VARARGS);
 
     // numeric
     public static final FunctionIdentifier NUMERIC_UNARY_MINUS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -642,7 +646,7 @@ public class AsterixBuiltinFunctions {
     public static final FunctionIdentifier INJECT_FAILURE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "inject-failure", 2);
     public static final FunctionIdentifier FLOW_RECORD = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "flow-record", 1);
+            "flow-object", 1);
     public static final FunctionIdentifier CAST_TYPE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "cast", 1);
 
@@ -761,6 +765,16 @@ public class AsterixBuiltinFunctions {
     public static final FunctionIdentifier IS_NULL = AlgebricksBuiltinFunctions.IS_NULL;
     public static final FunctionIdentifier IS_UNKOWN = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "is-unknown", 1);
+    public static final FunctionIdentifier IS_BOOLEAN = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "is-boolean", 1);
+    public static final FunctionIdentifier IS_NUMBER = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "is-number",
+            1);
+    public static final FunctionIdentifier IS_STRING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "is-string",
+            1);
+    public static final FunctionIdentifier IS_ARRAY = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "is-array",
+            1);
+    public static final FunctionIdentifier IS_OBJECT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "is-object",
+            1);
 
     public static final FunctionIdentifier IS_SYSTEM_NULL = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "is-system-null", 1);
@@ -791,10 +805,15 @@ public class AsterixBuiltinFunctions {
 
         // first, take care of Algebricks builtin functions
         addFunction(IS_MISSING, BooleanOnlyTypeComputer.INSTANCE, true);
-        addFunction(IS_NULL, BooleanOnlyTypeComputer.INSTANCE, true);
         addFunction(IS_UNKOWN, BooleanOnlyTypeComputer.INSTANCE, true);
-        addFunction(IS_SYSTEM_NULL, BooleanOnlyTypeComputer.INSTANCE, true);
-        addFunction(NOT, BooleanFunctionTypeComputer.INSTANCE, true);
+        addFunction(IS_NULL, BooleanOrMissingTypeComputer.INSTANCE, true);
+        addFunction(IS_SYSTEM_NULL, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(IS_BOOLEAN, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(IS_NUMBER, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(IS_STRING, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(IS_ARRAY, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(IS_OBJECT, ABooleanTypeComputer.INSTANCE, true);
+        addFunction(NOT, ABooleanTypeComputer.INSTANCE, true);
 
         addPrivateFunction(EQ, BooleanFunctionTypeComputer.INSTANCE, true);
         addPrivateFunction(LE, BooleanFunctionTypeComputer.INSTANCE, true);
@@ -810,7 +829,7 @@ public class AsterixBuiltinFunctions {
         addFunction(DEEP_EQUAL, BooleanFunctionTypeComputer.INSTANCE, true);
 
         // and then, Asterix builtin functions
-        addPrivateFunction(CHECK_UNKNOWN, NotMissingTypeComputer.INSTANCE, true);
+        addPrivateFunction(CHECK_UNKNOWN, NotUnknownTypeComputer.INSTANCE, true);
         addPrivateFunction(ANY_COLLECTION_MEMBER, CollectionMemberResultType.INSTANCE, true);
         addFunction(BOOLEAN_CONSTRUCTOR, StringBooleanTypeComputer.INSTANCE, true);
         addFunction(CARET, NumericAddSubMulDivTypeComputer.INSTANCE, true);
@@ -1036,7 +1055,7 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(UNORDERED_LIST_CONSTRUCTOR, UnorderedListConstructorTypeComputer.INSTANCE, true);
         addFunction(WORD_TOKENS, OrderedListOfAStringTypeComputer.INSTANCE, true);
 
-        // records
+        // objects
         addFunction(RECORD_MERGE, RecordMergeTypeComputer.INSTANCE, true);
         addFunction(ADD_FIELDS, RecordAddFieldsTypeComputer.INSTANCE, true);
         addFunction(REMOVE_FIELDS, RecordRemoveFieldsTypeComputer.INSTANCE, true);
@@ -1047,6 +1066,7 @@ public class AsterixBuiltinFunctions {
         addPrivateFunction(FIELD_ACCESS_BY_NAME, FieldAccessByNameResultType.INSTANCE, true);
         addFunction(GET_RECORD_FIELDS, OrderedListOfAnyTypeComputer.INSTANCE, true);
         addFunction(GET_RECORD_FIELD_VALUE, FieldAccessNestedResultType.INSTANCE, true);
+        addFunction(RECORD_PAIRS, RecordPairsTypeComputer.INSTANCE, true);
 
         // temporal type accessors
         addFunction(ACCESSOR_TEMPORAL_YEAR, AInt64TypeComputer.INSTANCE, true);

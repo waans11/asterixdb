@@ -157,8 +157,13 @@ import org.apache.asterix.runtime.evaluators.functions.GramTokensDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.HashedGramTokensDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.HashedWordTokensDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.InjectFailureDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.IsArrayDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.IsBooleanDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IsMissingDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IsNullDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.IsNumberDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.IsObjectDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.IsStringDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IsSystemNullDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IsUnknownDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.LenDescriptor;
@@ -254,6 +259,7 @@ import org.apache.asterix.runtime.evaluators.functions.records.GetRecordFieldVal
 import org.apache.asterix.runtime.evaluators.functions.records.GetRecordFieldsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.records.RecordAddFieldsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.records.RecordMergeDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.records.RecordPairsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.records.RecordRemoveFieldsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.AdjustDateTimeForTimeZoneDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.AdjustTimeForTimeZoneDescriptor;
@@ -666,8 +672,18 @@ public class FunctionCollection {
         functionsToInjectUnkownHandling.add(GetOverlappingIntervalDescriptor.FACTORY);
         functionsToInjectUnkownHandling.add(DurationFromIntervalDescriptor.FACTORY);
 
+        // Type functions.
+        functionsToInjectUnkownHandling.add(IsBooleanDescriptor.FACTORY);
+        functionsToInjectUnkownHandling.add(IsNumberDescriptor.FACTORY);
+        functionsToInjectUnkownHandling.add(IsStringDescriptor.FACTORY);
+        functionsToInjectUnkownHandling.add(IsArrayDescriptor.FACTORY);
+        functionsToInjectUnkownHandling.add(IsObjectDescriptor.FACTORY);
+
         // Cast function
         functionsToInjectUnkownHandling.add(CastTypeDescriptor.FACTORY);
+
+        // Record function
+        functionsToInjectUnkownHandling.add(RecordPairsDescriptor.FACTORY);
 
         List<IFunctionDescriptorFactory> generatedFactories = new ArrayList<>();
         for (IFunctionDescriptorFactory factory : functionsToInjectUnkownHandling) {

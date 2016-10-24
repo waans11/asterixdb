@@ -18,6 +18,8 @@
  */
 package org.apache.asterix.api.common;
 
+import static org.apache.asterix.api.common.AsterixHyracksIntegrationUtil.LoggerHolder.LOGGER;
+
 import java.io.File;
 import java.net.Inet4Address;
 import java.util.ArrayList;
@@ -44,7 +46,12 @@ import org.apache.hyracks.control.common.controllers.NCConfig;
 import org.apache.hyracks.control.nc.NodeControllerService;
 
 public class AsterixHyracksIntegrationUtil {
-    private static final Logger LOGGER = Logger.getLogger(AsterixHyracksIntegrationUtil.class.getName());
+    static class LoggerHolder {
+        static final Logger LOGGER = Logger.getLogger(AsterixHyracksIntegrationUtil.class.getName());
+        private LoggerHolder() {
+        }
+    }
+
     private static final String IO_DIR_KEY = "java.io.tmpdir";
     public static final int DEFAULT_HYRACKS_CC_CLIENT_PORT = 1098;
     public static final int DEFAULT_HYRACKS_CC_CLUSTER_PORT = 1099;
@@ -57,7 +64,7 @@ public class AsterixHyracksIntegrationUtil {
 
     public void init(boolean deleteOldInstanceData) throws Exception {
         ncs = new NodeControllerService[0]; // ensure that ncs is not null
-        propertiesAccessor = new AsterixPropertiesAccessor();
+        propertiesAccessor = AsterixPropertiesAccessor.getInstance();
         if (deleteOldInstanceData) {
             deleteTransactionLogs();
             removeTestStorageFiles();
@@ -118,7 +125,7 @@ public class AsterixHyracksIntegrationUtil {
         if (tempPath.endsWith(File.separator)) {
             tempPath = tempPath.substring(0, tempPath.length() - 1);
         }
-        System.err.println("Using the path: " + tempPath);
+        LOGGER.info("Using the temp path: " + tempPath);
         // get initial partitions from properties
         String[] nodeStores = propertiesAccessor.getStores().get(ncName);
         if (nodeStores == null) {

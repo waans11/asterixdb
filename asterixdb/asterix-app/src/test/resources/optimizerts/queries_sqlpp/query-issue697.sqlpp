@@ -31,8 +31,8 @@ use test;
 
 create type test.TestType as
  closed {
-  key1 : int32,
-  `value` : int32
+  key1 : integer,
+  `value` : integer
 }
 
 create  dataset test(TestType) primary key key1;

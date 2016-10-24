@@ -66,7 +66,7 @@ import org.apache.asterix.optimizer.rules.RemoveRedundantListifyRule;
 import org.apache.asterix.optimizer.rules.RemoveRedundantSelectRule;
 import org.apache.asterix.optimizer.rules.RemoveSortInFeedIngestionRule;
 import org.apache.asterix.optimizer.rules.RemoveUnusedOneToOneEquiJoinRule;
-import org.apache.asterix.optimizer.rules.ReplaceSinkOpWithCommitOpRule;
+import org.apache.asterix.optimizer.rules.SetupCommitExtensionOpRule;
 import org.apache.asterix.optimizer.rules.ResolveVariableRule;
 import org.apache.asterix.optimizer.rules.SetAsterixPhysicalOperatorsRule;
 import org.apache.asterix.optimizer.rules.SetClosedRecordConstructorsRule;
@@ -115,7 +115,7 @@ import org.apache.hyracks.algebricks.rewriter.rules.PushSubplanWithAggregateDown
 import org.apache.hyracks.algebricks.rewriter.rules.PushUnnestDownThroughUnionRule;
 import org.apache.hyracks.algebricks.rewriter.rules.ReinferAllTypesRule;
 import org.apache.hyracks.algebricks.rewriter.rules.RemoveCartesianProductWithEmptyBranchRule;
-import org.apache.hyracks.algebricks.rewriter.rules.RemoveRedundantGroupByDecorVars;
+import org.apache.hyracks.algebricks.rewriter.rules.RemoveRedundantGroupByDecorVarsRule;
 import org.apache.hyracks.algebricks.rewriter.rules.RemoveRedundantVariablesRule;
 import org.apache.hyracks.algebricks.rewriter.rules.RemoveUnnecessarySortMergeExchange;
 import org.apache.hyracks.algebricks.rewriter.rules.RemoveUnusedAssignAndAggregateRule;
@@ -265,7 +265,7 @@ public final class RuleCollections {
         consolidation.add(new IntroduceAggregateCombinerRule());
         consolidation.add(new CountVarToCountOneRule());
         consolidation.add(new RemoveUnusedAssignAndAggregateRule());
-        consolidation.add(new RemoveRedundantGroupByDecorVars());
+        consolidation.add(new RemoveRedundantGroupByDecorVarsRule());
         //PushUnnestDownUnion => RemoveRedundantListifyRule cause these rules are correlated
         consolidation.add(new PushUnnestDownThroughUnionRule());
         consolidation.add(new RemoveRedundantListifyRule());
@@ -317,7 +317,7 @@ public final class RuleCollections {
         List<IAlgebraicRewriteRule> physicalRewritesAllLevels = new LinkedList<>();
         physicalRewritesAllLevels.add(new PullSelectOutOfEqJoin());
         //Turned off the following rule for now not to change OptimizerTest results.
-        physicalRewritesAllLevels.add(new ReplaceSinkOpWithCommitOpRule());
+        physicalRewritesAllLevels.add(new SetupCommitExtensionOpRule());
         physicalRewritesAllLevels.add(new SetAlgebricksPhysicalOperatorsRule());
         physicalRewritesAllLevels.add(new SetAsterixPhysicalOperatorsRule());
         physicalRewritesAllLevels.add(new AddEquivalenceClassForRecordConstructorRule());

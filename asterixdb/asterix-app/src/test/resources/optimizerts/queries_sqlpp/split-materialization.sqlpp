@@ -32,11 +32,11 @@ create type TinySocial.EmploymentType as
 
 create type TinySocial.FacebookUserType as
  closed {
-  id : int32,
+  id : integer,
   alias : string,
   name : string,
   `user-since` : datetime,
-  `friend-ids` : {{int32}},
+  `friend-ids` : {{integer}},
   employment : [EmploymentType]
 }
 

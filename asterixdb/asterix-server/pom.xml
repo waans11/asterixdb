@@ -236,6 +236,12 @@
       <groupId>org.codehaus.mojo.appassembler</groupId>
       <artifactId>appassembler-booter</artifactId>
       <version>1.10</version>
+      <exclusions>
+        <exclusion>
+          <groupId>junit</groupId>
+          <artifactId>junit</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.asterix</groupId>
@@ -243,6 +249,13 @@
       <version>${project.version}</version>
       <type>zip</type>
       <classifier>assembly</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-minicluster</artifactId>
+      <version>${hadoop.version}</version>
+      <type>jar</type>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

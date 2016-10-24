@@ -73,6 +73,7 @@ public class LogManager implements ILogManager, ILifeCycleComponent {
     private LogFlusher logFlusher;
     private Future<? extends Object> futureLogFlusher;
     private static final long SMALLEST_LOG_FILE_ID = 0;
+    private static final int INITIAL_LOG_SIZE = 0;
     private final String nodeId;
     protected LinkedBlockingQueue<ILogRecord> flushLogsQ;
     private final FlushLogsLogger flushLogsLogger;
@@ -80,8 +81,8 @@ public class LogManager implements ILogManager, ILifeCycleComponent {
 
     public LogManager(TransactionSubsystem txnSubsystem) {
         this.txnSubsystem = txnSubsystem;
-        logManagerProperties =
-                new LogManagerProperties(this.txnSubsystem.getTransactionProperties(), this.txnSubsystem.getId());
+        logManagerProperties = new LogManagerProperties(this.txnSubsystem.getTransactionProperties(),
+                this.txnSubsystem.getId());
         logFileSize = logManagerProperties.getLogPartitionSize();
         logPageSize = logManagerProperties.getLogPageSize();
         numLogPages = logManagerProperties.getNumLogPages();
@@ -107,7 +108,7 @@ public class LogManager implements ILogManager, ILifeCycleComponent {
             LOGGER.info("LogManager starts logging in LSN: " + appendLSN);
         }
         appendChannel = getFileChannel(appendLSN.get(), false);
-        getAndInitNewPage();
+        getAndInitNewPage(INITIAL_LOG_SIZE);
         logFlusher = new LogFlusher(this, emptyQ, flushQ);
         futureLogFlusher = txnSubsystem.getAsterixAppRuntimeContextProvider().getThreadExecutor().submit(logFlusher);
         if (!flushLogsLogger.isAlive()) {
@@ -155,17 +156,13 @@ public class LogManager implements ILogManager, ILifeCycleComponent {
          * appendLSN = the first LSN of the next log file), we do not allow a log to be
          * written at the last offset of the current file.
          */
-        if (getLogFileOffset(appendLSN.get()) + logRecord.getLogSize() >= logFileSize) {
+        final int logSize = logRecord.getLogSize();
+        // Make sure the log will not exceed the log file size
+        if (getLogFileOffset(appendLSN.get()) + logSize >= logFileSize) {
             prepareNextLogFile();
-            appendPage.isFull(true);
-            getAndInitNewPage();
-        } else if (!appendPage.hasSpace(logRecord.getLogSize())) {
-            appendPage.isFull(true);
-            if (logRecord.getLogSize() > logPageSize) {
-                getAndInitNewLargePage(logRecord.getLogSize());
-            } else {
-                getAndInitNewPage();
-            }
+            prepareNextPage(logSize);
+        } else if (!appendPage.hasSpace(logSize)) {
+            prepareNextPage(logSize);
         }
         appendPage.append(logRecord, appendLSN.get());
 
@@ -175,29 +172,34 @@ public class LogManager implements ILogManager, ILifeCycleComponent {
         if (logRecord.isMarker()) {
             logRecord.logAppended(appendLSN.get());
         }
-        appendLSN.addAndGet(logRecord.getLogSize());
+        appendLSN.addAndGet(logSize);
     }
 
-    protected void getAndInitNewLargePage(int logSize) {
-        // for now, alloc a new buffer for each large page
-        // TODO: pool large pages
-        appendPage = new LogBuffer(txnSubsystem, logSize, flushLSN);
-        appendPage.setFileChannel(appendChannel);
-        flushQ.offer(appendPage);
+    protected void prepareNextPage(int logSize) {
+        appendPage.isFull(true);
+        getAndInitNewPage(logSize);
     }
 
-    protected void getAndInitNewPage() {
-        appendPage = null;
-        while (appendPage == null) {
-            try {
-                appendPage = emptyQ.take();
-            } catch (InterruptedException e) {
-                //ignore
+    protected void getAndInitNewPage(int logSize) {
+        if (logSize > logPageSize) {
+            // for now, alloc a new buffer for each large page
+            // TODO: pool large pages
+            appendPage = new LogBuffer(txnSubsystem, logSize, flushLSN);
+            appendPage.setFileChannel(appendChannel);
+            flushQ.offer(appendPage);
+        } else {
+            appendPage = null;
+            while (appendPage == null) {
+                try {
+                    appendPage = emptyQ.take();
+                } catch (InterruptedException e) {
+                    //ignore
+                }
             }
+            appendPage.reset();
+            appendPage.setFileChannel(appendChannel);
+            flushQ.offer(appendPage);
         }
-        appendPage.reset();
-        appendPage.setFileChannel(appendChannel);
-        flushQ.offer(appendPage);
     }
 
     protected void prepareNextLogFile() {
