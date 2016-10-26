@@ -426,9 +426,10 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
         // We assume that each field consists of 4 bytes.
         int numberOfBits = numberOfGroupByColumns * 4 * 8;
         // Too high range that is greater than Long.MAXVALUE is not necessary for our calculation.
-        numberOfBits = Math.min(63, numberOfBits);
+        // And, this should not generate negative numbers when shifting the number.
+        numberOfBits = Math.min(61, numberOfBits);
         // Possible number of unique hash entries
-        long possibleNumberOfHashEntries = 2 << numberOfBits;
+        long possibleNumberOfHashEntries = (long) 2 << numberOfBits;
 
         // Between # of entries in Data table and # of possible hash values, we choose smaller one.
         long groupByTableSize = Math.min(possibleNumberOfHashEntries, maxNumberOfTuplesInDataTable);
