@@ -44,8 +44,8 @@ public class SerializableHashTable implements ISerializableTable {
     private static final int INT_SIZE = 4;
     // Initial entry slot size
     private static final int INIT_ENTRY_SIZE = 4;
-    private static int INVALID_VALUE = 0xFFFFFFFF;
-    private static byte INVALID_BYTE_VALUE = (byte) 0xFF;
+    private static final int INVALID_VALUE = 0xFFFFFFFF;
+    private static final byte INVALID_BYTE_VALUE = (byte) 0xFF;
     private double garbageCollectionThreshold;
 
     // Header frame array

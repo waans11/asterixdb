@@ -101,8 +101,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         final ArrayTupleBuilder stateTupleBuilder = new ArrayTupleBuilder(outRecordDescriptor.getFields().length);
 
         //TODO(jf) research on the optimized partition size
-        final int numPartitions = getNumOfPartitions(
-                (int) ((inputDataBytesSize + expectedByteSizeOfHashTableForGroupBy) / ctx.getInitialFrameSize()),
+        final int numPartitions = getNumOfPartitions((int) (inputDataBytesSize / ctx.getInitialFrameSize()),
                 framesLimit - 1);
         final int entriesPerPartition = (int) Math.ceil(1.0 * tableSize / numPartitions);
         if (LOGGER.isLoggable(Level.FINE)) {
