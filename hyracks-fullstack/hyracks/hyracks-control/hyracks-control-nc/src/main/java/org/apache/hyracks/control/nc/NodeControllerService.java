@@ -46,7 +46,6 @@ import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.api.application.INCApplicationEntryPoint;
 import org.apache.hyracks.api.client.NodeControllerInfo;
 import org.apache.hyracks.api.comm.NetworkAddress;
-import org.apache.hyracks.api.context.IHyracksRootContext;
 import org.apache.hyracks.api.dataset.IDatasetPartitionManager;
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.io.IODeviceHandle;
@@ -78,17 +77,16 @@ import org.apache.hyracks.control.nc.net.MessagingNetworkManager;
 import org.apache.hyracks.control.nc.net.NetworkManager;
 import org.apache.hyracks.control.nc.partitions.PartitionManager;
 import org.apache.hyracks.control.nc.resources.memory.MemoryManager;
-import org.apache.hyracks.control.nc.runtime.RootHyracksContext;
+import org.apache.hyracks.control.nc.task.ShutdownTask;
+import org.apache.hyracks.control.nc.task.ThreadDumpTask;
 import org.apache.hyracks.control.nc.work.AbortTasksWork;
 import org.apache.hyracks.control.nc.work.ApplicationMessageWork;
 import org.apache.hyracks.control.nc.work.BuildJobProfilesWork;
 import org.apache.hyracks.control.nc.work.CleanupJobletWork;
 import org.apache.hyracks.control.nc.work.DeployBinaryWork;
 import org.apache.hyracks.control.nc.work.ReportPartitionAvailabilityWork;
-import org.apache.hyracks.control.nc.task.ShutdownTask;
 import org.apache.hyracks.control.nc.work.StartTasksWork;
 import org.apache.hyracks.control.nc.work.StateDumpWork;
-import org.apache.hyracks.control.nc.task.ThreadDumpTask;
 import org.apache.hyracks.control.nc.work.UnDeployBinaryWork;
 import org.apache.hyracks.ipc.api.IIPCHandle;
 import org.apache.hyracks.ipc.api.IIPCI;
@@ -106,7 +104,7 @@ public class NodeControllerService implements IControllerService {
 
     private final String id;
 
-    private final IHyracksRootContext ctx;
+    private final IOManager ioManager;
 
     private final IPCSystem ipc;
 
@@ -171,7 +169,7 @@ public class NodeControllerService implements IControllerService {
         ipc = new IPCSystem(new InetSocketAddress(ncConfig.clusterNetIPAddress, ncConfig.clusterNetPort), ipci,
                 new CCNCFunctions.SerializerDeserializer());
 
-        this.ctx = new RootHyracksContext(this, new IOManager(getDevices(ncConfig.ioDevices)));
+        ioManager = new IOManager(getDevices(ncConfig.ioDevices));
         if (id == null) {
             throw new Exception("id not set");
         }
@@ -197,8 +195,8 @@ public class NodeControllerService implements IControllerService {
         ioCounter = new IOCounterFactory().getIOCounter();
     }
 
-    public IHyracksRootContext getRootContext() {
-        return ctx;
+    public IOManager getIoManager() {
+        return ioManager;
     }
 
     public NCApplicationContext getApplicationContext() {
@@ -249,7 +247,7 @@ public class NodeControllerService implements IControllerService {
     }
 
     private void init() throws Exception {
-        ctx.getIOManager().setExecutor(executor);
+        ioManager.setExecutor(executor);
         datasetPartitionManager = new DatasetPartitionManager(this, executor, ncConfig.resultManagerMemory,
                 ncConfig.resultTTL, ncConfig.resultSweepThreshold);
         datasetNetworkManager = new DatasetNetworkManager(ncConfig.resultIPAddress, ncConfig.resultPort,
@@ -326,13 +324,10 @@ public class NodeControllerService implements IControllerService {
         if (ncAppEntryPoint != null) {
             ncAppEntryPoint.notifyStartupComplete();
         }
-
-        //add JVM shutdown hook
-        Runtime.getRuntime().addShutdownHook(new JVMShutdownHook(this));
     }
 
     private void startApplication() throws Exception {
-        appCtx = new NCApplicationContext(this, serverCtx, ctx, id, memoryManager, lccm, ncConfig.getAppConfig());
+        appCtx = new NCApplicationContext(this, serverCtx, ioManager, id, memoryManager, lccm, ncConfig.getAppConfig());
         String className = ncConfig.appNCMainClass;
         if (className != null) {
             Class<?> c = Class.forName(className);
@@ -598,27 +593,5 @@ public class NodeControllerService implements IControllerService {
 
     public MessagingNetworkManager getMessagingNetworkManager() {
         return messagingNetManager;
-    }
-
-    /**
-     * Shutdown hook that invokes {@link NodeControllerService#stop() stop} method.
-     */
-    private static class JVMShutdownHook extends Thread {
-
-        private final NodeControllerService nodeControllerService;
-
-        public JVMShutdownHook(NodeControllerService ncAppEntryPoint) {
-            this.nodeControllerService = ncAppEntryPoint;
-        }
-
-        @Override
-        public void run() {
-            LOGGER.info("Shutdown hook in progress");
-            try {
-                nodeControllerService.stop();
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Exception in executing shutdown hook", e);
-            }
-        }
     }
 }

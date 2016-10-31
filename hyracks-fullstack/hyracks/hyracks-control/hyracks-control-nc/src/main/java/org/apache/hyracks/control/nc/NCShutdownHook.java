@@ -16,32 +16,28 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.hyracks.control.nc.runtime;
+package org.apache.hyracks.control.nc;
 
-import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import org.apache.hyracks.api.client.NodeControllerInfo;
-import org.apache.hyracks.api.context.IHyracksRootContext;
-import org.apache.hyracks.api.io.IIOManager;
-import org.apache.hyracks.control.nc.NodeControllerService;
-
-public class RootHyracksContext implements IHyracksRootContext {
-    private final NodeControllerService ncs;
-
-    private final IIOManager ioManager;
-
-    public RootHyracksContext(NodeControllerService ncs, IIOManager ioManager) {
-        this.ncs = ncs;
-        this.ioManager = ioManager;
+/**
+ * Shutdown hook that invokes {@link NodeControllerService#stop() stop} method.
+ */
+public class NCShutdownHook extends Thread {
+    private static final Logger LOGGER = Logger.getLogger(NCShutdownHook.class.getName());
+    private final NodeControllerService nodeControllerService;
+    public NCShutdownHook(NodeControllerService nodeControllerService) {
+        this.nodeControllerService = nodeControllerService;
     }
 
     @Override
-    public IIOManager getIOManager() {
-        return ioManager;
-    }
-
-    @Override
-    public Map<String, NodeControllerInfo> getNodeControllerInfos() throws Exception {
-        return ncs.getNodeControllersInfo();
+    public void run() {
+        LOGGER.info("Shutdown hook in progress");
+        try {
+            nodeControllerService.stop();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Exception in executing shutdown hook", e);
+        }
     }
 }
