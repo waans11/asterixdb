@@ -408,8 +408,10 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
     /**
      * Based on a rough estimation of a tuple (each field size: 4 bytes) and possible hash values
      * for the given number of group-by columns, calculate the number of hash entries for the hash table in Group-by.
+     * The formula is MIN(# of hash values, # of possible tuples in the data table).
      * We assume that the group-by table consists of hash table that stores hash value of tuple pointer and data table
      * actually stores the aggregated tuple.
+     * For more details, refer to this JIRA issue: https://issues.apache.org/jira/browse/ASTERIXDB-1556
      *
      * @param memoryBudget
      * @param numberOfGroupByColumns
@@ -435,6 +437,7 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
         long groupByTableSize = Math.min(possibleNumberOfHashEntries, maxNumberOfTuplesInDataTable);
         long groupByTableByteSize = groupByTableSize * SerializableHashTable.getExpectedByteSizePerHashValue();
 
+        // Get the ratio of hash-table size in the total size (hash + data table).
         double hashTableRatio = (double) groupByTableByteSize / (groupByTableByteSize + memoryBudget);
 
         long finalGroupByTableByteSize = (long) (hashTableRatio * memoryBudget);
@@ -442,6 +445,7 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
         long finalGroupByTableSize = finalGroupByTableByteSize
                 / SerializableHashTable.getExpectedByteSizePerHashValue();
 
+        // Find the next prime number to be used as the hash-table size.
         BigInteger groupByPrimeNumberTableSize = BigInteger.valueOf((long) finalGroupByTableSize).nextProbablePrime();
 
         return groupByPrimeNumberTableSize.intValue();

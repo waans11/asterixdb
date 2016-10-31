@@ -42,16 +42,14 @@ public interface IPartitionedTupleBufferManager {
      * Insert tuple from (byte[] byteArray,int[] fieldEndOffsets, int start, int size) into
      * specified partition. The handle is written into the tuplepointer.
      * <br>
-     * If {@code byteArray} contains the {@code fieldEndOffsets} already,
-     * then please set the {@code fieldEndOffsets} as NULL.
+     * If {@code byteArray} contains the {@code fieldEndOffsets} already, then please set the {@code fieldEndOffsets} as NULL
      *
      * @param partition
      *            the id of the partition to insert the tuple into
      * @param byteArray
      *            the byteArray which contains the tuple
      * @param fieldEndOffsets
-     *            the fieldEndOffsets which comes from the ArrayTupleBuilder, please set it to NULL
-     *            if the {@code byteArray} already contains the fieldEndOffsets
+     *            the fieldEndOffsets which comes from the ArrayTupleBuilder, please set it to NULL if the {@code byteArray} already contains the fieldEndOffsets
      * @param start
      *            the start offset in the {@code byteArray}
      * @param size
@@ -74,7 +72,7 @@ public interface IPartitionedTupleBufferManager {
      * @param tupleId
      *            the id of the tuple from the tupleAccessor
      * @param pointer
-     *            the returned pointer indicating the handler to later fetch the tuple from the buffer manager
+     *            the returned pointer indicating the handler to later fetch the tuple from the buffer maanager
      * @return true if the insertion succeed. Otherwise return false.
      * @throws HyracksDataException
      */
@@ -82,8 +80,7 @@ public interface IPartitionedTupleBufferManager {
             throws HyracksDataException;
 
     /**
-     * Reset to the initial states. The previous allocated resources won't be released
-     * in order to be used in the next round.
+     * Reset to the initial states. The previous allocated resources won't be released in order to be used in the next round.
      *
      * @throws HyracksDataException
      */
