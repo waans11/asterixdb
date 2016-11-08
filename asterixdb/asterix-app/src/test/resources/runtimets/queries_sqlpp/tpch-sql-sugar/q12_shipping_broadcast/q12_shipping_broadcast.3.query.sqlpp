@@ -16,10 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-/*
- * Test case Name  : cluster_state_nc_threaddump_1
- * Description     : NC threaddump
- * Expected Result : Positive
- * Date            : 8th September 2016
- */
-/node/asterix_nc2/threaddump
+
+USE tpch;
+
+
+SELECT l_shipmode,
+       sum(CASE WHEN o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END) high_line_count,
+       sum(CASE o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' WHEN true THEN 0 ELSE 1 END) low_line_count
+FROM  LineItem,
+      Orders
+WHERE l_orderkey /*+ bcast */ = o_orderkey AND l_commitdate < l_receiptdate AND
+      l_shipdate < l_commitdate AND l_receiptdate >= '1994-01-01' AND
+      l_receiptdate < '1995-01-01' AND (l_shipmode = 'MAIL' OR l_shipmode = 'SHIP')
+GROUP BY l_shipmode
+ORDER BY l_shipmode
+;

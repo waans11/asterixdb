@@ -17,9 +17,9 @@
  * under the License.
  */
 /*
- * Test case Name  : cluster_state_3
- * Description     : cluster state api all nodes
+ * Test case Name  : cluster_state_nc_threaddump_1
+ * Description     : NC threaddump
  * Expected Result : Positive
  * Date            : 8th September 2016
  */
-/cc
+/admin/cluster/node/asterix_nc2/threaddump
