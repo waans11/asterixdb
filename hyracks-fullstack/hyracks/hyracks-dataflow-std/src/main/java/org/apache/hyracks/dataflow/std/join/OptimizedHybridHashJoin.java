@@ -20,9 +20,9 @@ package org.apache.hyracks.dataflow.std.join;
 
 import java.nio.ByteBuffer;
 import java.util.BitSet;
-import java.util.logging.Logger;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.hyracks.api.comm.FrameHelper;
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.comm.VSizeFrame;
@@ -39,8 +39,12 @@ import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.io.RunFileReader;
 import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.IPartitionedTupleBufferManager;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.PreferToSpillFullyOccupiedFramePolicy;
+import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.VPartitionTupleBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
@@ -95,6 +99,10 @@ public class OptimizedHybridHashJoin {
     private final FrameTupleAccessor accessorBuild;
     private final FrameTupleAccessor accessorProbe;
 
+    // This frame pool will be shared by both data table and hash table.
+    private IDeallocatableFramePool framePool;
+    private ISimpleFrameBufferManager bufferManagerForHashTable;
+
     private boolean isReversed; //Added for handling correct calling for predicate-evaluator upon recursive calls that cause role-reversal
 
     // stats information
@@ -143,9 +151,11 @@ public class OptimizedHybridHashJoin {
     }
 
     public void initBuild() throws HyracksDataException {
+        framePool = new DeallocatableFramePool(ctx, memForJoin * ctx.getInitialFrameSize());
+        bufferManagerForHashTable = new SimpleFrameBufferManager(framePool);
         bufferManager = new VPartitionTupleBufferManager(ctx,
                 PreferToSpillFullyOccupiedFramePolicy.createAtMostOneFrameForSpilledPartitionConstrain(spilledStatus),
-                numOfPartitions, memForJoin * ctx.getInitialFrameSize());
+                numOfPartitions, framePool);
         spillPolicy = new PreferToSpillFullyOccupiedFramePolicy(bufferManager, spilledStatus,
                 ctx.getInitialFrameSize());
         spilledStatus.clear();
@@ -166,12 +176,14 @@ public class OptimizedHybridHashJoin {
 
     private void processTuple(int tid, int pid) throws HyracksDataException {
         while (!bufferManager.insertTuple(pid, accessorBuild, tid, tempPtr)) {
-            selectAndSpillVictim(pid);
+            int tupleLength = accessorBuild.getTupleLength(tid);
+            tupleLength = FrameHelper.calcRequiredSpace(accessorBuild.getFieldCount(), tupleLength);
+            selectAndSpillVictim(pid, tupleLength);
         }
     }
 
-    private void selectAndSpillVictim(int pid) throws HyracksDataException {
-        int victimPartition = spillPolicy.selectVictimPartition(pid);
+    private void selectAndSpillVictim(int pid, int requiredSize) throws HyracksDataException {
+        int victimPartition = spillPolicy.selectVictimPartition(pid, requiredSize);
         if (victimPartition < 0) {
             throw new HyracksDataException(
                     "No more space left in the memory buffer, please give join more memory budgets.");
@@ -310,11 +322,11 @@ public class OptimizedHybridHashJoin {
     }
 
     private void createInMemoryJoiner(int inMemTupCount) throws HyracksDataException {
-        ISerializableTable table = new SerializableHashTable(inMemTupCount, ctx);
+        ISerializableTable table = new SerializableHashTable(inMemTupCount, ctx, bufferManagerForHashTable);
         this.inMemJoiner = new InMemoryHashJoin(ctx, inMemTupCount, new FrameTupleAccessor(probeRd), probeHpc,
                 new FrameTupleAccessor(buildRd), buildHpc,
                 new FrameTuplePairComparator(probeKeys, buildKeys, comparators), isLeftOuter, nonMatchWriters, table,
-                predEvaluator, isReversed);
+                predEvaluator, isReversed, bufferManagerForHashTable);
     }
 
     private void cacheInMemJoin() throws HyracksDataException {

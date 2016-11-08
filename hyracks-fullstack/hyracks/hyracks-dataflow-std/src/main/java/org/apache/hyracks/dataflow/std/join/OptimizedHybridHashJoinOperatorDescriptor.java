@@ -59,6 +59,10 @@ import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
+import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
+import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -70,10 +74,12 @@ import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
  *         partitions.
  *         - Operator overview:
  *         Assume we are trying to do (R Join S), with M buffers available, while we have an estimate on the size
- *         of R (in terms of buffers). HHJ (Hybrid Hash Join) has two main phases: Build and Probe, where in our implementation Probe phase
- *         can apply HHJ recursively, based on the value of M and size of R and S. HHJ phases proceed as follow:
+ *         of R (in terms of buffers). HHJ (Hybrid Hash Join) has two main phases: Build and Probe,
+ *         where in our implementation Probe phase can apply HHJ recursively, based on the value of M and size of
+ *         R and S. HHJ phases proceed as follow:
  *         BUILD:
- *         Calculate number of partitions (Based on the size of R, fudge factor and M) [See Shapiro's paper for the detailed discussion].
+ *         Calculate number of partitions (Based on the size of R, fudge factor and M)
+ *         [See Shapiro's paper for the detailed discussion].
  *         Initialize the build phase (one frame per partition, all partitions considered resident at first)
  *         Read tuples of R, frame by frame, and hash each tuple (based on a given hash function) to find
  *         its target partition and try to append it to that partition:
@@ -81,9 +87,9 @@ import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
  *         if no free buffer is available, find the largest resident partition and spill it. Using its freed
  *         buffers after spilling, allocate a new buffer for the target partition.
  *         Being done with R, close the build phase. (During closing we write the very last buffer of each
- *         spilled partition to the disk, and we do partition tuning, where we try to bring back as many buffers, belonging to
- *         spilled partitions as possible into memory, based on the free buffers - We will stop at the point where remaining free buffers is not enough
- *         for reloading an entire partition back into memory)
+ *         spilled partition to the disk, and we do partition tuning, where we try to bring back as many buffers,
+ *         belonging to spilled partitions as possible into memory, based on the free buffers - We will stop at the
+ *         point where remaining free buffers is not enough for reloading an entire partition back into memory)
  *         Create the hash table for the resident partitions (basically we create an in-memory hash join here)
  *         PROBE:
  *         Initialize the probe phase on S (mainly allocate one buffer per spilled partition, and one buffer
@@ -190,19 +196,18 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
     private int getNumberOfPartitions(int memorySize, int buildSize, double factor, int nPartitions)
             throws HyracksDataException {
         int numberOfPartitions = 0;
-        if (memorySize <= 1) {
-            throw new HyracksDataException("not enough memory is available for Hybrid Hash Join");
+        //two for hash table and one for data table
+        if (memorySize <= 3) {
+            throw new HyracksDataException("Not enough memory is available for Hybrid Hash Join.");
         }
-        if (memorySize > buildSize) {
+        if (memorySize > buildSize * factor) {
             return 1; //We will switch to in-Mem HJ eventually
         }
         numberOfPartitions = (int) (Math.ceil((buildSize * factor / nPartitions - memorySize) / (memorySize - 1)));
-        if (numberOfPartitions <= 0) {
-            numberOfPartitions = 1; //becomes in-memory hash join
-        }
+        numberOfPartitions = Math.max(2, numberOfPartitions);
         if (numberOfPartitions > memorySize) {
             numberOfPartitions = (int) Math.ceil(Math.sqrt(buildSize * factor / nPartitions));
-            return (numberOfPartitions < memorySize ? numberOfPartitions : memorySize);
+            return Math.max(2, Math.min(numberOfPartitions, memorySize));
         }
         return numberOfPartitions;
     }
@@ -642,17 +647,28 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
 
                     assert isLeftOuter ? !isReversed : true : "LeftOut Join can not reverse roles";
 
-                    ISerializableTable table = new SerializableHashTable(tabSize, ctx);
+                    // This frame pool will be shared by both data table and hash table.
+                    IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx,
+                            state.memForJoin * ctx.getInitialFrameSize());
+                    ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
+
+                    ISerializableTable table = new SerializableHashTable(tabSize, ctx, bufferManager);
                     InMemoryHashJoin joiner = new InMemoryHashJoin(ctx, tabSize, new FrameTupleAccessor(probeRDesc),
                             hpcRepProbe, new FrameTupleAccessor(buildRDesc), hpcRepBuild,
                             new FrameTuplePairComparator(pKeys, bKeys, comparators), isLeftOuter, nonMatchWriter, table,
-                            predEvaluator, isReversed);
+                            predEvaluator, isReversed, bufferManager);
 
                     bReader.open();
                     rPartbuff.reset();
                     while (bReader.nextFrame(rPartbuff)) {
                         //We need to allocate a copyBuffer, because this buffer gets added to the buffers list in the InMemoryHashJoin
-                        ByteBuffer copyBuffer = ctx.allocateFrame(rPartbuff.getFrameSize());
+                        // Temp:
+                        //                        ByteBuffer copyBuffer = ctx.allocateFrame(rPartbuff.getFrameSize());
+                        ByteBuffer copyBuffer = bufferManager.acquireFrame(rPartbuff.getFrameSize());
+                        if (copyBuffer == null) {
+                            throw new HyracksDataException(
+                                    "Can't allocate a frame. Please assign more memort to the join parameter.");
+                        }
                         FrameUtils.copyAndFlip(rPartbuff.getBuffer(), copyBuffer);
                         joiner.build(copyBuffer);
                         rPartbuff.reset();

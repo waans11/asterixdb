@@ -50,14 +50,20 @@ public class PreferToSpillFullyOccupiedFramePolicy {
      * is always evaluated to true. i.e. we need to spill an in-memory partition anyway.
      * But, when we will have another policy, the if statement will make more sense.
      */
-    public int selectVictimPartition(int failedToInsertPartition) {
+    public int selectVictimPartition(int failedToInsertPartition, int requiredSize) {
         // To avoid flush a half-full frame, it's better to spill itself.
         if (bufferManager.getNumTuples(failedToInsertPartition) > 0) {
+            // Temp: to be deleted
+//            System.out.println(
+//                    "PreferToSpillFullyOccupiedFramePolicy::selectVictimPartition failedToInsertPartition "
+//                            + failedToInsertPartition);
             return failedToInsertPartition;
         }
         // If we couldn't find an already spilled partition, or it is too small to flush that one,
         // try to flush an in memory partition.
         int partitionToSpill = findSpilledPartitionWithMaxMemoryUsage();
+        // Temp: to be deleted
+//        System.out.println("partitionToSpill " + partitionToSpill);
         int maxToSpillPartSize = 0;
         if (partitionToSpill < 0
                 || (maxToSpillPartSize = bufferManager.getPhysicalSize(partitionToSpill)) <= minFrameSize) {
@@ -66,14 +72,20 @@ public class PreferToSpillFullyOccupiedFramePolicy {
                 partitionToSpill = partitionInMem;
             }
         }
+        // Temp: to be deleted
+//        System.out.println("partitionToSpill " + partitionToSpill);
         return partitionToSpill;
     }
 
     public int findInMemPartitionWithMaxMemoryUsage() {
+        // Temp: to be deleted
+//        System.out.println("findInMemPartitionWithMaxMemoryUsage");
         return findMaxSize(spilledStatus.nextClearBit(0), (i) -> spilledStatus.nextClearBit(i + 1));
     }
 
     public int findSpilledPartitionWithMaxMemoryUsage() {
+        // Temp: to be deleted
+//        System.out.println("findSpilledPartitionWithMaxMemoryUsage");
         return findMaxSize(spilledStatus.nextSetBit(0), (i) -> spilledStatus.nextSetBit(i + 1));
     }
 
@@ -82,11 +94,15 @@ public class PreferToSpillFullyOccupiedFramePolicy {
         int max = 0;
         for (int i = startIndex; i >= 0 && i < bufferManager.getNumPartitions(); i = nextIndexOp.applyAsInt(i)) {
             int partSize = bufferManager.getPhysicalSize(i);
+            // Temp: to be deleted
+//            System.out.println(i + " partSize " + partSize);
             if (partSize > max) {
                 max = partSize;
                 pid = i;
             }
         }
+        // Temp: to be deleted
+//        System.out.println("findMaxSize " + pid + " " + max);
         return pid;
     }
 

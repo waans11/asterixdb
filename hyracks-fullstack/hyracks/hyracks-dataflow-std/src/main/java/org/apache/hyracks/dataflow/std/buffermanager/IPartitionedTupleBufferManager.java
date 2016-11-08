@@ -80,6 +80,11 @@ public interface IPartitionedTupleBufferManager {
             throws HyracksDataException;
 
     /**
+     * Cancel the effect of last insertTuple() operation.
+     */
+    void cancelInsertTuple(int partition) throws HyracksDataException;
+
+    /**
      * Reset to the initial states. The previous allocated resources won't be released in order to be used in the next round.
      *
      * @throws HyracksDataException

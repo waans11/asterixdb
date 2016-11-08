@@ -21,19 +21,9 @@ package org.apache.hyracks.dataflow.std.group;
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 
 public interface ISpillableTable {
-
-    /**
-     * Result Type for an insertion.
-     */
-    public enum InsertResultType {
-        SUCCESS,
-        FAIL,
-        // If a memory budget is given and if an insertion is successful, but exceeds the given budget,
-        // we return this code to let the caller does some operation to make some space.
-        SUCCESS_BUT_EXCEEDS_BUDGET
-    }
 
     /**
      * Release all the storage resources.
@@ -50,13 +40,12 @@ public interface ISpillableTable {
 
     /**
      * Insert the specific tuple into the table.
-     *
      * @param accessor
      * @param tIndex
-     * @return the result of an insertion - success, fail, or succeeded but exceeded the memory budget
+     * @return
      * @throws HyracksDataException
      */
-    InsertResultType insert(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException;
+    boolean insert(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException;
 
     /**
      * Flush the certain partition to writer, and return the numOfTuples that have been flushed
@@ -72,16 +61,6 @@ public interface ISpillableTable {
      * Get number of partitions
      */
     int getNumPartitions();
-
-    /**
-     * Get number of used frames
-     */
-    int getCurrentByteSize();
-
-    /**
-     * Returns true if the number of used bytes exceed the budget.
-     */
-    boolean isUsedByteExceedsBudget();
 
     /**
      * When the table is full, it will return a proper partition which will be the flush() candidate.

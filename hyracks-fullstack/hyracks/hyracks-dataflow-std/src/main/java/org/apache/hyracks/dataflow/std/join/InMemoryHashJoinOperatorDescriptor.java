@@ -49,6 +49,10 @@ import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
+import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
+import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -63,10 +67,12 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
     private final boolean isLeftOuter;
     private final IMissingWriterFactory[] nonMatchWriterFactories;
     private final int tableSize;
+    private final int memoryBudgetInFrames;
 
     public InMemoryHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
-            RecordDescriptor recordDescriptor, int tableSize, IPredicateEvaluatorFactory predEvalFactory) {
+            RecordDescriptor recordDescriptor, int tableSize, IPredicateEvaluatorFactory predEvalFactory,
+            int memSizeInFrames) {
         super(spec, 2, 1);
         this.keys0 = keys0;
         this.keys1 = keys1;
@@ -77,12 +83,13 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
         this.isLeftOuter = false;
         this.nonMatchWriterFactories = null;
         this.tableSize = tableSize;
+        this.memoryBudgetInFrames = memSizeInFrames;
     }
 
     public InMemoryHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
             IPredicateEvaluatorFactory predEvalFactory, RecordDescriptor recordDescriptor, boolean isLeftOuter,
-            IMissingWriterFactory[] missingWriterFactories1, int tableSize) {
+            IMissingWriterFactory[] missingWriterFactories1, int tableSize, int memSizeInFrames) {
         super(spec, 2, 1);
         this.keys0 = keys0;
         this.keys1 = keys1;
@@ -93,20 +100,22 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
         this.isLeftOuter = isLeftOuter;
         this.nonMatchWriterFactories = missingWriterFactories1;
         this.tableSize = tableSize;
+        this.memoryBudgetInFrames = memSizeInFrames;
     }
 
     public InMemoryHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
-            RecordDescriptor recordDescriptor, int tableSize) {
-        this(spec, keys0, keys1, hashFunctionFactories, comparatorFactories, recordDescriptor, tableSize, null);
+            RecordDescriptor recordDescriptor, int tableSize, int memSizeInFrames) {
+        this(spec, keys0, keys1, hashFunctionFactories, comparatorFactories, recordDescriptor, tableSize, null,
+                memSizeInFrames);
     }
 
     public InMemoryHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor, boolean isLeftOuter, IMissingWriterFactory[] nullWriterFactories1,
-            int tableSize) {
+            int tableSize, int memSizeInFrames) {
         this(spec, keys0, keys1, hashFunctionFactories, comparatorFactories, null, recordDescriptor, isLeftOuter,
-                nullWriterFactories1, tableSize);
+                nullWriterFactories1, tableSize, memSizeInFrames);
     }
 
     @Override
@@ -177,6 +186,11 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
             final IPredicateEvaluator predEvaluator = (predEvaluatorFactory == null ? null
                     : predEvaluatorFactory.createPredicateEvaluator());
 
+            final int memSizeInBytes = memoryBudgetInFrames * ctx.getInitialFrameSize();
+            // Hash Table and Data Table will be shared by
+            final IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
+            final ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
+
             IOperatorNodePushable op = new AbstractUnaryInputSinkOperatorNodePushable() {
                 private HashBuildTaskState state;
 
@@ -188,15 +202,21 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
                             .createPartitioner();
                     state = new HashBuildTaskState(ctx.getJobletContext().getJobId(),
                             new TaskId(getActivityId(), partition));
-                    ISerializableTable table = new SerializableHashTable(tableSize, ctx);
+                    ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                     state.joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpc0,
                             new FrameTupleAccessor(rd1), hpc1, new FrameTuplePairComparator(keys0, keys1, comparators),
-                            isLeftOuter, nullWriters1, table, predEvaluator);
+                            isLeftOuter, nullWriters1, table, predEvaluator, bufferManager);
                 }
 
                 @Override
                 public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
-                    ByteBuffer copyBuffer = ctx.allocateFrame(buffer.capacity());
+                    ByteBuffer copyBuffer = bufferManager.acquireFrame(buffer.capacity());
+                    if (copyBuffer == null) {
+                        throw new HyracksDataException(
+                                "Can't allocate a frame. Please assign more memory to InMemoryHashJoin.");
+                    }
+                    // Temp:
+                    //                    ByteBuffer copyBuffer = ctx.allocateFrame(buffer.capacity());
                     FrameUtils.copyAndFlip(buffer, copyBuffer);
                     state.joiner.build(copyBuffer);
                 }

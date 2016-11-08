@@ -23,8 +23,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import org.apache.hyracks.api.context.IHyracksFrameMgrContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.control.nc.resources.memory.FrameManager;
+import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
+import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,10 +39,16 @@ public class SerializableHashTableTest {
     final int NUM_PART = 101;
     TuplePointer pointer = new TuplePointer(0, 0);
     final int num = 10000;
+    private IHyracksFrameMgrContext ctx;
+    private IDeallocatableFramePool framePool;
+    private ISimpleFrameBufferManager bufferManager;
 
     @Before
     public void setup() throws HyracksDataException {
-        nsTable = new SerializableHashTable(NUM_PART, new FrameManager(256));
+        ctx = new FrameManager(256);
+        framePool = new DeallocatableFramePool(ctx, ctx.getInitialFrameSize() * 256);
+        bufferManager = new SimpleFrameBufferManager(framePool);
+        nsTable = new SerializableHashTable(NUM_PART, ctx, bufferManager);
     }
 
     @Test

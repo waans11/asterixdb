@@ -62,10 +62,5 @@
       <artifactId>commons-lang3</artifactId>
       <version>3.5</version>
     </dependency>
-    <dependency>
-      <groupId>org.apache.hyracks</groupId>
-      <artifactId>hyracks-dataflow-std</artifactId>
-      <version>${project.version}</version>
-    </dependency>
   </dependencies>
 </project>

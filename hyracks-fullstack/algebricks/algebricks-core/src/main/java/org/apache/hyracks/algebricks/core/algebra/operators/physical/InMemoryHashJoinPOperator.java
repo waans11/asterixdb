@@ -50,15 +50,18 @@ import org.apache.hyracks.dataflow.std.join.InMemoryHashJoinOperatorDescriptor;
 public class InMemoryHashJoinPOperator extends AbstractHashJoinPOperator {
 
     private final int tableSize;
+    private final int memoryBudgetInFrames;
 
     /**
      * builds on the first operator and probes on the second.
      */
 
     public InMemoryHashJoinPOperator(JoinKind kind, JoinPartitioningType partitioningType,
-            List<LogicalVariable> sideLeftOfEqualities, List<LogicalVariable> sideRightOfEqualities, int tableSize) {
+            List<LogicalVariable> sideLeftOfEqualities, List<LogicalVariable> sideRightOfEqualities, int tableSize,
+            int memSizeInFrames) {
         super(kind, partitioningType, sideLeftOfEqualities, sideRightOfEqualities);
         this.tableSize = tableSize;
+        this.memoryBudgetInFrames = memSizeInFrames;
     }
 
     @Override
@@ -106,7 +109,7 @@ public class InMemoryHashJoinPOperator extends AbstractHashJoinPOperator {
         switch (kind) {
             case INNER: {
                 opDesc = new InMemoryHashJoinOperatorDescriptor(spec, keysLeft, keysRight, hashFunFactories,
-                        comparatorFactories, recDescriptor, tableSize, predEvaluatorFactory);
+                        comparatorFactories, recDescriptor, tableSize, predEvaluatorFactory, memoryBudgetInFrames);
                 break;
             }
             case LEFT_OUTER: {
@@ -116,7 +119,7 @@ public class InMemoryHashJoinPOperator extends AbstractHashJoinPOperator {
                 }
                 opDesc = new InMemoryHashJoinOperatorDescriptor(spec, keysLeft, keysRight, hashFunFactories,
                         comparatorFactories, predEvaluatorFactory, recDescriptor, true, nonMatchWriterFactories,
-                        tableSize);
+                        tableSize, memoryBudgetInFrames);
                 break;
             }
             default: {

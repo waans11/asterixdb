@@ -27,7 +27,6 @@ import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.io.RunFileWriter;
 import org.apache.hyracks.dataflow.std.group.AggregateType;
 import org.apache.hyracks.dataflow.std.group.ISpillableTable;
-import org.apache.hyracks.dataflow.std.group.ISpillableTable.InsertResultType;
 
 public class ExternalHashGroupBy {
 
@@ -47,21 +46,11 @@ public class ExternalHashGroupBy {
         this.spilledNumTuples = new int[runWriters.length];
     }
 
-    /**
-     * Inserts tuples to the spillable table.
-     * If an insertion was not successful, that means there are not enough frames.
-     * Thus, this method tries to spill a data partition to disk and tries that insertion again.
-     * If the insertion was successful, but that insertion consumed all budget,
-     * the only issue was that it has exceeded the budget slightly.
-     * Like the failing case, we try to spill a partition to the disk until the number of frames
-     * that we are used is within the budget.
-     */
     public void insert(ByteBuffer buffer) throws HyracksDataException {
         accessor.reset(buffer);
         int tupleCount = accessor.getTupleCount();
         for (int i = 0; i < tupleCount; i++) {
-            InsertResultType result = table.insert(accessor, i);
-            if (result == InsertResultType.FAIL || result == InsertResultType.SUCCESS_BUT_EXCEEDS_BUDGET) {
+            if (!table.insert(accessor, i)) {
                 do {
                     int partition = table.findVictimPartition(accessor, i);
                     if (partition < 0) {
@@ -69,16 +58,11 @@ public class ExternalHashGroupBy {
                     }
                     RunFileWriter writer = getPartitionWriterOrCreateOneIfNotExist(partition);
                     flushPartitionToRun(partition, writer);
-                    if (result == InsertResultType.FAIL) {
-                        result = table.insert(accessor, i);
-                    } else if (!table.isUsedByteExceedsBudget()) {
-                        // If the budget exceeding issue was gone and the table conforms to the budget,
-                        // we can stop here. If not, we continue to spill another partition(s).
-                        result = InsertResultType.SUCCESS;
-                    }
-                } while (result != InsertResultType.SUCCESS);
+                } while (!table.insert(accessor, i));
             }
         }
+        // Temp:
+//        System.out.println("the number of tuples inserted: " + tupleCount + "\n");
     }
 
     private void flushPartitionToRun(int partition, RunFileWriter writer)
@@ -86,6 +70,14 @@ public class ExternalHashGroupBy {
         try {
             spilledNumTuples[partition] += table.flushFrames(partition, writer, AggregateType.PARTIAL);
             table.clear(partition);
+            // Temp:
+//            int count = 0;
+//            System.out.print("flushPartitionToRun: ");
+//            for (int i = 0; i < spilledNumTuples.length; i++) {
+//                System.out.print("partition " + i + " #spilled " + spilledNumTuples[i] + "   ");
+//                count += spilledNumTuples[i];
+//            }
+//            System.out.println(" total " + count);
         } catch (Exception ex) {
             writer.fail();
             throw new HyracksDataException(ex);

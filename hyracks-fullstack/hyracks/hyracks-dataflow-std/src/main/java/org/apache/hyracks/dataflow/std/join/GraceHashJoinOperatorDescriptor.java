@@ -161,7 +161,7 @@ public class GraceHashJoinOperatorDescriptor extends AbstractOperatorDescriptor 
                     new TaskId(new ActivityId(getOperatorId(), RPARTITION_ACTIVITY_ID), partition),
                     new TaskId(new ActivityId(getOperatorId(), SPARTITION_ACTIVITY_ID), partition), recordsPerFrame,
                     factor, keys0, keys1, hashFunctionFactories, comparatorFactories, nullWriterFactories1, rd1, rd0,
-                    recordDescriptors[0], numPartitions, predEvaluator, isLeftOuter);
+                    recordDescriptors[0], numPartitions, predEvaluator, isLeftOuter, memsize);
         }
     }
 }

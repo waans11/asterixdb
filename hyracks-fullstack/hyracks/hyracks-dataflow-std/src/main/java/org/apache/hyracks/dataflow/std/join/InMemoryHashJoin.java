@@ -36,6 +36,7 @@ import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -57,21 +58,24 @@ public class InMemoryHashJoin {
     private final TuplePointer storedTuplePointer;
     private final boolean reverseOutputOrder; //Should we reverse the order of tuples, we are writing in output
     private final IPredicateEvaluator predEvaluator;
+    private final ISimpleFrameBufferManager bufferManager;
 
     private static final Logger LOGGER = Logger.getLogger(InMemoryHashJoin.class.getName());
 
     public InMemoryHashJoin(IHyracksTaskContext ctx, int tableSize, FrameTupleAccessor accessorProbe,
             ITuplePartitionComputer tpcProbe, FrameTupleAccessor accessorBuild, ITuplePartitionComputer tpcBuild,
             FrameTuplePairComparator comparator, boolean isLeftOuter, IMissingWriter[] missingWritersBuild,
-            ISerializableTable table, IPredicateEvaluator predEval) throws HyracksDataException {
+            ISerializableTable table, IPredicateEvaluator predEval, ISimpleFrameBufferManager bufferManager)
+            throws HyracksDataException {
         this(ctx, tableSize, accessorProbe, tpcProbe, accessorBuild, tpcBuild, comparator, isLeftOuter,
-                missingWritersBuild, table, predEval, false);
+                missingWritersBuild, table, predEval, false, bufferManager);
     }
 
     public InMemoryHashJoin(IHyracksTaskContext ctx, int tableSize, FrameTupleAccessor accessorProbe,
             ITuplePartitionComputer tpcProbe, FrameTupleAccessor accessorBuild, ITuplePartitionComputer tpcBuild,
             FrameTuplePairComparator comparator, boolean isLeftOuter, IMissingWriter[] missingWritersBuild,
-            ISerializableTable table, IPredicateEvaluator predEval, boolean reverse) throws HyracksDataException {
+            ISerializableTable table, IPredicateEvaluator predEval, boolean reverse,
+            ISimpleFrameBufferManager bufferManager) throws HyracksDataException {
         this.ctx = ctx;
         this.tableSize = tableSize;
         this.table = table;
@@ -97,6 +101,7 @@ public class InMemoryHashJoin {
             missingTupleBuild = null;
         }
         reverseOutputOrder = reverse;
+        this.bufferManager = bufferManager;
         LOGGER.fine("InMemoryHashJoin has been created for a table size of " + tableSize + " for Thread ID "
                 + Thread.currentThread().getId() + ".");
     }
@@ -155,8 +160,13 @@ public class InMemoryHashJoin {
     public void closeJoin(IFrameWriter writer) throws HyracksDataException {
         appender.write(writer, true);
         int nFrames = buffers.size();
+        // Release all buffers that are allocated during a caller of the build() process.
+        for (int i = 0; i < buffers.size(); i++) {
+            bufferManager.releaseFrame(buffers.get(i));
+        }
         buffers.clear();
-        ctx.deallocateFrames(nFrames);
+        // Temp:
+        //        ctx.deallocateFrames(nFrames);
         LOGGER.fine("InMemoryHashJoin has finished using " + nFrames + " frames for Thread ID "
                 + Thread.currentThread().getId() + ".");
     }

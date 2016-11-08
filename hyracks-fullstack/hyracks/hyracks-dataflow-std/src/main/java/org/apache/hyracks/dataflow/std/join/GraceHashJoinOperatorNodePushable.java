@@ -33,15 +33,19 @@ import org.apache.hyracks.api.dataflow.value.ITuplePartitionComputer;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
-import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
 import org.apache.hyracks.dataflow.common.data.partition.FieldHashPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.RepartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.io.RunFileReader;
 import org.apache.hyracks.dataflow.common.io.RunFileWriter;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNodePushable;
+import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
+import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
+import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
 
 class GraceHashJoinOperatorNodePushable extends AbstractUnaryOutputSourceOperatorNodePushable {
     private final IHyracksTaskContext ctx;
@@ -59,12 +63,13 @@ class GraceHashJoinOperatorNodePushable extends AbstractUnaryOutputSourceOperato
     private final int numPartitions;
     private final boolean isLeftOuter;
     private final IPredicateEvaluator predEvaluator;
+    private final int memSizeInFrames;
 
     GraceHashJoinOperatorNodePushable(IHyracksTaskContext ctx, Object state0Id, Object state1Id, int recordsPerFrame,
             double factor, int[] keys0, int[] keys1, IBinaryHashFunctionFactory[] hashFunctionFactories,
             IBinaryComparatorFactory[] comparatorFactories, IMissingWriterFactory[] nullWriterFactories,
             RecordDescriptor rd1, RecordDescriptor rd0, RecordDescriptor outRecordDescriptor, int numPartitions,
-            IPredicateEvaluator predEval, boolean isLeftOuter) {
+            IPredicateEvaluator predEval, boolean isLeftOuter, int memSizeInFrames) {
         this.ctx = ctx;
         this.state0Id = state0Id;
         this.state1Id = state1Id;
@@ -80,6 +85,7 @@ class GraceHashJoinOperatorNodePushable extends AbstractUnaryOutputSourceOperato
         this.factor = factor;
         this.predEvaluator = predEval;
         this.isLeftOuter = isLeftOuter;
+        this.memSizeInFrames = memSizeInFrames;
     }
 
     @Override
@@ -109,7 +115,11 @@ class GraceHashJoinOperatorNodePushable extends AbstractUnaryOutputSourceOperato
             IFrame buffer = new VSizeFrame(ctx);
             // buffer
             int tableSize = (int) (numPartitions * recordsPerFrame * factor);
-            ISerializableTable table = new SerializableHashTable(tableSize, ctx);
+            int memSizeInBytes = memSizeInFrames * ctx.getInitialFrameSize();
+            IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
+            ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
+
+            ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
 
             for (int partitionid = 0; partitionid < numPartitions; partitionid++) {
                 RunFileWriter buildWriter = buildWriters[partitionid];
@@ -120,14 +130,20 @@ class GraceHashJoinOperatorNodePushable extends AbstractUnaryOutputSourceOperato
                 table.reset();
                 InMemoryHashJoin joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpcRep0,
                         new FrameTupleAccessor(rd1), hpcRep1, new FrameTuplePairComparator(keys0, keys1, comparators),
-                        isLeftOuter, nullWriters1, table, predEvaluator);
+                        isLeftOuter, nullWriters1, table, predEvaluator, bufferManager);
 
                 // build
                 if (buildWriter != null) {
                     RunFileReader buildReader = buildWriter.createDeleteOnCloseReader();
                     buildReader.open();
                     while (buildReader.nextFrame(buffer)) {
-                        ByteBuffer copyBuffer = ctx.allocateFrame(buffer.getFrameSize());
+                        // Temp:
+                        //                        ByteBuffer copyBuffer = ctx.allocateFrame(buffer.getFrameSize());
+                        ByteBuffer copyBuffer = bufferManager.acquireFrame(buffer.getFrameSize());
+                        if (copyBuffer == null) {
+                            throw new HyracksDataException(
+                                    "Can't allocate a frame. Please extend the memory budget of the Grach Hash Join.");
+                        }
                         FrameUtils.copyAndFlip(buffer.getBuffer(), copyBuffer);
                         joiner.build(copyBuffer);
                         buffer.reset();

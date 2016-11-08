@@ -184,7 +184,7 @@ public class Join {
                     new IBinaryHashFunctionFactory[] {
                             PointableBinaryHashFunctionFactory.of(UTF8StringPointable.FACTORY) },
                     new IBinaryComparatorFactory[] { PointableBinaryComparatorFactory.of(UTF8StringPointable.FACTORY) },
-                    Common.custOrderJoinDesc, tableSize, null);
+                    Common.custOrderJoinDesc, tableSize, null, memSize * frameSize);
 
         } else if ("hybrid".equalsIgnoreCase(algo)) {
             join = new OptimizedHybridHashJoinOperatorDescriptor(spec, memSize, graceInputSize, graceFactor,

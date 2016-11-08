@@ -24,9 +24,14 @@ import org.apache.hyracks.dataflow.std.buffermanager.ITuplePointerAccessor;
 
 public interface ISerializableTable {
 
-    void insert(int entry, TuplePointer tuplePointer) throws HyracksDataException;
+    boolean insert(int entry, TuplePointer tuplePointer) throws HyracksDataException;
 
     void delete(int entry);
+
+    /**
+     * Cancel the effect of the last insertion.
+     */
+    void cancelInsert(int entry);
 
     boolean getTuplePointer(int entry, int offset, TuplePointer tuplePointer);
 

@@ -20,7 +20,6 @@
 package org.apache.hyracks.dataflow.std.buffermanager;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.apache.hyracks.api.comm.FixedSizeFrame;
@@ -53,6 +52,18 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     private final FixedSizeFrameTupleAppender appender;
     private BufferInfo tempInfo;
     private final IPartitionedMemoryConstrain constrain;
+
+    // In case where the given frame pool is shared by two or more buffer managers, it can be provided from the caller.
+    public VPartitionTupleBufferManager(IHyracksFrameMgrContext ctx, IPartitionedMemoryConstrain constrain,
+            int partitions, IDeallocatableFramePool framePool) throws HyracksDataException {
+        this.constrain = constrain;
+        this.framePool = framePool;
+        this.partitionArray = new IFrameBufferManager[partitions];
+        this.numTuples = new int[partitions];
+        this.appendFrame = new FixedSizeFrame();
+        this.appender = new FixedSizeFrameTupleAppender();
+        this.tempInfo = new BufferInfo(null, -1, -1);
+    }
 
     public VPartitionTupleBufferManager(IHyracksFrameMgrContext ctx, IPartitionedMemoryConstrain constrain,
             int partitions, int frameLimitInBytes) throws HyracksDataException {
@@ -106,9 +117,27 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         return size;
     }
 
+    // Temp:
+    //    @Override
+    //    public int getAvailableSize(int partitionId) {
+    //        int size = 0;
+    //        IFrameBufferManager partition = partitionArray[partitionId];
+    //        if (partition != null) {
+    //            partition.getFrame(partition.getNumFrames() - 1, tempInfo).getBuffer();
+    //            for (int i = 0; i < partition.getNumFrames(); ++i) {
+    //                size += partition.getFrame(i, tempInfo).getLength();
+    //            }
+    //        }
+    //        return size;
+    //    }
+
     @Override
     public void clearPartition(int partitionId) throws HyracksDataException {
         IFrameBufferManager partition = partitionArray[partitionId];
+        // Temp: to be deleted
+//        System.out.println("VPartitionTupleBufferManager::clearPartition #Tuples deleted from partition " + partitionId
+//                + ": " + numTuples[partitionId] + " #frames "
+//                + partition.getNumFrames());
         if (partition != null) {
             for (int i = 0; i < partition.getNumFrames(); ++i) {
                 framePool.deAllocateBuffer(partition.getFrame(i, tempInfo).getBuffer());
@@ -141,7 +170,30 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         }
         pointer.reset(makeGroupFrameId(partition, fid), tid);
         numTuples[partition]++;
+        // Temp:
+//        int count = 0;
+//        for (int i = 0; i < numTuples.length; i++) {
+//            System.out.print("partition " + i + " #tuples " + numTuples[i] + " ");
+//            count = count + numTuples[i];
+//        }
+//        System.out.println(" total " + count);
         return true;
+    }
+
+    @Override
+    public void cancelInsertTuple(int partition) throws HyracksDataException {
+        int fid = getLastBuffer(partition);
+        partitionArray[partition].getFrame(fid, tempInfo);
+        deleteTupleFromBuffer(tempInfo);
+        numTuples[partition]--;
+        // Temp:
+//        System.out.print("cancelInsert(); ");
+//        int count = 0;
+//        for (int i = 0; i < numTuples.length; i++) {
+//            System.out.print("partition " + i + " #tuples " + numTuples[i] + " ");
+//            count = count + numTuples[i];
+//        }
+//        System.out.println(" total " + count);
     }
 
     @Override
@@ -205,11 +257,36 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         return -1;
     }
 
+    private void deleteTupleFromBuffer(BufferInfo bufferInfo) throws HyracksDataException {
+        assert (bufferInfo.getStartOffset() == 0) : "Haven't supported yet in FrameTupleAppender";
+        if (bufferInfo.getBuffer() != appendFrame.getBuffer()) {
+            appendFrame.reset(bufferInfo.getBuffer());
+            appender.reset(appendFrame, false);
+        }
+        appender.cancelAppend();
+    }
+
+    private void getOccupiedByteSize(BufferInfo bufferInfo) throws HyracksDataException {
+        assert (bufferInfo.getStartOffset() == 0) : "Haven't supported yet in FrameTupleAppender";
+        if (bufferInfo.getBuffer() != appendFrame.getBuffer()) {
+            appendFrame.reset(bufferInfo.getBuffer());
+            appender.reset(appendFrame, false);
+        }
+        appender.cancelAppend();
+    }
+
     private int getLastBufferOrCreateNewIfNotExist(int partition, int actualSize) throws HyracksDataException {
         if (partitionArray[partition] == null || partitionArray[partition].getNumFrames() == 0) {
-            partitionArray[partition] = new PartitionFrameBufferManager();
+            partitionArray[partition] = new FrameBufferManager();
             return createNewBuffer(partition, actualSize);
         }
+        return partitionArray[partition].getNumFrames() - 1;
+    }
+
+    private int getLastBuffer(int partition) throws HyracksDataException {
+        // Temp:
+//        System.out.println(
+//                "getLastBuffer - partition " + partition + " #frames " + partitionArray[partition].getNumFrames());
         return partitionArray[partition].getNumFrames() - 1;
     }
 
@@ -217,39 +294,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     public void close() {
         framePool.close();
         Arrays.fill(partitionArray, null);
-    }
-
-    private static class PartitionFrameBufferManager implements IFrameBufferManager {
-
-        ArrayList<ByteBuffer> buffers = new ArrayList<>();
-
-        @Override
-        public void reset() throws HyracksDataException {
-            buffers.clear();
-        }
-
-        @Override
-        public BufferInfo getFrame(int frameIndex, BufferInfo returnedInfo) {
-            returnedInfo.reset(buffers.get(frameIndex), 0, buffers.get(frameIndex).capacity());
-            return returnedInfo;
-        }
-
-        @Override
-        public int getNumFrames() {
-            return buffers.size();
-        }
-
-        @Override
-        public int insertFrame(ByteBuffer frame) throws HyracksDataException {
-            buffers.add(frame);
-            return buffers.size() - 1;
-        }
-
-        @Override
-        public void close() {
-            buffers = null;
-        }
-
     }
 
     @Override
