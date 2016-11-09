@@ -114,7 +114,10 @@ public class InMemoryHashJoin {
         for (int i = 0; i < tCount; ++i) {
             int entry = tpcBuild.partition(accessorBuild, i, tableSize);
             storedTuplePointer.reset(bIndex, i);
-            table.insert(entry, storedTuplePointer);
+            if (!table.insert(entry, storedTuplePointer)) {
+                throw new HyracksDataException(
+                        "Can't insert an entry into hash table. Assign more budget to hash-join.");
+            }
         }
     }
 

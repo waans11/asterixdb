@@ -46,7 +46,7 @@ public class SerializableHashTableTest {
     @Before
     public void setup() throws HyracksDataException {
         ctx = new FrameManager(256);
-        framePool = new DeallocatableFramePool(ctx, ctx.getInitialFrameSize() * 256);
+        framePool = new DeallocatableFramePool(ctx, ctx.getInitialFrameSize() * 2048);
         bufferManager = new SimpleFrameBufferManager(framePool);
         nsTable = new SerializableHashTable(NUM_PART, ctx, bufferManager);
     }
