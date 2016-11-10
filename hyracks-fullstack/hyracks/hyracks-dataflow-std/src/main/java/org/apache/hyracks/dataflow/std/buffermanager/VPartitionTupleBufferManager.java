@@ -53,7 +53,7 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     private BufferInfo tempInfo;
     private final IPartitionedMemoryConstrain constrain;
 
-    // In case where the given frame pool is shared by two or more buffer managers, it can be provided from the caller.
+    // In case where a frame pool is shared by one or more buffer manager(s), it can be provided from the caller.
     public VPartitionTupleBufferManager(IHyracksFrameMgrContext ctx, IPartitionedMemoryConstrain constrain,
             int partitions, IDeallocatableFramePool framePool) throws HyracksDataException {
         this.constrain = constrain;
@@ -227,13 +227,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
             partitionArray[partition] = new FrameBufferManager();
             return createNewBuffer(partition, actualSize);
         }
-        return partitionArray[partition].getNumFrames() - 1;
-    }
-
-    private int getLastBuffer(int partition) throws HyracksDataException {
-        // Temp:
-//        System.out.println(
-//                "getLastBuffer - partition " + partition + " #frames " + partitionArray[partition].getNumFrames());
         return partitionArray[partition].getNumFrames() - 1;
     }
 

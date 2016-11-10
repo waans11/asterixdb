@@ -198,8 +198,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
     private int getNumberOfPartitions(int memorySize, int buildSize, double factor, int nPartitions)
             throws HyracksDataException {
         int numberOfPartitions = 0;
-        //two for hash table and one for data table
-        if (memorySize <= 3) {
+        if (memorySize <= 1) {
             throw new HyracksDataException("Not enough memory is available for Hybrid Hash Join.");
         }
         if (memorySize > buildSize * factor) {

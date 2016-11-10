@@ -137,8 +137,4 @@ public class DeallocatableFramePool implements IDeallocatableFramePool {
         allocated = 0;
     }
 
-    @Override
-    public int getCurrentlyAllocatedByteSize() {
-        return allocated;
-    }
 }

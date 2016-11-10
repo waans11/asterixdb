@@ -29,8 +29,6 @@ public interface IFramePool {
 
     int getMemoryBudgetBytes();
 
-    int getCurrentlyAllocatedByteSize();
-
     /**
      * Get a frame of given size. <br>
      * Returns {@code null} if failed to allocate the required size of frame

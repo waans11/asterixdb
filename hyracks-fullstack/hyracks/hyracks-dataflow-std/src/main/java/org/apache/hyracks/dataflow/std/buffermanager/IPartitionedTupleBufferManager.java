@@ -59,7 +59,7 @@ public interface IPartitionedTupleBufferManager {
     /**
      * Insert tuple {@code tupleId} from the {@code tupleAccessor} into the given partition.
      * The returned handle is written into the tuplepointer
-     *
+     * 
      * @param partition
      *            the id of the partition to insert the tuple
      * @param tupleAccessor
@@ -76,7 +76,7 @@ public interface IPartitionedTupleBufferManager {
 
     /**
      * Reset to the initial states. The previous allocated resources won't be released in order to be used in the next round.
-     *
+     * 
      * @throws HyracksDataException
      */
     void reset() throws HyracksDataException;
@@ -93,7 +93,7 @@ public interface IPartitionedTupleBufferManager {
      * This partition will not be cleared.
      * Currently it is used by Join where we flush the inner partition to the join (as a frameWriter),
      * but we will still keep the inner for the next outer partition.
-     *
+     * 
      * @param pid
      * @param writer
      * @throws HyracksDataException
@@ -102,7 +102,7 @@ public interface IPartitionedTupleBufferManager {
 
     /**
      * Clear the memory occupation of the particular partition.
-     *
+     * 
      * @param partition
      * @throws HyracksDataException
      */
