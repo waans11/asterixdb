@@ -91,11 +91,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     }
 
     @Override
-    public int getCurrentByteSize() {
-        return framePool.getCurrentlyAllocatedByteSize();
-    }
-
-    @Override
     public int getNumPartitions() {
         return partitionArray.length;
     }

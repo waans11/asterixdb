@@ -130,14 +130,13 @@ class GraceHashJoinOperatorNodePushable extends AbstractUnaryOutputSourceOperato
                 table.reset();
                 InMemoryHashJoin joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpcRep0,
                         new FrameTupleAccessor(rd1), hpcRep1, new FrameTuplePairComparator(keys0, keys1, comparators),
-                        isLeftOuter, nullWriters1, table, predEvaluator, bufferManager);
+                        isLeftOuter, nullWriters1, table, predEvaluator);
 
                 // build
                 if (buildWriter != null) {
                     RunFileReader buildReader = buildWriter.createDeleteOnCloseReader();
                     buildReader.open();
                     while (buildReader.nextFrame(buffer)) {
-                        // Temp:
                         ByteBuffer copyBuffer = ctx.allocateFrame(buffer.getFrameSize());
                         FrameUtils.copyAndFlip(buffer.getBuffer(), copyBuffer);
                         joiner.build(copyBuffer);

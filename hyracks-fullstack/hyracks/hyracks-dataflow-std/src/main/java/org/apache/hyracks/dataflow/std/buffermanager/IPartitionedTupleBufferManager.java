@@ -27,11 +27,6 @@ import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 
 public interface IPartitionedTupleBufferManager {
 
-    /**
-     * Return the byte size of entire frames that are currently allocated to this buffer manager.
-     */
-    int getCurrentByteSize();
-
     int getNumPartitions();
 
     int getNumTuples(int partition);

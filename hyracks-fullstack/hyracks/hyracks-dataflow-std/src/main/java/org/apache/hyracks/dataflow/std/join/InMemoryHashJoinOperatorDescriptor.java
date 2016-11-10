@@ -204,7 +204,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
                     ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                     state.joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpc0,
                             new FrameTupleAccessor(rd1), hpc1, new FrameTuplePairComparator(keys0, keys1, comparators),
-                            isLeftOuter, nullWriters1, table, predEvaluator, bufferManager);
+                            isLeftOuter, nullWriters1, table, predEvaluator);
                 }
 
                 @Override

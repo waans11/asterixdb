@@ -46,4 +46,3 @@ public class SimpleFrameBufferManager implements ISimpleFrameBufferManager {
     }
 
 }
-

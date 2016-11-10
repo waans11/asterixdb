@@ -69,7 +69,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
     private static final int BUILD_AND_PARTITION_ACTIVITY_ID = 0;
     private static final int PARTITION_AND_JOIN_ACTIVITY_ID = 1;
 
-    private final int memSizesInFrame;
+    private final int memSizeInFrames;
     private static final long serialVersionUID = 1L;
     private final int inputsize0;
     private final double factor;
@@ -97,13 +97,13 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
      * @param recordDescriptor
      * @throws HyracksDataException
      */
-    public HybridHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSizesInFrame, int inputsize0,
+    public HybridHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSizeInFrames, int inputsize0,
             int recordsPerFrame, double factor, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor, IPredicateEvaluatorFactory predEvalFactory, boolean isLeftOuter,
             IMissingWriterFactory[] nullWriterFactories1) throws HyracksDataException {
         super(spec, 2, 1);
-        this.memSizesInFrame = memSizesInFrame;
+        this.memSizeInFrames = memSizeInFrames;
         this.inputsize0 = inputsize0;
         this.factor = factor;
         this.recordsPerFrame = recordsPerFrame;
@@ -224,7 +224,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                 @Override
                 public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
 
-                    if (state.memoryForHashtable != memSizesInFrame - 2) {
+                    if (state.memoryForHashtable != memSizeInFrames - 2) {
                         accessorBuild.reset(buffer);
                         int tCount = accessorBuild.getTupleCount();
                         for (int i = 0; i < tCount; ++i) {
@@ -287,21 +287,21 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
 
                 @Override
                 public void open() throws HyracksDataException {
-                    if (memSizesInFrame > 1) {
-                        if (memSizesInFrame > inputsize0 * factor) {
+                    if (memSizeInFrames > 1) {
+                        if (memSizeInFrames > inputsize0 * factor) {
                             // becomes in-memory HJ
-                            state.memoryForHashtable = memSizesInFrame - 2;
+                            state.memoryForHashtable = memSizeInFrames - 2;
                             state.nPartitions = 0;
                         } else {
                             state.nPartitions = (int) (Math.ceil(
-                                    (inputsize0 * factor / nPartitions - memSizesInFrame) / (memSizesInFrame - 1)));
+                                    (inputsize0 * factor / nPartitions - memSizeInFrames) / (memSizeInFrames - 1)));
                         }
                         state.nPartitions = Math.max(2, state.nPartitions);
-                        state.memoryForHashtable = memSizesInFrame - state.nPartitions - 2;
+                        state.memoryForHashtable = memSizeInFrames - state.nPartitions - 2;
                         if (state.memoryForHashtable < 0) {
                             state.memoryForHashtable = 0;
                             state.nPartitions = (int) Math.ceil(Math.sqrt(inputsize0 * factor / nPartitions));
-                            state.nPartitions = Math.max(2, Math.min(state.nPartitions, memSizesInFrame - 2));
+                            state.nPartitions = Math.max(2, Math.min(state.nPartitions, memSizeInFrames - 2));
                         }
                     } else {
                         throw new HyracksDataException("Not enough memory was given to the hash join.");
@@ -311,14 +311,14 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                             .createPartitioner();
                     ITuplePartitionComputer hpc1 = new FieldHashPartitionComputerFactory(keys1, hashFunctionFactories)
                             .createPartitioner();
-                    int tableSize = (int) (memSizesInFrame * recordsPerFrame * factor);
-                    int memSizeInBytes = memSizesInFrame * ctx.getInitialFrameSize();
+                    int tableSize = (int) (memSizeInFrames * recordsPerFrame * factor);
+                    int memSizeInBytes = memSizeInFrames * ctx.getInitialFrameSize();
                     framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
                     bufferManager = new SimpleFrameBufferManager(framePool);
                     ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                     state.joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpc0,
                             new FrameTupleAccessor(rd1), hpc1, new FrameTuplePairComparator(keys0, keys1, comparators),
-                            isLeftOuter, nullWriters1, table, predEvaluator, bufferManager);
+                            isLeftOuter, nullWriters1, table, predEvaluator);
                     bufferForPartitions = new IFrame[state.nPartitions];
                     state.fWriters = new RunFileWriter[state.nPartitions];
                     for (int i = 0; i < state.nPartitions; i++) {
@@ -419,7 +419,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
 
                 @Override
                 public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
-                    if (state.memoryForHashtable != memSizesInFrame - 2) {
+                    if (state.memoryForHashtable != memSizeInFrames - 2) {
                         accessorProbe.reset(buffer);
                         int tupleCount0 = accessorProbe.getTupleCount();
                         for (int i = 0; i < tupleCount0; ++i) {
@@ -482,7 +482,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                                 .createPartitioner();
                         ITuplePartitionComputer hpcRep1 = new RepartitionComputerFactory(state.nPartitions, hpcf1)
                                 .createPartitioner();
-                        if (state.memoryForHashtable != memSizesInFrame - 2) {
+                        if (state.memoryForHashtable != memSizeInFrames - 2) {
                             for (int i = 0; i < state.nPartitions; i++) {
                                 ByteBuffer buf = bufferForPartitions[i].getBuffer();
                                 accessorProbe.reset(buf);
@@ -494,15 +494,15 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
 
                             inBuffer.reset();
                             int tableSize;
-                            int memSizesInBytesForHashTable;
+                            int memSizeInBytesForHashTable;
                             if (state.memoryForHashtable == 0) {
                                 tableSize = (int) (state.nPartitions * recordsPerFrame * factor);
                             } else {
-                                tableSize = (int) (memSizesInFrame * recordsPerFrame * factor);
+                                tableSize = (int) (memSizeInFrames * recordsPerFrame * factor);
                             }
-                            memSizesInBytesForHashTable = memSizesInFrame * ctx.getInitialFrameSize();
+                            memSizeInBytesForHashTable = memSizeInFrames * ctx.getInitialFrameSize();
                             IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx,
-                                    memSizesInBytesForHashTable);
+                                    memSizeInBytesForHashTable);
                             ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
                             ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                             for (int partitionid = 0; partitionid < state.nPartitions; partitionid++) {
@@ -515,7 +515,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                                 InMemoryHashJoin joiner = new InMemoryHashJoin(ctx, tableSize,
                                         new FrameTupleAccessor(rd0), hpcRep0, new FrameTupleAccessor(rd1), hpcRep1,
                                         new FrameTuplePairComparator(keys0, keys1, comparators), isLeftOuter,
-                                        nullWriters1, table, predEvaluator, bufferManager);
+                                        nullWriters1, table, predEvaluator);
 
                                 if (buildWriter != null) {
                                     RunFileReader buildReader = buildWriter.createDeleteOnCloseReader();
