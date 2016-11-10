@@ -50,7 +50,7 @@ import org.apache.hyracks.dataflow.std.join.InMemoryHashJoinOperatorDescriptor;
 public class InMemoryHashJoinPOperator extends AbstractHashJoinPOperator {
 
     private final int tableSize;
-    private final int memoryBudgetInFrames;
+    private final int memSizeInFrames;
 
     /**
      * builds on the first operator and probes on the second.
@@ -61,7 +61,7 @@ public class InMemoryHashJoinPOperator extends AbstractHashJoinPOperator {
             int memSizeInFrames) {
         super(kind, partitioningType, sideLeftOfEqualities, sideRightOfEqualities);
         this.tableSize = tableSize;
-        this.memoryBudgetInFrames = memSizeInFrames;
+        this.memSizeInFrames = memSizeInFrames;
     }
 
     @Override
@@ -109,7 +109,7 @@ public class InMemoryHashJoinPOperator extends AbstractHashJoinPOperator {
         switch (kind) {
             case INNER: {
                 opDesc = new InMemoryHashJoinOperatorDescriptor(spec, keysLeft, keysRight, hashFunFactories,
-                        comparatorFactories, recDescriptor, tableSize, predEvaluatorFactory, memoryBudgetInFrames);
+                        comparatorFactories, recDescriptor, tableSize, predEvaluatorFactory, memSizeInFrames);
                 break;
             }
             case LEFT_OUTER: {
@@ -119,7 +119,7 @@ public class InMemoryHashJoinPOperator extends AbstractHashJoinPOperator {
                 }
                 opDesc = new InMemoryHashJoinOperatorDescriptor(spec, keysLeft, keysRight, hashFunFactories,
                         comparatorFactories, predEvaluatorFactory, recDescriptor, true, nonMatchWriterFactories,
-                        tableSize, memoryBudgetInFrames);
+                        tableSize, memSizeInFrames);
                 break;
             }
             default: {

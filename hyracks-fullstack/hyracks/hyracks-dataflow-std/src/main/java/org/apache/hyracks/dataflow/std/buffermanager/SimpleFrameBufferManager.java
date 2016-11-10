@@ -29,7 +29,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
  */
 public class SimpleFrameBufferManager implements ISimpleFrameBufferManager {
 
-    private IDeallocatableFramePool framePool;
+    private final IDeallocatableFramePool framePool;
 
     public SimpleFrameBufferManager(IDeallocatableFramePool framePool) {
         this.framePool = framePool;
@@ -37,11 +37,7 @@ public class SimpleFrameBufferManager implements ISimpleFrameBufferManager {
 
     @Override
     public ByteBuffer acquireFrame(int frameSize) throws HyracksDataException {
-        ByteBuffer newBuffer = framePool.allocateFrame(frameSize);
-        if (newBuffer == null) {
-            return null;
-        }
-        return newBuffer;
+        return framePool.allocateFrame(frameSize);
     }
 
     @Override

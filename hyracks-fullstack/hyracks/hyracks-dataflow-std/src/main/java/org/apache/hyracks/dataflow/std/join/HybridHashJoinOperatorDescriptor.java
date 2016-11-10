@@ -69,7 +69,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
     private static final int BUILD_AND_PARTITION_ACTIVITY_ID = 0;
     private static final int PARTITION_AND_JOIN_ACTIVITY_ID = 1;
 
-    private final int memsize;
+    private final int memSizesInFrame;
     private static final long serialVersionUID = 1L;
     private final int inputsize0;
     private final double factor;
@@ -84,7 +84,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
 
     /**
      * @param spec
-     * @param memsize
+     * @param memSizesInFrame
      *            in frames
      * @param inputsize0
      *            in frames
@@ -97,13 +97,13 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
      * @param recordDescriptor
      * @throws HyracksDataException
      */
-    public HybridHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memsize, int inputsize0,
+    public HybridHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSizesInFrame, int inputsize0,
             int recordsPerFrame, double factor, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor, IPredicateEvaluatorFactory predEvalFactory, boolean isLeftOuter,
             IMissingWriterFactory[] nullWriterFactories1) throws HyracksDataException {
         super(spec, 2, 1);
-        this.memsize = memsize;
+        this.memSizesInFrame = memSizesInFrame;
         this.inputsize0 = inputsize0;
         this.factor = factor;
         this.recordsPerFrame = recordsPerFrame;
@@ -200,6 +200,8 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                 private final FrameTupleAppender ftappender = new FrameTupleAppender();
                 private IFrame[] bufferForPartitions;
                 private final IFrame inBuffer = new VSizeFrame(ctx);
+                private IDeallocatableFramePool framePool;
+                private ISimpleFrameBufferManager bufferManager;
 
                 @Override
                 public void close() throws HyracksDataException {
@@ -222,7 +224,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                 @Override
                 public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
 
-                    if (state.memoryForHashtable != memsize - 2) {
+                    if (state.memoryForHashtable != memSizesInFrame - 2) {
                         accessorBuild.reset(buffer);
                         int tCount = accessorBuild.getTupleCount();
                         for (int i = 0; i < tCount; ++i) {
@@ -285,36 +287,34 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
 
                 @Override
                 public void open() throws HyracksDataException {
-                    if (memsize > 1) {
-                        if (memsize > inputsize0) {
-                            state.nPartitions = 0;
-                        } else {
-                            state.nPartitions = (int) (Math
-                                    .ceil((inputsize0 * factor / nPartitions - memsize) / (memsize - 1)));
-                        }
-                        if (state.nPartitions <= 0) {
+                    if (memSizesInFrame > 1) {
+                        if (memSizesInFrame > inputsize0 * factor) {
                             // becomes in-memory HJ
-                            state.memoryForHashtable = memsize - 2;
+                            state.memoryForHashtable = memSizesInFrame - 2;
                             state.nPartitions = 0;
                         } else {
-                            state.memoryForHashtable = memsize - state.nPartitions - 2;
-                            if (state.memoryForHashtable < 0) {
-                                state.memoryForHashtable = 0;
-                                state.nPartitions = (int) Math.ceil(Math.sqrt(inputsize0 * factor / nPartitions));
-                            }
+                            state.nPartitions = (int) (Math.ceil(
+                                    (inputsize0 * factor / nPartitions - memSizesInFrame) / (memSizesInFrame - 1)));
+                        }
+                        state.nPartitions = Math.max(2, state.nPartitions);
+                        state.memoryForHashtable = memSizesInFrame - state.nPartitions - 2;
+                        if (state.memoryForHashtable < 0) {
+                            state.memoryForHashtable = 0;
+                            state.nPartitions = (int) Math.ceil(Math.sqrt(inputsize0 * factor / nPartitions));
+                            state.nPartitions = Math.max(2, Math.min(state.nPartitions, memSizesInFrame - 2));
                         }
                     } else {
-                        throw new HyracksDataException("not enough memory");
+                        throw new HyracksDataException("Not enough memory was given to the hash join.");
                     }
 
                     ITuplePartitionComputer hpc0 = new FieldHashPartitionComputerFactory(keys0, hashFunctionFactories)
                             .createPartitioner();
                     ITuplePartitionComputer hpc1 = new FieldHashPartitionComputerFactory(keys1, hashFunctionFactories)
                             .createPartitioner();
-                    int tableSize = (int) (state.memoryForHashtable * recordsPerFrame * factor);
-                    int memSizeInBytes = state.memoryForHashtable * ctx.getInitialFrameSize();
-                    final IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
-                    final ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
+                    int tableSize = (int) (memSizesInFrame * recordsPerFrame * factor);
+                    int memSizeInBytes = memSizesInFrame * ctx.getInitialFrameSize();
+                    framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
+                    bufferManager = new SimpleFrameBufferManager(framePool);
                     ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                     state.joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpc0,
                             new FrameTupleAccessor(rd1), hpc1, new FrameTuplePairComparator(keys0, keys1, comparators),
@@ -419,7 +419,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
 
                 @Override
                 public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
-                    if (state.memoryForHashtable != memsize - 2) {
+                    if (state.memoryForHashtable != memSizesInFrame - 2) {
                         accessorProbe.reset(buffer);
                         int tupleCount0 = accessorProbe.getTupleCount();
                         for (int i = 0; i < tupleCount0; ++i) {
@@ -482,7 +482,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                                 .createPartitioner();
                         ITuplePartitionComputer hpcRep1 = new RepartitionComputerFactory(state.nPartitions, hpcf1)
                                 .createPartitioner();
-                        if (state.memoryForHashtable != memsize - 2) {
+                        if (state.memoryForHashtable != memSizesInFrame - 2) {
                             for (int i = 0; i < state.nPartitions; i++) {
                                 ByteBuffer buf = bufferForPartitions[i].getBuffer();
                                 accessorProbe.reset(buf);
@@ -493,15 +493,14 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                             }
 
                             inBuffer.reset();
-                            int tableSize = -1;
+                            int tableSize;
                             int memSizesInBytesForHashTable;
                             if (state.memoryForHashtable == 0) {
                                 tableSize = (int) (state.nPartitions * recordsPerFrame * factor);
-                                memSizesInBytesForHashTable = state.nPartitions * ctx.getInitialFrameSize();
                             } else {
-                                tableSize = (int) (memsize * recordsPerFrame * factor);
-                                memSizesInBytesForHashTable = memsize * ctx.getInitialFrameSize();
+                                tableSize = (int) (memSizesInFrame * recordsPerFrame * factor);
                             }
+                            memSizesInBytesForHashTable = memSizesInFrame * ctx.getInitialFrameSize();
                             IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx,
                                     memSizesInBytesForHashTable);
                             ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);

@@ -283,7 +283,7 @@ public class TPCHCustomerOrderHashJoinTest extends AbstractIntegrationTest {
 
         HybridHashJoinOperatorDescriptor join = new HybridHashJoinOperatorDescriptor(
                 spec,
-                5,
+                10,
                 20,
                 200,
                 1.2,
@@ -543,7 +543,7 @@ public class TPCHCustomerOrderHashJoinTest extends AbstractIntegrationTest {
 
         HybridHashJoinOperatorDescriptor join = new HybridHashJoinOperatorDescriptor(
                 spec,
-                5,
+                10,
                 20,
                 200,
                 1.2,
@@ -806,7 +806,7 @@ public class TPCHCustomerOrderHashJoinTest extends AbstractIntegrationTest {
 
         HybridHashJoinOperatorDescriptor join = new HybridHashJoinOperatorDescriptor(
                 spec,
-                3,
+                10,
                 20,
                 100,
                 1.2,

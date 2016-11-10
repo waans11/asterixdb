@@ -44,7 +44,7 @@ public class GraceHashJoinOperatorDescriptor extends AbstractOperatorDescriptor 
     private final int[] keys1;
     private final int inputsize0;
     private final int recordsPerFrame;
-    private final int memsize;
+    private final int memSizeInFrames;
     private final double factor;
     private final IBinaryHashFunctionFactory[] hashFunctionFactories;
     private final IBinaryComparatorFactory[] comparatorFactories;
@@ -52,12 +52,12 @@ public class GraceHashJoinOperatorDescriptor extends AbstractOperatorDescriptor 
     private final boolean isLeftOuter;
     private final IMissingWriterFactory[] nullWriterFactories1;
 
-    public GraceHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memsize, int inputsize0,
+    public GraceHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSizeInFrames, int inputsize0,
             int recordsPerFrame, double factor, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor, IPredicateEvaluatorFactory predEvalFactory) {
         super(spec, 2, 1);
-        this.memsize = memsize;
+        this.memSizeInFrames = memSizeInFrames;
         this.inputsize0 = inputsize0;
         this.recordsPerFrame = recordsPerFrame;
         this.factor = factor;
@@ -71,13 +71,13 @@ public class GraceHashJoinOperatorDescriptor extends AbstractOperatorDescriptor 
         recordDescriptors[0] = recordDescriptor;
     }
 
-    public GraceHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memsize, int inputsize0,
+    public GraceHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSizeInFrames, int inputsize0,
             int recordsPerFrame, double factor, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor, boolean isLeftOuter, IMissingWriterFactory[] nullWriterFactories1,
             IPredicateEvaluatorFactory predEvalFactory) {
         super(spec, 2, 1);
-        this.memsize = memsize;
+        this.memSizeInFrames = memSizeInFrames;
         this.inputsize0 = inputsize0;
         this.recordsPerFrame = recordsPerFrame;
         this.factor = factor;
@@ -113,7 +113,7 @@ public class GraceHashJoinOperatorDescriptor extends AbstractOperatorDescriptor 
     }
 
     public int getMemorySize() {
-        return memsize;
+        return memSizeInFrames;
     }
 
     private class HashPartitionActivityNode extends AbstractActivityNode {
@@ -161,7 +161,7 @@ public class GraceHashJoinOperatorDescriptor extends AbstractOperatorDescriptor 
                     new TaskId(new ActivityId(getOperatorId(), RPARTITION_ACTIVITY_ID), partition),
                     new TaskId(new ActivityId(getOperatorId(), SPARTITION_ACTIVITY_ID), partition), recordsPerFrame,
                     factor, keys0, keys1, hashFunctionFactories, comparatorFactories, nullWriterFactories1, rd1, rd0,
-                    recordDescriptors[0], numPartitions, predEvaluator, isLeftOuter, memsize);
+                    recordDescriptors[0], numPartitions, predEvaluator, isLeftOuter, memSizeInFrames);
         }
     }
 }

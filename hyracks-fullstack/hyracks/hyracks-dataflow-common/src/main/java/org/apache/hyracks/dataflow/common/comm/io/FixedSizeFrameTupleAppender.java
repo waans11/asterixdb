@@ -19,13 +19,9 @@
 
 package org.apache.hyracks.dataflow.common.comm.io;
 
-import org.apache.hyracks.api.comm.FrameConstants;
-import org.apache.hyracks.api.comm.FrameHelper;
-import org.apache.hyracks.api.comm.IFrameTupleReversibleAppender;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.util.IntSerDeUtils;
 
-public class FixedSizeFrameTupleAppender extends FrameTupleAppender implements IFrameTupleReversibleAppender {
+public class FixedSizeFrameTupleAppender extends FrameTupleAppender {
     @Override
     protected boolean canHoldNewTuple(int fieldCount, int dataLength) throws HyracksDataException {
         if (hasEnoughSpace(fieldCount, dataLength)) {
@@ -33,20 +29,4 @@ public class FixedSizeFrameTupleAppender extends FrameTupleAppender implements I
         }
         return false;
     }
-
-    @Override
-    public boolean cancelAppend() throws HyracksDataException {
-        // Decrease tupleCount by one;
-        tupleCount = IntSerDeUtils.getInt(array, FrameHelper.getTupleCountOffset(frame.getFrameSize()));
-        if (tupleCount > 0) {
-            tupleCount = tupleCount - 1;
-        }
-        // Reset tupleCount.
-        IntSerDeUtils.putInt(array, FrameHelper.getTupleCountOffset(frame.getFrameSize()), tupleCount);
-        tupleDataEndOffset = tupleCount == 0 ? FrameConstants.TUPLE_START_OFFSET
-                : IntSerDeUtils.getInt(array,
-                        FrameHelper.getTupleCountOffset(frame.getFrameSize()) - tupleCount * FrameConstants.SIZE_LEN);
-        return true;
-    }
-
 }

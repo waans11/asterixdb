@@ -403,18 +403,22 @@ public class SerializableHashTable implements ISerializableTable {
 
     @Override
     public void close() {
-        int nFrames = contents.size();
-        for (int i = 0; i < headers.length; i++)
-            headers[i] = null;
+        for (int i = 0; i < headers.length; i++) {
+            if (headers[i] != null) {
+                bufferManager.releaseFrame(headers[i].getByteBuffer());
+                headers[i] = null;
+            }
+        }
+        for (int i = 0; i < contents.size(); i++) {
+            bufferManager.releaseFrame(contents.get(i).getByteBuffer());
+        }
         contents.clear();
         currentOffsetInEachFrameList.clear();
         tupleCount = 0;
         currentByteSize = 0;
         currentFrameNumberForInsert = 0;
         currentLargestFrameNumber = 0;
-        ctx.deallocateFrames(nFrames);
     }
-
 
 
     /**

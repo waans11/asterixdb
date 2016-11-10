@@ -90,7 +90,7 @@ public class OptimizedHybridHashJoin {
 
     private final BitSet spilledStatus; //0=resident, 1=spilled
     private final int numOfPartitions;
-    private final int memForJoin;
+    private final int memSizeInFrames;
     private InMemoryHashJoin inMemJoiner; //Used for joining resident partitions
 
     private IPartitionedTupleBufferManager bufferManager;
@@ -99,8 +99,8 @@ public class OptimizedHybridHashJoin {
     private final FrameTupleAccessor accessorBuild;
     private final FrameTupleAccessor accessorProbe;
 
-    // This frame pool will be shared by both data table and hash table.
     private IDeallocatableFramePool framePool;
+    private IDeallocatableFramePool framePoolForHashTable;
     private ISimpleFrameBufferManager bufferManagerForHashTable;
 
     private boolean isReversed; //Added for handling correct calling for predicate-evaluator upon recursive calls that cause role-reversal
@@ -112,13 +112,14 @@ public class OptimizedHybridHashJoin {
                                                        // we mainly use it to match the corresponding function signature.
     private int[] probePSizeInTups;
 
-    public OptimizedHybridHashJoin(IHyracksTaskContext ctx, int memForJoin, int numOfPartitions, String probeRelName,
+    public OptimizedHybridHashJoin(IHyracksTaskContext ctx, int memSizeInFrames, int numOfPartitions,
+            String probeRelName,
             String buildRelName, int[] probeKeys, int[] buildKeys, IBinaryComparator[] comparators,
             RecordDescriptor probeRd, RecordDescriptor buildRd, ITuplePartitionComputer probeHpc,
             ITuplePartitionComputer buildHpc, IPredicateEvaluator predEval, boolean isLeftOuter,
             IMissingWriterFactory[] nullWriterFactories1) {
         this.ctx = ctx;
-        this.memForJoin = memForJoin;
+        this.memSizeInFrames = memSizeInFrames;
         this.buildRd = buildRd;
         this.probeRd = probeRd;
         this.buildHpc = buildHpc;
@@ -151,8 +152,9 @@ public class OptimizedHybridHashJoin {
     }
 
     public void initBuild() throws HyracksDataException {
-        framePool = new DeallocatableFramePool(ctx, memForJoin * ctx.getInitialFrameSize());
-        bufferManagerForHashTable = new SimpleFrameBufferManager(framePool);
+        framePool = new DeallocatableFramePool(ctx, memSizeInFrames * ctx.getInitialFrameSize());
+        framePoolForHashTable = new DeallocatableFramePool(ctx, memSizeInFrames * ctx.getInitialFrameSize());
+        bufferManagerForHashTable = new SimpleFrameBufferManager(framePoolForHashTable);
         bufferManager = new VPartitionTupleBufferManager(ctx,
                 PreferToSpillFullyOccupiedFramePolicy.createAtMostOneFrameForSpilledPartitionConstrain(spilledStatus),
                 numOfPartitions, framePool);
@@ -271,7 +273,7 @@ public class OptimizedHybridHashJoin {
 
     private void bringBackSpilledPartitionIfHasMoreMemory() throws HyracksDataException {
         // we need number of |spilledPartitions| buffers to store the probe data
-        int freeSpace = (memForJoin - spilledStatus.cardinality()) * ctx.getInitialFrameSize();
+        int freeSpace = (memSizeInFrames - spilledStatus.cardinality()) * ctx.getInitialFrameSize();
         for (int p = spilledStatus.nextClearBit(0); p >= 0
                 && p < numOfPartitions; p = spilledStatus.nextClearBit(p + 1)) {
             freeSpace -= bufferManager.getPhysicalSize(p);

@@ -116,7 +116,7 @@ public class InMemoryHashJoin {
             storedTuplePointer.reset(bIndex, i);
             if (!table.insert(entry, storedTuplePointer)) {
                 throw new HyracksDataException(
-                        "Can't insert an entry into hash table. Assign more budget to hash-join.");
+                        "Can't insert an entry into hash table. Please assign more memory to InMemoryHashJoin.");
             }
         }
     }
@@ -163,13 +163,8 @@ public class InMemoryHashJoin {
     public void closeJoin(IFrameWriter writer) throws HyracksDataException {
         appender.write(writer, true);
         int nFrames = buffers.size();
-        // Release all buffers that are allocated during a caller of the build() process.
-        for (int i = 0; i < buffers.size(); i++) {
-            bufferManager.releaseFrame(buffers.get(i));
-        }
         buffers.clear();
-        // Temp:
-        //        ctx.deallocateFrames(nFrames);
+        ctx.deallocateFrames(nFrames);
         LOGGER.fine("InMemoryHashJoin has finished using " + nFrames + " frames for Thread ID "
                 + Thread.currentThread().getId() + ".");
     }

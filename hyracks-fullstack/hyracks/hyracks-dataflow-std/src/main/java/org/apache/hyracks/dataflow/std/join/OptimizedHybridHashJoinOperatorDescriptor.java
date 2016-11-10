@@ -201,7 +201,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
             throw new HyracksDataException("Not enough memory is available for Hybrid Hash Join.");
         }
         if (memorySize > buildSize * factor) {
-            return 1; //We will switch to in-Mem HJ eventually
+            return 1; // We will switch to in-Mem HJ eventually
         }
         numberOfPartitions = (int) (Math.ceil((buildSize * factor / nPartitions - memorySize) / (memorySize - 1)));
         numberOfPartitions = Math.max(2, numberOfPartitions);
@@ -647,7 +647,6 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
 
                     assert isLeftOuter ? !isReversed : true : "LeftOut Join can not reverse roles";
 
-                    // This frame pool will be shared by both data table and hash table.
                     IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx,
                             state.memForJoin * ctx.getInitialFrameSize());
                     ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
@@ -661,14 +660,9 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                     bReader.open();
                     rPartbuff.reset();
                     while (bReader.nextFrame(rPartbuff)) {
-                        //We need to allocate a copyBuffer, because this buffer gets added to the buffers list in the InMemoryHashJoin
-                        // Temp:
-                        //                        ByteBuffer copyBuffer = ctx.allocateFrame(rPartbuff.getFrameSize());
-                        ByteBuffer copyBuffer = bufferManager.acquireFrame(rPartbuff.getFrameSize());
-                        if (copyBuffer == null) {
-                            throw new HyracksDataException(
-                                    "Can't allocate a frame. Please assign more memort to the join parameter.");
-                        }
+                        // We need to allocate a copyBuffer, because this buffer gets added to the buffers list
+                        // in the InMemoryHashJoin.
+                        ByteBuffer copyBuffer = ctx.allocateFrame(rPartbuff.getFrameSize());
                         FrameUtils.copyAndFlip(rPartbuff.getBuffer(), copyBuffer);
                         joiner.build(copyBuffer);
                         rPartbuff.reset();

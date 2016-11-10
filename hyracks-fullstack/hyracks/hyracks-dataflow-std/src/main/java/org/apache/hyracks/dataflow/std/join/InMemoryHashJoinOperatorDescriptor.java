@@ -67,7 +67,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
     private final boolean isLeftOuter;
     private final IMissingWriterFactory[] nonMatchWriterFactories;
     private final int tableSize;
-    private final int memoryBudgetInFrames;
+    private final int memSizeInFrames;
 
     public InMemoryHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int[] keys0, int[] keys1,
             IBinaryHashFunctionFactory[] hashFunctionFactories, IBinaryComparatorFactory[] comparatorFactories,
@@ -83,7 +83,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
         this.isLeftOuter = false;
         this.nonMatchWriterFactories = null;
         this.tableSize = tableSize;
-        this.memoryBudgetInFrames = memSizeInFrames;
+        this.memSizeInFrames = memSizeInFrames;
     }
 
     public InMemoryHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int[] keys0, int[] keys1,
@@ -100,7 +100,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
         this.isLeftOuter = isLeftOuter;
         this.nonMatchWriterFactories = missingWriterFactories1;
         this.tableSize = tableSize;
-        this.memoryBudgetInFrames = memSizeInFrames;
+        this.memSizeInFrames = memSizeInFrames;
     }
 
     public InMemoryHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int[] keys0, int[] keys1,
@@ -186,8 +186,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
             final IPredicateEvaluator predEvaluator = (predEvaluatorFactory == null ? null
                     : predEvaluatorFactory.createPredicateEvaluator());
 
-            final int memSizeInBytes = memoryBudgetInFrames * ctx.getInitialFrameSize();
-            // Hash Table and Data Table will be shared by
+            final int memSizeInBytes = memSizeInFrames * ctx.getInitialFrameSize();
             final IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
             final ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
 
@@ -210,13 +209,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
 
                 @Override
                 public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
-                    ByteBuffer copyBuffer = bufferManager.acquireFrame(buffer.capacity());
-                    if (copyBuffer == null) {
-                        throw new HyracksDataException(
-                                "Can't allocate a frame. Please assign more memory to InMemoryHashJoin.");
-                    }
-                    // Temp:
-                    //                    ByteBuffer copyBuffer = ctx.allocateFrame(buffer.capacity());
+                    ByteBuffer copyBuffer = ctx.allocateFrame(buffer.capacity());
                     FrameUtils.copyAndFlip(buffer, copyBuffer);
                     state.joiner.build(copyBuffer);
                 }

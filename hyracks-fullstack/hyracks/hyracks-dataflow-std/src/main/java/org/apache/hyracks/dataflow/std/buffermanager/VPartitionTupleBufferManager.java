@@ -117,20 +117,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         return size;
     }
 
-    // Temp:
-    //    @Override
-    //    public int getAvailableSize(int partitionId) {
-    //        int size = 0;
-    //        IFrameBufferManager partition = partitionArray[partitionId];
-    //        if (partition != null) {
-    //            partition.getFrame(partition.getNumFrames() - 1, tempInfo).getBuffer();
-    //            for (int i = 0; i < partition.getNumFrames(); ++i) {
-    //                size += partition.getFrame(i, tempInfo).getLength();
-    //            }
-    //        }
-    //        return size;
-    //    }
-
     @Override
     public void clearPartition(int partitionId) throws HyracksDataException {
         IFrameBufferManager partition = partitionArray[partitionId];
@@ -178,22 +164,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
 //        }
 //        System.out.println(" total " + count);
         return true;
-    }
-
-    @Override
-    public void cancelInsertTuple(int partition) throws HyracksDataException {
-        int fid = getLastBuffer(partition);
-        partitionArray[partition].getFrame(fid, tempInfo);
-        deleteTupleFromBuffer(tempInfo);
-        numTuples[partition]--;
-        // Temp:
-//        System.out.print("cancelInsert(); ");
-//        int count = 0;
-//        for (int i = 0; i < numTuples.length; i++) {
-//            System.out.print("partition " + i + " #tuples " + numTuples[i] + " ");
-//            count = count + numTuples[i];
-//        }
-//        System.out.println(" total " + count);
     }
 
     @Override
@@ -255,24 +225,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
         }
 
         return -1;
-    }
-
-    private void deleteTupleFromBuffer(BufferInfo bufferInfo) throws HyracksDataException {
-        assert (bufferInfo.getStartOffset() == 0) : "Haven't supported yet in FrameTupleAppender";
-        if (bufferInfo.getBuffer() != appendFrame.getBuffer()) {
-            appendFrame.reset(bufferInfo.getBuffer());
-            appender.reset(appendFrame, false);
-        }
-        appender.cancelAppend();
-    }
-
-    private void getOccupiedByteSize(BufferInfo bufferInfo) throws HyracksDataException {
-        assert (bufferInfo.getStartOffset() == 0) : "Haven't supported yet in FrameTupleAppender";
-        if (bufferInfo.getBuffer() != appendFrame.getBuffer()) {
-            appendFrame.reset(bufferInfo.getBuffer());
-            appender.reset(appendFrame, false);
-        }
-        appender.cancelAppend();
     }
 
     private int getLastBufferOrCreateNewIfNotExist(int partition, int actualSize) throws HyracksDataException {

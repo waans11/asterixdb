@@ -138,12 +138,7 @@ class GraceHashJoinOperatorNodePushable extends AbstractUnaryOutputSourceOperato
                     buildReader.open();
                     while (buildReader.nextFrame(buffer)) {
                         // Temp:
-                        //                        ByteBuffer copyBuffer = ctx.allocateFrame(buffer.getFrameSize());
-                        ByteBuffer copyBuffer = bufferManager.acquireFrame(buffer.getFrameSize());
-                        if (copyBuffer == null) {
-                            throw new HyracksDataException(
-                                    "Can't allocate a frame. Please extend the memory budget of the Grach Hash Join.");
-                        }
+                        ByteBuffer copyBuffer = ctx.allocateFrame(buffer.getFrameSize());
                         FrameUtils.copyAndFlip(buffer.getBuffer(), copyBuffer);
                         joiner.build(copyBuffer);
                         buffer.reset();
