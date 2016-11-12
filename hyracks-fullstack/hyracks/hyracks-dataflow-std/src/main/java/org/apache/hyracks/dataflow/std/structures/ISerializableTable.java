@@ -24,29 +24,9 @@ import org.apache.hyracks.dataflow.std.buffermanager.ITuplePointerAccessor;
 
 public interface ISerializableTable {
 
-    /**
-     * Make space for the given hash entry. Before calling insert(), this method should be called.
-     */
-    boolean makeSpaceBeforeInsert(int entry) throws HyracksDataException;
-
-    /**
-     * Insert a tuplePointer with the given hash entry. Before calling this method,
-     * makeSpaceForInsert() should be called.
-     */
-    boolean insertAfterMakeSpace(int entry, TuplePointer tuplePointer) throws HyracksDataException;
-
-    /**
-     * Normal insert operation. This operation might fail based on the space availability.
-     * To make sure to preserve the space before an insertion, use makeSpaceForInsert() and guaranteedInsert().
-     */
     boolean insert(int entry, TuplePointer tuplePointer) throws HyracksDataException;
 
     void delete(int entry);
-
-    /**
-     * Cancel the effect of the last insertion.
-     */
-    void cancelInsert(int entry);
 
     boolean getTuplePointer(int entry, int offset, TuplePointer tuplePointer);
 

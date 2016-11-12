@@ -223,31 +223,19 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 initStateTupleBuilder(accessor, tIndex);
                 int pid = getPartition(entryInHashTable);
 
-
-                // First, try to make space for this insertion on hash table to prevent partial success
-                // (success on bufferManager and fail on Hash Table). These two operations should be atomic.
-                if (!hashTableForTuplePointer.makeSpaceBeforeInsert(entryInHashTable)) {
-                    needToCheckGarbageCollection = true;
-                    return false;
-                }
-                needToCheckGarbageCollection = false;
-
                 if (!bufferManager.insertTuple(pid, stateTupleBuilder.getByteArray(),
                         stateTupleBuilder.getFieldEndOffsets(), 0, stateTupleBuilder.getSize(), pointer)) {
                     // Temp:
 //                    System.out.println(
 //                            "insertNewAggregateEntry : insert into the data table failed. This is #" + (count + 1));
-
-                    // For this case, garbage collection checking on the hash table should not be done
-                    // since doing a garbage collection can reclaim the space that makeSpaceBeforeInsert() has created.
                     return false;
                 }
 
-                if (!hashTableForTuplePointer.insertAfterMakeSpace(entryInHashTable, pointer)) {
+                if (!hashTableForTuplePointer.insert(entryInHashTable, pointer)) {
+                    bufferManager.cancelInsertTuple(pid);
                     // Temp:
 //                    System.out.println(
 //                            "insertNewAggregateEntry : insert into the hash table failed. This #" + (count + 1));
-                    needToCheckGarbageCollection = true;
                     return false;
                 }
 

@@ -53,9 +53,7 @@ public class SerializableHashTable implements ISerializableTable {
     // Content frame list
     private List<IntSerDeBuffer> contents = new ArrayList<>();
     private List<Integer> currentOffsetInEachFrameList = new ArrayList<>();
-    private final IHyracksFrameMgrContext ctx;
     private final int frameCapacity;
-    private int currentFrameNumberForInsert = 0;
     private int currentLargestFrameNumber = 0;
     private int tupleCount = 0;
     // The byte size of total frames that are allocated to the headers and contents
@@ -75,7 +73,6 @@ public class SerializableHashTable implements ISerializableTable {
     public SerializableHashTable(int tableSize, final IHyracksFrameMgrContext ctx,
             ISimpleFrameBufferManager bufferManager, double garbageCollectionThreshold)
             throws HyracksDataException {
-        this.ctx = ctx;
         frameSize = ctx.getInitialFrameSize();
         this.bufferManager = bufferManager;
 
@@ -97,11 +94,8 @@ public class SerializableHashTable implements ISerializableTable {
         this.garbageCollectionThreshold = garbageCollectionThreshold;
     }
 
-    /**
-     * Allocate more frames if required for a future insertion for this entry.
-     */
     @Override
-    public boolean makeSpaceBeforeInsert(int entry) throws HyracksDataException {
+    public boolean insert(int entry, TuplePointer pointer) throws HyracksDataException {
         int headerFrameIndex = getHeaderFrameIndex(entry);
         int offsetInHeaderFrame = getHeaderFrameOffset(entry);
         IntSerDeBuffer headerFrame = headers[headerFrameIndex];
@@ -115,157 +109,24 @@ public class SerializableHashTable implements ISerializableTable {
             currentByteSize += headerFrame.getByteCapacity();
         }
         int contentFrameIndex = headerFrame.getInt(offsetInHeaderFrame);
-        if (contentFrameIndex < 0) {
-            // Since the initial value of index and offset is -1, this means that the slot for
-            // this entry is not created yet.
-            return makeSpaceBeforeNewEntryInsert(INIT_ENTRY_SIZE);
-        } else {
-            // The entry slot already exists.
-            int offsetInContentFrame = headerFrame.getInt(offsetInHeaderFrame + 1);
-            return makeSpaceBeforeNonFirstTupleInsert(headerFrame, offsetInHeaderFrame, contentFrameIndex,
-                    offsetInContentFrame);
-        }
-    }
-
-    /**
-     * Allocate frames that are needed for a future insertion.
-     */
-    private boolean makeSpaceBeforeNewEntryInsert(int entryCapacity) throws HyracksDataException {
-        IntSerDeBuffer lastContentFrame = contents.get(currentLargestFrameNumber);
-        int lastOffsetInLastFrame = currentOffsetInEachFrameList.get(currentLargestFrameNumber);
-        currentFrameNumberForInsert = currentLargestFrameNumber;
-        int requiredIntCapacity = entryCapacity * 2;
-
-        if (lastOffsetInLastFrame + requiredIntCapacity >= frameCapacity) {
-            IntSerDeBuffer newContentFrame;
-            // At least we need to have the mata-data (slot capacity and used count) and
-            // one tuplePointer in the same frame (4 INT_SIZE).
-            // So, if there is not enough space for this, we just move on to the next page.
-            if ((lastOffsetInLastFrame + 4) > frameCapacity) {
-                // Swipe the region that can't be used.
-                lastContentFrame.writeInvalidVal(lastOffsetInLastFrame, frameCapacity - lastOffsetInLastFrame);
-                currentFrameNumberForInsert++;
-                lastOffsetInLastFrame = 0;
-            }
-            do {
-                if (currentLargestFrameNumber >= contents.size() - 1) {
-                    ByteBuffer newFrame = bufferManager.acquireFrame(frameSize);
-                    if (newFrame == null) {
-                        return false;
-                    }
-                    newContentFrame = new IntSerDeBuffer(newFrame);
-                    currentLargestFrameNumber++;
-                    contents.add(newContentFrame);
-                    currentByteSize += newContentFrame.getByteCapacity();
-                    currentOffsetInEachFrameList.add(0);
-                } else {
-                    currentLargestFrameNumber++;
-                    currentOffsetInEachFrameList.set(currentLargestFrameNumber, 0);
-                }
-                requiredIntCapacity -= frameCapacity;
-            } while (requiredIntCapacity > 0);
-        }
-        return true;
-    }
-
-    /**
-     * Allocate frames that are needed for a future insertion when there is the currently allocated slot.
-     */
-    private boolean makeSpaceBeforeNonFirstTupleInsert(IntSerDeBuffer header, int offsetInHeaderFrame,
-            int contentFrameIndex, int offsetInContentFrame) throws HyracksDataException {
-        IntSerDeBuffer contentFrame = contents.get(contentFrameIndex);
-        int entrySlotCapacity = contentFrame.getInt(offsetInContentFrame);
-        int entryUsedCountInSlot = contentFrame.getInt(offsetInContentFrame + 1);
-        if (entryUsedCountInSlot < entrySlotCapacity) {
-            // No further operation is required. We can go ahead and insert a new tuple pointer.
-            return true;
-        } else {
-            // There is no enough space in this slot. We need to increase the slot size and reserve space for it.
-
-            // New capacity: double the original capacity
-            int capacity = (entrySlotCapacity + 1) * 2;
-
-            // Make the space for the new double-sized slot for the current entries.
-            if (!this.makeSpaceBeforeNewEntryInsert(capacity)) {
-                return false;
-            }
-            return true;
-        }
-    }
-
-    /**
-     * Insert then entry with the given tuple pointer to the table.
-     * This method must be called after executing makeSpaceBeforeInsert() method.
-     */
-    @Override
-    public boolean insertAfterMakeSpace(int entry, TuplePointer pointer) throws HyracksDataException {
-        int headerFrameIndex = getHeaderFrameIndex(entry);
-        int offsetInHeaderFrame = getHeaderFrameOffset(entry);
-        IntSerDeBuffer headerFrame = headers[headerFrameIndex];
-        int contentFrameIndex = headerFrame.getInt(offsetInHeaderFrame);
         boolean result;
         if (contentFrameIndex < 0) {
             // Since the initial value of index and offset is -1, this means that the slot for
             // this entry is not created yet. So, create the entry slot and insert first tuple into that slot.
             // OR, the previous slot becomes full and the newly double-sized slot is about to be created.
-            result = insertNewEntryAfterMakeSpace(headerFrame, offsetInHeaderFrame, INIT_ENTRY_SIZE, pointer);
+            result = insertNewEntry(headerFrame, offsetInHeaderFrame, INIT_ENTRY_SIZE, pointer);
         } else {
             // The entry slot already exists. Insert non-first tuple into the entry slot
             int offsetInContentFrame = headerFrame.getInt(offsetInHeaderFrame + 1);
-            result = insertNonFirstTupleAfterMakeSpace(headerFrame, offsetInHeaderFrame, contentFrameIndex,
-                    offsetInContentFrame, pointer);
+            result = insertNonFirstTuple(headerFrame, offsetInHeaderFrame, contentFrameIndex, offsetInContentFrame,
+                    pointer);
         }
 
         if (result) {
             tupleCount++;
         }
         return result;
-    }
-
-    @Override
-    public boolean insert(int entry, TuplePointer pointer) throws HyracksDataException {
-        // First, create the required space first.
-        if (!makeSpaceBeforeInsert(entry)) {
-            return false;
         }
-        // Then, insert an actual entry.
-        return insertAfterMakeSpace(entry, pointer);
-    }
-
-    // Temp:
-    //    @Override
-    //    public boolean insert(int entry, TuplePointer pointer) throws HyracksDataException {
-    //        int headerFrameIndex = getHeaderFrameIndex(entry);
-    //        int offsetInHeaderFrame = getHeaderFrameOffset(entry);
-    //        IntSerDeBuffer headerFrame = headers[headerFrameIndex];
-    //        if (headerFrame == null) {
-    //            ByteBuffer newFrame = bufferManager.acquireFrame(frameSize);
-    //            if (newFrame == null) {
-    //                return false;
-    //            }
-    //            headerFrame = new IntSerDeBuffer(newFrame);
-    //            headers[headerFrameIndex] = headerFrame;
-    //            currentByteSize += headerFrame.getByteCapacity();
-    //        }
-    //        int contentFrameIndex = headerFrame.getInt(offsetInHeaderFrame);
-    //        boolean result;
-    //        if (contentFrameIndex < 0) {
-    //            // Since the initial value of index and offset is -1, this means that the slot for
-    //            // this entry is not created yet. So, create the entry slot and insert first tuple into that slot.
-    //            // OR, the previous slot becomes full and the newly double-sized slot is about to be created.
-    //            result = insertNewEntry(headerFrame, offsetInHeaderFrame, INIT_ENTRY_SIZE, pointer);
-    //        } else {
-    //            // The entry slot already exists. Insert non-first tuple into the entry slot
-    //            int offsetInContentFrame = headerFrame.getInt(offsetInHeaderFrame + 1);
-    //            result = insertNonFirstTuple(headerFrame, offsetInHeaderFrame, contentFrameIndex, offsetInContentFrame,
-    //                    pointer);
-    //        }
-    //
-    //        if (result) {
-    //            tupleCount++;
-    //        }
-    //        return result;
-    //    }
 
     @Override
     /**
@@ -293,30 +154,6 @@ public class SerializableHashTable implements ISerializableTable {
             }
         }
     }
-
-    @Override
-    /**
-     * Cancel the effect of the last insertion for the given entry.
-     */
-    public void cancelInsert(int entry) {
-        int headerFrameIndex = getHeaderFrameIndex(entry);
-        int offsetInHeaderFrame = getHeaderFrameOffset(entry);
-        IntSerDeBuffer header = headers[headerFrameIndex];
-        if (header != null) {
-            int contentFrameIndex = header.getInt(offsetInHeaderFrame);
-            int offsetInContentFrame = header.getInt(offsetInHeaderFrame + 1);
-            if (contentFrameIndex >= 0) {
-                IntSerDeBuffer frame = contents.get(contentFrameIndex);
-                int entryUsedCountInSlot = frame.getInt(offsetInContentFrame + 1);
-                if (entryUsedCountInSlot > 0) {
-                    entryUsedCountInSlot = entryUsedCountInSlot - 1;
-                }
-                frame.writeInt(offsetInContentFrame + 1, entryUsedCountInSlot);
-                tupleCount = tupleCount - 1;
-            }
-        }
-    }
-
 
     @Override
     /**
@@ -365,7 +202,6 @@ public class SerializableHashTable implements ISerializableTable {
         }
 
         currentLargestFrameNumber = 0;
-        currentFrameNumberForInsert = 0;
         tupleCount = 0;
         currentByteSize = 0;
         wastedIntSpaceCount = 0;
@@ -416,135 +252,89 @@ public class SerializableHashTable implements ISerializableTable {
         currentOffsetInEachFrameList.clear();
         tupleCount = 0;
         currentByteSize = 0;
-        currentFrameNumberForInsert = 0;
         currentLargestFrameNumber = 0;
     }
 
 
-    /**
-     * Insert the given entry with the given tuple pointer into the table. It might be a new entry or
-     * an old entry that is migrated from the old slot because of the capacity overflow.
-     */
-    private boolean insertNewEntryAfterMakeSpace(IntSerDeBuffer header, int offsetInHeaderFrame, int entryCapacity,
+    private boolean insertNewEntry(IntSerDeBuffer header, int offsetInHeaderFrame, int entryCapacity,
             TuplePointer pointer) throws HyracksDataException {
-        IntSerDeBuffer contentFrameForInsert = contents.get(currentFrameNumberForInsert);
-        int lastOffsetInContentFrameForInsert = currentOffsetInEachFrameList.get(currentFrameNumberForInsert);
+        IntSerDeBuffer lastContentFrame = contents.get(currentLargestFrameNumber);
+        int lastOffsetInCurrentFrame = currentOffsetInEachFrameList.get(currentLargestFrameNumber);
         int requiredIntCapacity = entryCapacity * 2;
+        int currentFrameNumber = currentLargestFrameNumber;
+        boolean currentFrameNumberChanged = false;
+
+        if (lastOffsetInCurrentFrame + requiredIntCapacity >= frameCapacity) {
+            IntSerDeBuffer newContentFrame;
+            // At least we need to have the mata-data (slot capacity and used count) and
+            // one tuplePointer in the same frame (4 INT_SIZE).
+            // So, if there is not enough space for this, we just move on to the next page.
+            if ((lastOffsetInCurrentFrame + 4) > frameCapacity) {
+                // Swipe the region that can't be used.
+                lastContentFrame.writeInvalidVal(lastOffsetInCurrentFrame, frameCapacity - lastOffsetInCurrentFrame);
+                currentFrameNumber++;
+                lastOffsetInCurrentFrame = 0;
+                currentFrameNumberChanged = true;
+            }
+            do {
+                if (currentLargestFrameNumber >= contents.size() - 1) {
+                    ByteBuffer newFrame = bufferManager.acquireFrame(frameSize);
+                    if (newFrame == null) {
+                        // Temp:
+                        //                        System.out.println("HashTable insertNewEntry:: capacity " + entryCapacity + " fails. frameSize "
+                        //                                + frameSize + " current #frames: " + (currentByteSize / frameSize) + " total Byte "
+                        //                                + currentByteSize);
+                        return false;
+                    }
+                    newContentFrame = new IntSerDeBuffer(newFrame);
+                    currentLargestFrameNumber++;
+                    contents.add(newContentFrame);
+                    currentByteSize += newContentFrame.getByteCapacity();
+                    currentOffsetInEachFrameList.add(0);
+                } else {
+                    currentLargestFrameNumber++;
+                    currentOffsetInEachFrameList.set(currentLargestFrameNumber, 0);
+                }
+                requiredIntCapacity -= frameCapacity;
+            } while (requiredIntCapacity > 0);
+        }
+
+        if (currentFrameNumberChanged) {
+            lastContentFrame = contents.get(currentFrameNumber);
+        }
 
         // set header
-        header.writeInt(offsetInHeaderFrame, currentFrameNumberForInsert);
-        header.writeInt(offsetInHeaderFrame + 1, lastOffsetInContentFrameForInsert);
+        header.writeInt(offsetInHeaderFrame, currentFrameNumber);
+        header.writeInt(offsetInHeaderFrame + 1, lastOffsetInCurrentFrame);
 
         // set the entry & its slot.
         // 1. slot capacity
-        contentFrameForInsert.writeInt(lastOffsetInContentFrameForInsert, entryCapacity - 1);
+        lastContentFrame.writeInt(lastOffsetInCurrentFrame, entryCapacity - 1);
         // 2. used count in the slot
-        contentFrameForInsert.writeInt(lastOffsetInContentFrameForInsert + 1, 1);
+        lastContentFrame.writeInt(lastOffsetInCurrentFrame + 1, 1);
         // 3. initial entry in the slot
-        contentFrameForInsert.writeInt(lastOffsetInContentFrameForInsert + 2, pointer.getFrameIndex());
-        contentFrameForInsert.writeInt(lastOffsetInContentFrameForInsert + 3, pointer.getTupleIndex());
-
-        int newLastOffsetInContentFrameForInsert = lastOffsetInContentFrameForInsert + entryCapacity * 2;
-        newLastOffsetInContentFrameForInsert = newLastOffsetInContentFrameForInsert < frameCapacity
-                ? newLastOffsetInContentFrameForInsert : frameCapacity - 1;
-        currentOffsetInEachFrameList.set(currentFrameNumberForInsert, newLastOffsetInContentFrameForInsert);
-
-        requiredIntCapacity = entryCapacity * 2 - (frameCapacity - lastOffsetInContentFrameForInsert);
-        while (requiredIntCapacity > 0) {
-            currentFrameNumberForInsert++;
-            requiredIntCapacity -= frameCapacity;
-            newLastOffsetInContentFrameForInsert = requiredIntCapacity < 0 ? requiredIntCapacity + frameCapacity
+        lastContentFrame.writeInt(lastOffsetInCurrentFrame + 2, pointer.getFrameIndex());
+        lastContentFrame.writeInt(lastOffsetInCurrentFrame + 3, pointer.getTupleIndex());
+        int newLastOffsetInContentFrame = lastOffsetInCurrentFrame + entryCapacity * 2;
+        newLastOffsetInContentFrame = newLastOffsetInContentFrame < frameCapacity ? newLastOffsetInContentFrame
                     : frameCapacity - 1;
-            currentOffsetInEachFrameList.set(currentFrameNumberForInsert, newLastOffsetInContentFrameForInsert);
+        currentOffsetInEachFrameList.set(currentFrameNumber, newLastOffsetInContentFrame);
+
+        requiredIntCapacity = entryCapacity * 2 - (frameCapacity - lastOffsetInCurrentFrame);
+        while (requiredIntCapacity > 0) {
+            currentFrameNumber++;
+            requiredIntCapacity -= frameCapacity;
+            newLastOffsetInContentFrame = requiredIntCapacity < 0 ? requiredIntCapacity + frameCapacity
+                    : frameCapacity - 1;
+            currentOffsetInEachFrameList.set(currentFrameNumber, newLastOffsetInContentFrame);
         }
 
         return true;
     }
 
-    // Temp:
-    //    private boolean insertNewEntry(IntSerDeBuffer header, int offsetInHeaderFrame, int entryCapacity,
-    //            TuplePointer pointer) throws HyracksDataException {
-    //        IntSerDeBuffer lastContentFrame = contents.get(currentLargestFrameNumber);
-    //        int lastOffsetInCurrentFrame = currentOffsetInEachFrameList.get(currentLargestFrameNumber);
-    //        int requiredIntCapacity = entryCapacity * 2;
-    //        int currentFrameNumber = currentLargestFrameNumber;
-    //        boolean currentFrameNumberChanged = false;
-    //
-    //        if (lastOffsetInCurrentFrame + requiredIntCapacity >= frameCapacity) {
-    //            IntSerDeBuffer newContentFrame;
-    //            // At least we need to have the mata-data (slot capacity and used count) and
-    //            // one tuplePointer in the same frame (4 INT_SIZE).
-    //            // So, if there is not enough space for this, we just move on to the next page.
-    //            if ((lastOffsetInCurrentFrame + 4) > frameCapacity) {
-    //                // Swipe the region that can't be used.
-    //                lastContentFrame.writeInvalidVal(lastOffsetInCurrentFrame, frameCapacity - lastOffsetInCurrentFrame);
-    //                currentFrameNumber++;
-    //                lastOffsetInCurrentFrame = 0;
-    //                currentFrameNumberChanged = true;
-    //            }
-    //            do {
-    //                if (currentLargestFrameNumber >= contents.size() - 1) {
-    //                    ByteBuffer newFrame = bufferManager.acquireFrame(frameSize);
-    //                    if (newFrame == null) {
-    //                        // Temp:
-    //                        //                        System.out.println("HashTable insertNewEntry:: capacity " + entryCapacity + " fails. frameSize "
-    //                        //                                + frameSize + " current #frames: " + (currentByteSize / frameSize) + " total Byte "
-    //                        //                                + currentByteSize);
-    //                        return false;
-    //                    }
-    //                    newContentFrame = new IntSerDeBuffer(newFrame);
-    //                    currentLargestFrameNumber++;
-    //                    contents.add(newContentFrame);
-    //                    currentByteSize += newContentFrame.getByteCapacity();
-    //                    currentOffsetInEachFrameList.add(0);
-    //                } else {
-    //                    currentLargestFrameNumber++;
-    //                    currentOffsetInEachFrameList.set(currentLargestFrameNumber, 0);
-    //                }
-    //                requiredIntCapacity -= frameCapacity;
-    //            } while (requiredIntCapacity > 0);
-    //        }
-    //
-    //        if (currentFrameNumberChanged) {
-    //            lastContentFrame = contents.get(currentFrameNumber);
-    //        }
-    //
-    //        // set header
-    //        header.writeInt(offsetInHeaderFrame, currentFrameNumber);
-    //        header.writeInt(offsetInHeaderFrame + 1, lastOffsetInCurrentFrame);
-    //
-    //        // set the entry & its slot.
-    //        // 1. slot capacity
-    //        lastContentFrame.writeInt(lastOffsetInCurrentFrame, entryCapacity - 1);
-    //        // 2. used count in the slot
-    //        lastContentFrame.writeInt(lastOffsetInCurrentFrame + 1, 1);
-    //        // 3. initial entry in the slot
-    //        lastContentFrame.writeInt(lastOffsetInCurrentFrame + 2, pointer.getFrameIndex());
-    //        lastContentFrame.writeInt(lastOffsetInCurrentFrame + 3, pointer.getTupleIndex());
-    //        int newLastOffsetInContentFrame = lastOffsetInCurrentFrame + entryCapacity * 2;
-    //        newLastOffsetInContentFrame = newLastOffsetInContentFrame < frameCapacity ? newLastOffsetInContentFrame
-    //                : frameCapacity - 1;
-    //        currentOffsetInEachFrameList.set(currentFrameNumber, newLastOffsetInContentFrame);
-    //
-    //        requiredIntCapacity = entryCapacity * 2 - (frameCapacity - lastOffsetInCurrentFrame);
-    //        while (requiredIntCapacity > 0) {
-    //            currentFrameNumber++;
-    //            requiredIntCapacity -= frameCapacity;
-    //            newLastOffsetInContentFrame = requiredIntCapacity < 0 ? requiredIntCapacity + frameCapacity
-    //                    : frameCapacity - 1;
-    //            currentOffsetInEachFrameList.set(currentFrameNumber, newLastOffsetInContentFrame);
-    //        }
-    //
-    //        return true;
-    //    }
 
-
-    /**
-     * Insert a tuple pointer into a currently existing slot.
-     * This method should be called after makeSpaceForInsert().
-     */
-    private boolean insertNonFirstTupleAfterMakeSpace(IntSerDeBuffer header, int offsetInHeaderFrame,
-            int contentFrameIndex, int offsetInContentFrame, TuplePointer pointer) throws HyracksDataException {
+    private boolean insertNonFirstTuple(IntSerDeBuffer header, int offsetInHeaderFrame, int contentFrameIndex,
+            int offsetInContentFrame, TuplePointer pointer) throws HyracksDataException {
         int frameIndex = contentFrameIndex;
         IntSerDeBuffer contentFrame = contents.get(frameIndex);
         int entrySlotCapacity = contentFrame.getInt(offsetInContentFrame);
@@ -588,7 +378,7 @@ public class SerializableHashTable implements ISerializableTable {
             tempTuplePointer.reset(fIndex, tIndex);
             // Create a new double-sized slot for the current entries and
             // migrate the initial entry in the slot to the new slot.
-            if (!this.insertNewEntryAfterMakeSpace(header, offsetInHeaderFrame, capacity, tempTuplePointer)) {
+            if (!this.insertNewEntry(header, offsetInHeaderFrame, capacity, tempTuplePointer)) {
                 // Reverse the effect of change.
                 header.writeInt(offsetInHeaderFrame, contentFrameIndex);
                 header.writeInt(offsetInHeaderFrame + 1, offsetInContentFrame);
@@ -611,14 +401,16 @@ public class SerializableHashTable implements ISerializableTable {
                 fIndex = contentFrame.getInt(startOffsetInContentFrame);
                 tIndex = contentFrame.getInt(startOffsetInContentFrame + 1);
                 tempTuplePointer.reset(fIndex, tIndex);
-                if (!insertNonFirstTupleAfterMakeSpace(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex,
-                        tempTuplePointer)) {
+                if (!insertNonFirstTuple(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex, tempTuplePointer)) {
+                    // Temp:
+                    //                    System.out.println("insertNonFirstTuple error!!!!!");
                     return false;
                 }
             }
             // Now, insert the new entry that caused an overflow to the old bucket.
-            if (!insertNonFirstTupleAfterMakeSpace(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex,
-                    pointer)) {
+            if (!insertNonFirstTuple(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex, pointer)) {
+                // Temp:
+                //                System.out.println("insertNonFirstTuple error!!!!!");
                 return false;
             }
             wastedIntSpaceCount += capacity;
@@ -626,94 +418,6 @@ public class SerializableHashTable implements ISerializableTable {
 
         return true;
     }
-
-    // Temp:
-    //    private boolean insertNonFirstTuple(IntSerDeBuffer header, int offsetInHeaderFrame, int contentFrameIndex,
-    //            int offsetInContentFrame, TuplePointer pointer) throws HyracksDataException {
-    //        int frameIndex = contentFrameIndex;
-    //        IntSerDeBuffer contentFrame = contents.get(frameIndex);
-    //        int entrySlotCapacity = contentFrame.getInt(offsetInContentFrame);
-    //        int entryUsedCountInSlot = contentFrame.getInt(offsetInContentFrame + 1);
-    //        boolean frameIndexChanged = false;
-    //        if (entryUsedCountInSlot < entrySlotCapacity) {
-    //            // The slot has at least one space to accommodate this tuple pointer.
-    //            // Increase the used count by 1.
-    //            contentFrame.writeInt(offsetInContentFrame + 1, entryUsedCountInSlot + 1);
-    //            // Calculate the first empty spot in the slot.
-    //            // +2: (capacity, # of used entry count)
-    //            // *2: each tuplePointer's occupation (frame index + offset in that frame)
-    //            int startOffsetInContentFrame = offsetInContentFrame + 2 + entryUsedCountInSlot * 2;
-    //            while (startOffsetInContentFrame >= frameCapacity) {
-    //                ++frameIndex;
-    //                startOffsetInContentFrame -= frameCapacity;
-    //                frameIndexChanged = true;
-    //            }
-    //            // We don't have to read content frame again if the frame index has not been changed.
-    //            if (frameIndexChanged) {
-    //                contentFrame = contents.get(frameIndex);
-    //            }
-    //            contentFrame.writeInt(startOffsetInContentFrame, pointer.getFrameIndex());
-    //            contentFrame.writeInt(startOffsetInContentFrame + 1, pointer.getTupleIndex());
-    //        } else {
-    //            // There is no enough space in this slot. We need to increase the slot size and
-    //            // migrate the current entries in it.
-    //
-    //            // New capacity: double the original capacity
-    //            int capacity = (entrySlotCapacity + 1) * 2;
-    //
-    //            // Temporarily set the header (frameIdx, offset) as (-1,-1) for the slot.
-    //            header.writeInvalidVal(offsetInHeaderFrame, 2);
-    //            // Mark the old slot as obsolete - set the used count as -1 so that its space can be reclaimed
-    //            // when a garbage collection is executed.
-    //            contentFrame.writeInvalidVal(offsetInContentFrame + 1, 1);
-    //
-    //            // Get the location of the initial entry.
-    //            int fIndex = contentFrame.getInt(offsetInContentFrame + 2);
-    //            int tIndex = contentFrame.getInt(offsetInContentFrame + 3);
-    //            tempTuplePointer.reset(fIndex, tIndex);
-    //            // Create a new double-sized slot for the current entries and
-    //            // migrate the initial entry in the slot to the new slot.
-    //            if (!this.insertNewEntry(header, offsetInHeaderFrame, capacity, tempTuplePointer)) {
-    //                // Reverse the effect of change.
-    //                header.writeInt(offsetInHeaderFrame, contentFrameIndex);
-    //                header.writeInt(offsetInHeaderFrame + 1, offsetInContentFrame);
-    //                contentFrame.writeInt(offsetInContentFrame + 1, entryUsedCountInSlot);
-    //                return false;
-    //            }
-    //
-    //
-    //            int newFrameIndex = header.getInt(offsetInHeaderFrame);
-    //            int newTupleIndex = header.getInt(offsetInHeaderFrame + 1);
-    //
-    //            // Migrate the existing entries (from 2nd to the last).
-    //            for (int i = 1; i < entryUsedCountInSlot; i++) {
-    //                int startOffsetInContentFrame = offsetInContentFrame + 2 + i * 2;
-    //                int startFrameIndex = frameIndex;
-    //                while (startOffsetInContentFrame >= frameCapacity) {
-    //                    ++startFrameIndex;
-    //                    startOffsetInContentFrame -= frameCapacity;
-    //                }
-    //                contentFrame = contents.get(startFrameIndex);
-    //                fIndex = contentFrame.getInt(startOffsetInContentFrame);
-    //                tIndex = contentFrame.getInt(startOffsetInContentFrame + 1);
-    //                tempTuplePointer.reset(fIndex, tIndex);
-    //                if (!insertNonFirstTuple(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex, tempTuplePointer)) {
-    //                    // Temp:
-    //                    //                    System.out.println("insertNonFirstTuple error!!!!!");
-    //                    return false;
-    //                }
-    //            }
-    //            // Now, insert the new entry that caused an overflow to the old bucket.
-    //            if (!insertNonFirstTuple(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex, pointer)) {
-    //                // Temp:
-    //                //                System.out.println("insertNonFirstTuple error!!!!!");
-    //                return false;
-    //            }
-    //            wastedIntSpaceCount += capacity;
-    //        }
-    //
-    //        return true;
-    //    }
 
     private int getHeaderFrameIndex(int entry) {
         int frameIndex = entry * 2 / frameCapacity;
@@ -777,7 +481,7 @@ public class SerializableHashTable implements ISerializableTable {
      * just reclaim the space.
      * #3. Once a Reader reaches the end of a frame, read next frame. This applies to the Writer, too.
      * #4. Repeat #1 ~ #3 until all frames are read.
-     * 
+     *
      * @return the number of frames that are reclaimed. The value -1 is returned when no space was reclaimed.
      */
     @Override
