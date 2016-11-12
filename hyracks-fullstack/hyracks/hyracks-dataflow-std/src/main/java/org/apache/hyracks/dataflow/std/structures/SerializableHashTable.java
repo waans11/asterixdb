@@ -739,11 +739,26 @@ public class SerializableHashTable implements ISerializableTable {
         return getUnitSize() * (2 + getNumberOfEntryInSlot() * 2);
     }
 
-    public static int getExpectedByteSizeOfHashTable(int tableSize, int frameSize) {
-        int numberOfHeaderFrame = (int) ((double) tableSize * 2 / (double) frameSize);
-        int numberOfContentFrame = (int) (((double) getNumberOfEntryInSlot() * 2 * getUnitSize() * tableSize)
-                / (double) frameSize);
-        return (numberOfHeaderFrame + numberOfContentFrame) * frameSize;
+    /**
+     * Calculate the expected hash table size based on the worst scenario: there is no duplicated entries so that
+     * each entry is assigned to a different slot.
+     *
+     * @param tableSize
+     *            : the cardinality of the hash table - number of slots
+     * @param frameSize
+     *            : the frame size
+     * @return
+     *         expected the byte size of the hash table
+     */
+    public static int getExpectedTableSizeInFrame(int tableSize, int frameSize) {
+        int numberOfHeaderFrame = (int) (Math.ceil((double) tableSize * 2 / (double) frameSize));
+        int numberOfContentFrame = (int) (Math
+                .ceil(((double) getNumberOfEntryInSlot() * 2 * getUnitSize() * tableSize) / (double) frameSize));
+        return (numberOfHeaderFrame + numberOfContentFrame);
+    }
+
+    public static int getExpectedTableSizeInByte(int tableSize, int frameSize) {
+        return getExpectedTableSizeInFrame(tableSize, frameSize) * frameSize;
     }
 
     @Override
@@ -762,6 +777,8 @@ public class SerializableHashTable implements ISerializableTable {
      * just reclaim the space.
      * #3. Once a Reader reaches the end of a frame, read next frame. This applies to the Writer, too.
      * #4. Repeat #1 ~ #3 until all frames are read.
+     * 
+     * @return the number of frames that are reclaimed. The value -1 is returned when no space was reclaimed.
      */
     @Override
     public int executeGarbageCollection(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
@@ -776,6 +793,7 @@ public class SerializableHashTable implements ISerializableTable {
         boolean currentPageChanged;
         IntSerDeBuffer currentReadContentFrameForGC;
         IntSerDeBuffer currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
+        int lastOffsetInLastFrame = currentOffsetInEachFrameList.get(contents.size() - 1);
 
         // Step #1. Read a content frame until it reaches the end of content frames.
         while (gcInfo.currentReadPageForGC <= currentLargestFrameNumber) {
@@ -854,6 +872,13 @@ public class SerializableHashTable implements ISerializableTable {
                 contents.remove(gcInfo.currentGCWritePageForGC + 1);
 
                 currentOffsetInEachFrameList.remove(gcInfo.currentGCWritePageForGC + 1);
+            }
+        } else {
+            // For this case, we check whether the last offset is changed.
+            // If not, we didn't get any space from the operation.
+            int afterLastOffsetInLastFrame = currentOffsetInEachFrameList.get(gcInfo.currentGCWritePageForGC);
+            if (lastOffsetInLastFrame == afterLastOffsetInLastFrame) {
+                numberOfFramesToBeDeallocated = -1;
             }
         }
 

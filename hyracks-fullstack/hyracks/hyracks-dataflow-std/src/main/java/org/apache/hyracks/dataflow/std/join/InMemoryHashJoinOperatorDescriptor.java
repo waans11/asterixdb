@@ -203,15 +203,36 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
                             new TaskId(getActivityId(), partition));
                     ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                     state.joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpc0,
-                            new FrameTupleAccessor(rd1), hpc1, new FrameTuplePairComparator(keys0, keys1, comparators),
-                            isLeftOuter, nullWriters1, table, predEvaluator);
+                            new FrameTupleAccessor(rd1), rd1, hpc1,
+                            new FrameTuplePairComparator(keys0, keys1, comparators), isLeftOuter, nullWriters1, table,
+                            predEvaluator, bufferManager);
                 }
 
                 @Override
                 public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
-                    ByteBuffer copyBuffer = ctx.allocateFrame(buffer.capacity());
+                    ByteBuffer copyBuffer = allocateBuffer(buffer.capacity());
+                    // Temp:
+                    //                    ByteBuffer copyBuffer = ctx.allocateFrame(buffer.capacity());
                     FrameUtils.copyAndFlip(buffer, copyBuffer);
                     state.joiner.build(copyBuffer);
+                }
+
+                public ByteBuffer allocateBuffer(int frameSize) throws HyracksDataException {
+                    ByteBuffer newBuffer = bufferManager.acquireFrame(frameSize);
+                    if (newBuffer != null) {
+                        return newBuffer;
+                    }
+                    // There may be a chance if we can compact the hash table.
+                    // At least, one frame needs to be reclaimed when compacting the hash table.
+                    if (state.joiner.compactHashTable() > 0) {
+                        newBuffer = bufferManager.acquireFrame(frameSize);
+                        if (newBuffer != null) {
+                            return newBuffer;
+                        }
+                    }
+                    // null - couldn't get a buffer.
+                    throw new HyracksDataException(
+                            "Can't allocate more frames. Assign more memory to InMemoryHashJoin.");
                 }
 
                 @Override

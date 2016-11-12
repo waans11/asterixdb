@@ -22,7 +22,6 @@ import java.nio.ByteBuffer;
 import java.util.BitSet;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.hyracks.api.comm.FrameHelper;
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.comm.VSizeFrame;
@@ -100,7 +99,8 @@ public class OptimizedHybridHashJoin {
     private final FrameTupleAccessor accessorProbe;
 
     private IDeallocatableFramePool framePool;
-    private IDeallocatableFramePool framePoolForHashTable;
+    // Temp:
+    //    private IDeallocatableFramePool framePoolForHashTable;
     private ISimpleFrameBufferManager bufferManagerForHashTable;
 
     private boolean isReversed; //Added for handling correct calling for predicate-evaluator upon recursive calls that cause role-reversal
@@ -153,8 +153,10 @@ public class OptimizedHybridHashJoin {
 
     public void initBuild() throws HyracksDataException {
         framePool = new DeallocatableFramePool(ctx, memSizeInFrames * ctx.getInitialFrameSize());
-        framePoolForHashTable = new DeallocatableFramePool(ctx, memSizeInFrames * ctx.getInitialFrameSize());
-        bufferManagerForHashTable = new SimpleFrameBufferManager(framePoolForHashTable);
+        // Temp:
+        //        framePoolForHashTable = new DeallocatableFramePool(ctx, memSizeInFrames * ctx.getInitialFrameSize());
+        //        bufferManagerForHashTable = new SimpleFrameBufferManager(framePoolForHashTable);
+        bufferManagerForHashTable = new SimpleFrameBufferManager(framePool);
         bufferManager = new VPartitionTupleBufferManager(ctx,
                 PreferToSpillFullyOccupiedFramePolicy.createAtMostOneFrameForSpilledPartitionConstrain(spilledStatus),
                 numOfPartitions, framePool);
@@ -179,13 +181,12 @@ public class OptimizedHybridHashJoin {
     private void processTuple(int tid, int pid) throws HyracksDataException {
         while (!bufferManager.insertTuple(pid, accessorBuild, tid, tempPtr)) {
             int tupleLength = accessorBuild.getTupleLength(tid);
-            tupleLength = FrameHelper.calcRequiredSpace(accessorBuild.getFieldCount(), tupleLength);
-            selectAndSpillVictim(pid, tupleLength);
+            selectAndSpillVictim(pid);
         }
     }
 
-    private void selectAndSpillVictim(int pid, int requiredSize) throws HyracksDataException {
-        int victimPartition = spillPolicy.selectVictimPartition(pid, requiredSize);
+    private void selectAndSpillVictim(int pid) throws HyracksDataException {
+        int victimPartition = spillPolicy.selectVictimPartition(pid);
         if (victimPartition < 0) {
             throw new HyracksDataException(
                     "No more space left in the memory buffer, please give join more memory budgets.");
@@ -227,17 +228,13 @@ public class OptimizedHybridHashJoin {
 
         closeAllSpilledPartitions(SIDE.BUILD);
 
-        bringBackSpilledPartitionIfHasMoreMemory(); //Trying to bring back as many spilled partitions as possible, making them resident
-
-        int inMemTupCount = 0;
-
-        for (int i = spilledStatus.nextClearBit(0); i >= 0
-                && i < numOfPartitions; i = spilledStatus.nextClearBit(i + 1)) {
-            inMemTupCount += buildPSizeInTups[i];
-        }
+        // Makes the space for the hash table (some partitions can be spilled to the disk) and
+        // tries to bring back as many spilled partitions as possible, making them resident.
+        int inMemTupCount = makeSpaceForHashTableAndBringBackSpilledPartitions();
 
         createInMemoryJoiner(inMemTupCount);
-        cacheInMemJoin();
+
+        loadDataInMemJoin();
     }
 
     /**
@@ -271,21 +268,70 @@ public class OptimizedHybridHashJoin {
         }
     }
 
-    private void bringBackSpilledPartitionIfHasMoreMemory() throws HyracksDataException {
+    /**
+     * Makes the space for the hash table. If there is no enough space, one or more partitions will be spilled
+     * to the disk until the hash table can fit into the memory. After this, bring back spilled partitions
+     * if there is available memory.
+     *
+     * @return the number of tuples in memory
+     * @throws HyracksDataException
+     */
+    private int makeSpaceForHashTableAndBringBackSpilledPartitions() throws HyracksDataException {
         // we need number of |spilledPartitions| buffers to store the probe data
-        int freeSpace = (memSizeInFrames - spilledStatus.cardinality()) * ctx.getInitialFrameSize();
+        int frameSize = ctx.getInitialFrameSize();
+        int freeSpace = (memSizeInFrames - spilledStatus.cardinality()) * frameSize;
+
+        int inMemTupCount = 0;
         for (int p = spilledStatus.nextClearBit(0); p >= 0
                 && p < numOfPartitions; p = spilledStatus.nextClearBit(p + 1)) {
             freeSpace -= bufferManager.getPhysicalSize(p);
+            inMemTupCount += buildPSizeInTups[p];
+        }
+
+        // Calculate the expected hash table size for the given number of tuples so that it can be counted.
+        int hashTableSizeForInMemTuples = SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount,
+                ctx.getInitialFrameSize());
+        freeSpace -= hashTableSizeForInMemTuples;
+
+
+        // In the case where freeSpace is less than zero after considering the hash table size,
+        // we need to spill more partitions until we can accommodate the hash table in memory.
+        boolean moreSpilled = false;
+        if (freeSpace <= 0) {
+            for (int p = spilledStatus.nextClearBit(0); p >= 0
+                    && p < numOfPartitions; p = spilledStatus.nextClearBit(p + 1)) {
+                int spaceToBeReturned = bufferManager.getPhysicalSize(p);
+                int numberOfTuplesToBeSpilled = buildPSizeInTups[p];
+                spillPartition(p);
+                moreSpilled = true;
+                inMemTupCount -= numberOfTuplesToBeSpilled;
+                int expectedHashTableSizeDecrease = hashTableSizeForInMemTuples
+                        - SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount, frameSize);
+                freeSpace = freeSpace + spaceToBeReturned + expectedHashTableSizeDecrease;
+                if (freeSpace > 0) {
+                    break;
+                }
+            }
+        }
+
+        // If more partitions are spilled to the disk, calculate the expected hash table size again
+        // before bringing partitions to memory.
+        if (moreSpilled) {
+            hashTableSizeForInMemTuples = SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount, frameSize);
         }
 
         int pid = 0;
-        while ((pid = selectPartitionsToReload(freeSpace, pid)) >= 0) {
+        while ((pid = selectPartitionsToReload(freeSpace, pid, inMemTupCount, hashTableSizeForInMemTuples)) >= 0) {
             if (!loadPartitionInMem(pid, buildRFWriters[pid])) {
-                return;
+                break;
             }
-            freeSpace -= bufferManager.getPhysicalSize(pid);
+            inMemTupCount += buildPSizeInTups[pid];
+            int expectedHashTableSizeIncrease = SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount,
+                    frameSize) - hashTableSizeForInMemTuples;
+            freeSpace = freeSpace - bufferManager.getPhysicalSize(pid) - expectedHashTableSizeIncrease;
         }
+
+        return inMemTupCount;
     }
 
     private boolean loadPartitionInMem(int pid, RunFileWriter wr) throws HyracksDataException {
@@ -298,7 +344,8 @@ public class OptimizedHybridHashJoin {
             accessorBuild.reset(reloadBuffer.getBuffer());
             for (int tid = 0; tid < accessorBuild.getTupleCount(); tid++) {
                 if (!bufferManager.insertTuple(pid, accessorBuild, tid, tempPtr)) {
-                    // for some reason (e.g. due to fragmentation) if the inserting failed, we need to clear the occupied frames
+                    // for some reason (e.g. due to fragmentation) if the inserting failed,
+                    // we need to clear the occupied frames
                     bufferManager.clearPartition(pid);
                     r.close();
                     return false;
@@ -306,17 +353,22 @@ public class OptimizedHybridHashJoin {
             }
         }
 
-        FileUtils.deleteQuietly(wr.getFileReference().getFile()); // delete the runfile if it already loaded into memory.
+        // delete the runfile if it already loaded into memory.
+        FileUtils.deleteQuietly(wr.getFileReference().getFile());
         r.close();
         spilledStatus.set(pid, false);
         buildRFWriters[pid] = null;
         return true;
     }
 
-    private int selectPartitionsToReload(int freeSpace, int pid) {
+    private int selectPartitionsToReload(int freeSpace, int pid, int inMemTupCount, int originalHashTableSize) {
         for (int i = spilledStatus.nextSetBit(pid); i >= 0; i = spilledStatus.nextSetBit(i + 1)) {
             assert buildRFWriters[i].getFileSize() > 0 : "How comes a spilled partition have size 0?";
-            if (freeSpace >= buildRFWriters[i].getFileSize()) {
+            int spilledTupleCount = buildPSizeInTups[i];
+            // Expected hash table size after reloading this partition
+            int expectedHashTableSizeIncrease = SerializableHashTable.getExpectedTableSizeInByte(
+                    inMemTupCount + spilledTupleCount, ctx.getInitialFrameSize()) - originalHashTableSize;
+            if (freeSpace >= buildRFWriters[i].getFileSize() + expectedHashTableSizeIncrease) {
                 return i;
             }
         }
@@ -326,12 +378,12 @@ public class OptimizedHybridHashJoin {
     private void createInMemoryJoiner(int inMemTupCount) throws HyracksDataException {
         ISerializableTable table = new SerializableHashTable(inMemTupCount, ctx, bufferManagerForHashTable);
         this.inMemJoiner = new InMemoryHashJoin(ctx, inMemTupCount, new FrameTupleAccessor(probeRd), probeHpc,
-                new FrameTupleAccessor(buildRd), buildHpc,
+                new FrameTupleAccessor(buildRd), buildRd, buildHpc,
                 new FrameTuplePairComparator(probeKeys, buildKeys, comparators), isLeftOuter, nonMatchWriters, table,
-                predEvaluator, isReversed);
+                predEvaluator, isReversed, bufferManagerForHashTable);
     }
 
-    private void cacheInMemJoin() throws HyracksDataException {
+    private void loadDataInMemJoin() throws HyracksDataException {
 
         for (int pid = 0; pid < numOfPartitions; pid++) {
             if (!spilledStatus.get(pid)) {
@@ -419,10 +471,12 @@ public class OptimizedHybridHashJoin {
     }
 
     public void closeProbe(IFrameWriter writer) throws HyracksDataException {
-        //We do NOT join the spilled partitions here, that decision is made at the descriptor level (which join technique to use)
+        //We do NOT join the spilled partitions here, that decision is made at the descriptor level
+        //(which join technique to use)
         inMemJoiner.closeJoin(writer);
         closeAllSpilledPartitions(SIDE.PROBE);
         bufferManager = null;
+        bufferManagerForHashTable = null;
     }
 
     /**

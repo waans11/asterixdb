@@ -13,8 +13,8 @@
             "3": "ID:3, Original Node: asterix_nc2, IODevice: 1, Active Node: asterix_nc2"
         },
         "compiler.framesize": 32768,
-        "compiler.groupmemory": 163840,
-        "compiler.joinmemory": 163840,
+        "compiler.groupmemory": 327680,
+        "compiler.joinmemory": 327680,
         "compiler.pregelix.home": "~/pregelix",
         "compiler.sortmemory": 327680,
         "core.dump.paths": {},

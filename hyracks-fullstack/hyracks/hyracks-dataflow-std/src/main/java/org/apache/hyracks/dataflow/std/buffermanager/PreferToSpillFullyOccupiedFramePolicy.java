@@ -50,7 +50,7 @@ public class PreferToSpillFullyOccupiedFramePolicy {
      * is always evaluated to true. i.e. we need to spill an in-memory partition anyway.
      * But, when we will have another policy, the if statement will make more sense.
      */
-    public int selectVictimPartition(int failedToInsertPartition, int requiredSize) {
+    public int selectVictimPartition(int failedToInsertPartition) {
         // To avoid flush a half-full frame, it's better to spill itself.
         if (bufferManager.getNumTuples(failedToInsertPartition) > 0) {
             // Temp: to be deleted

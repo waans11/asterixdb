@@ -65,6 +65,16 @@ public interface ISerializableTable {
 
     boolean isGarbageCollectionNeeded();
 
+    /**
+     * Execute the garbage collection of the given table.
+     *
+     * @param bufferAccessor:
+     *            required to access the real tuple to calculate the original hash value
+     * @param tpc:
+     *            hash function
+     * @return the number of frames that are reclaimed.
+     * @throws HyracksDataException
+     */
     int executeGarbageCollection(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
             throws HyracksDataException;
 }

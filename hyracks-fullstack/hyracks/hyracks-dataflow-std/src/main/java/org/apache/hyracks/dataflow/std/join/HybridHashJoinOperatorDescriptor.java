@@ -317,8 +317,9 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                     bufferManager = new SimpleFrameBufferManager(framePool);
                     ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                     state.joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpc0,
-                            new FrameTupleAccessor(rd1), hpc1, new FrameTuplePairComparator(keys0, keys1, comparators),
-                            isLeftOuter, nullWriters1, table, predEvaluator);
+                            new FrameTupleAccessor(rd1), rd1, hpc1,
+                            new FrameTuplePairComparator(keys0, keys1, comparators), isLeftOuter, nullWriters1, table,
+                            predEvaluator, bufferManager);
                     bufferForPartitions = new IFrame[state.nPartitions];
                     state.fWriters = new RunFileWriter[state.nPartitions];
                     for (int i = 0; i < state.nPartitions; i++) {
@@ -513,9 +514,9 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                                 }
                                 table.reset();
                                 InMemoryHashJoin joiner = new InMemoryHashJoin(ctx, tableSize,
-                                        new FrameTupleAccessor(rd0), hpcRep0, new FrameTupleAccessor(rd1), hpcRep1,
+                                        new FrameTupleAccessor(rd0), hpcRep0, new FrameTupleAccessor(rd1), rd1, hpcRep1,
                                         new FrameTuplePairComparator(keys0, keys1, comparators), isLeftOuter,
-                                        nullWriters1, table, predEvaluator);
+                                        nullWriters1, table, predEvaluator, bufferManager);
 
                                 if (buildWriter != null) {
                                     RunFileReader buildReader = buildWriter.createDeleteOnCloseReader();

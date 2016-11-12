@@ -68,19 +68,19 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             RecordDescriptor inRecordDescriptor, RecordDescriptor outRecordDescriptor, final int framesLimit,
             final int seed) throws HyracksDataException {
         final int tableSize = suggestTableSize;
-        final int budgetByteSize = framesLimit * ctx.getInitialFrameSize();
 
         // We check whether the given table size is within the budget of groupFrameLimit.
-        int expectedByteSizeOfHashTableForGroupBy = SerializableHashTable.getExpectedByteSizeOfHashTable(tableSize,
+        int expectedFrameCountOfHashTableForGroupBy = SerializableHashTable.getExpectedTableSizeInFrame(tableSize,
                 ctx.getInitialFrameSize());
 
         // For HashTable, we need to have at least two frames (one for header and one for content).
         // For DataTable, we need to have at least two frames.
         // The expected hash table size should be within the budget.
-        if (framesLimit < MIN_FRAME_LIMT || expectedByteSizeOfHashTableForGroupBy >= budgetByteSize) {
+        if (framesLimit < MIN_FRAME_LIMT || expectedFrameCountOfHashTableForGroupBy + 2 > framesLimit) {
             // Temp:
-//            System.out.println("buildSpillableTable: " + tableSize + " " + expectedByteSizeOfHashTableForGroupBy + " "
-//                    + budgetByteSize);
+            System.out.println("===== buildSpillableTable error: " + tableSize + " "
+                    + expectedFrameCountOfHashTableForGroupBy
+                    + " " + framesLimit);
             throw new HyracksDataException("The given frame limit is too small to partition the data.");
         }
 
@@ -111,8 +111,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         //TODO(jf) research on the optimized partition size
         // Since the memory budget is shared between the data table and hash table, when calculating the number of
         // partitions, we should not make a case where the number of partitions is one.
-        int memoryBudget = Math.max(MIN_FRAME_LIMT,
-                framesLimit - 1 - (expectedByteSizeOfHashTableForGroupBy / ctx.getInitialFrameSize()));
+        int memoryBudget = Math.max(MIN_FRAME_LIMT, framesLimit - 1 - expectedFrameCountOfHashTableForGroupBy);
 
         final int numPartitions = getNumOfPartitions((int) (inputDataBytesSize / ctx.getInitialFrameSize()),
                 memoryBudget);
@@ -329,8 +328,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 // Temp: to be deleted
 //                System.out.println("HashSpillableTableFactory::findVictimPartition h " + entryInHashTable
 //                        + "  partition " + partition);
-                int tupleSize = accessor.getTupleLength(tIndex);
-                return spillPolicy.selectVictimPartition(partition, tupleSize);
+                return spillPolicy.selectVictimPartition(partition);
             }
         };
     }
