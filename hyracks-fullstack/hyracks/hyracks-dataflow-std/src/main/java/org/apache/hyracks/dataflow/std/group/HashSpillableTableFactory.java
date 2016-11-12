@@ -56,6 +56,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
     private static final long serialVersionUID = 1L;
     private final IBinaryHashFunctionFamily[] hashFunctionFamilies;
     private static final int MIN_FRAME_LIMT = 4;
+    private static final int MIN_DATA_TABLE_FRAME_LIMT = 2;
 
     public HashSpillableTableFactory(IBinaryHashFunctionFamily[] hashFunctionFamilies) {
         this.hashFunctionFamilies = hashFunctionFamilies;
@@ -76,7 +77,8 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         // For HashTable, we need to have at least two frames (one for header and one for content).
         // For DataTable, we need to have at least two frames.
         // The expected hash table size should be within the budget.
-        if (framesLimit < MIN_FRAME_LIMT || expectedFrameCountOfHashTableForGroupBy + 2 > framesLimit) {
+        if (framesLimit < MIN_FRAME_LIMT
+                || expectedFrameCountOfHashTableForGroupBy + MIN_DATA_TABLE_FRAME_LIMT > framesLimit) {
             // Temp:
             //            System.out.println("===== buildSpillableTable error: " + tableSize + " "
             //                    + expectedFrameCountOfHashTableForGroupBy
