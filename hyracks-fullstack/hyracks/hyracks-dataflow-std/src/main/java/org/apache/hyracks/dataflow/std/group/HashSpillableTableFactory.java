@@ -78,9 +78,9 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         // The expected hash table size should be within the budget.
         if (framesLimit < MIN_FRAME_LIMT || expectedFrameCountOfHashTableForGroupBy + 2 > framesLimit) {
             // Temp:
-            System.out.println("===== buildSpillableTable error: " + tableSize + " "
-                    + expectedFrameCountOfHashTableForGroupBy
-                    + " " + framesLimit);
+            //            System.out.println("===== buildSpillableTable error: " + tableSize + " "
+            //                    + expectedFrameCountOfHashTableForGroupBy
+            //                    + " " + framesLimit);
             throw new HyracksDataException("The given frame limit is too small to partition the data.");
         }
 
