@@ -58,9 +58,9 @@ import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.FramePoolBackedFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
-import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -311,10 +311,10 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                             .createPartitioner();
                     ITuplePartitionComputer hpc1 = new FieldHashPartitionComputerFactory(keys1, hashFunctionFactories)
                             .createPartitioner();
-                    int tableSize = (int) (memSizeInFrames * recordsPerFrame * factor);
+                    int tableSize = (int) (state.memoryForHashtable * recordsPerFrame * factor);
                     int memSizeInBytes = memSizeInFrames * ctx.getInitialFrameSize();
                     framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
-                    bufferManager = new SimpleFrameBufferManager(framePool);
+                    bufferManager = new FramePoolBackedFrameBufferManager(framePool);
                     ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                     state.joiner = new InMemoryHashJoin(ctx, tableSize, new FrameTupleAccessor(rd0), hpc0,
                             new FrameTupleAccessor(rd1), rd1, hpc1,
@@ -504,7 +504,7 @@ public class HybridHashJoinOperatorDescriptor extends AbstractOperatorDescriptor
                             memSizeInBytesForHashTable = memSizeInFrames * ctx.getInitialFrameSize();
                             IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx,
                                     memSizeInBytesForHashTable);
-                            ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
+                            ISimpleFrameBufferManager bufferManager = new FramePoolBackedFrameBufferManager(framePool);
                             ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
                             for (int partitionid = 0; partitionid < state.nPartitions; partitionid++) {
                                 RunFileWriter buildWriter = buildWriters[partitionid];

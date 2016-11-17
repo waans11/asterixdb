@@ -37,12 +37,12 @@ import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.data.partition.FieldHashPartitionComputerFamily;
 import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.FramePoolBackedFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.IPartitionedTupleBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.ITuplePointerAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.PreferToSpillFullyOccupiedFramePolicy;
-import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.VPartitionTupleBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
@@ -55,8 +55,9 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
     private static final double FUDGE_FACTOR = 1.1;
     private static final long serialVersionUID = 1L;
     private final IBinaryHashFunctionFamily[] hashFunctionFamilies;
-    private static final int MIN_FRAME_LIMT = 4;
     private static final int MIN_DATA_TABLE_FRAME_LIMT = 2;
+    private static final int MIN_HASH_TABLE_FRAME_LIMT = 2;
+    private static final int MIN_FRAME_LIMT = MIN_DATA_TABLE_FRAME_LIMT + MIN_HASH_TABLE_FRAME_LIMT;
 
     public HashSpillableTableFactory(IBinaryHashFunctionFamily[] hashFunctionFamilies) {
         this.hashFunctionFamilies = hashFunctionFamilies;
@@ -70,19 +71,15 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             final int seed) throws HyracksDataException {
         final int tableSize = suggestTableSize;
 
-        // We check whether the given table size is within the budget of groupFrameLimit.
+        // We check whether the given table size is within the budget of the groupFrameLimit.
         int expectedFrameCountOfHashTableForGroupBy = SerializableHashTable.getExpectedTableSizeInFrame(tableSize,
                 ctx.getInitialFrameSize());
 
         // For HashTable, we need to have at least two frames (one for header and one for content).
         // For DataTable, we need to have at least two frames.
-        // The expected hash table size should be within the budget.
+        // Also, the expected hash table size should be within the budget.
         if (framesLimit < MIN_FRAME_LIMT
                 || expectedFrameCountOfHashTableForGroupBy + MIN_DATA_TABLE_FRAME_LIMT > framesLimit) {
-            // Temp:
-            //            System.out.println("===== buildSpillableTable error: " + tableSize + " "
-            //                    + expectedFrameCountOfHashTableForGroupBy
-            //                    + " " + framesLimit);
             throw new HyracksDataException("The given frame limit is too small to partition the data.");
         }
 
@@ -134,24 +131,21 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             private final IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx,
                     framesLimit * ctx.getInitialFrameSize());
             // buffer manager for hash table
-            private final ISimpleFrameBufferManager bufferManagerForHashTable = new SimpleFrameBufferManager(framePool);
+            private final ISimpleFrameBufferManager bufferManagerForHashTable = new FramePoolBackedFrameBufferManager(
+                    framePool);
 
             private final ISerializableTable hashTableForTuplePointer = new SerializableHashTable(tableSize, ctx,
                     bufferManagerForHashTable);
-            private boolean needToCheckGarbageCollection = true;
-
-            // Temp: to be deleted
-//            int count = 0;
 
             // buffer manager for data table
-            final IPartitionedTupleBufferManager bufferManager = new VPartitionTupleBufferManager(ctx,
+            final IPartitionedTupleBufferManager bufferManager = new VPartitionTupleBufferManager(
                     PreferToSpillFullyOccupiedFramePolicy.createAtMostOneFrameForSpilledPartitionConstrain(spilledSet),
                     numPartitions, framePool);
 
             final ITuplePointerAccessor bufferAccessor = bufferManager.getTuplePointerAccessor(outRecordDescriptor);
 
             private final PreferToSpillFullyOccupiedFramePolicy spillPolicy = new PreferToSpillFullyOccupiedFramePolicy(
-                    bufferManager, spilledSet, ctx.getInitialFrameSize());
+                    bufferManager, spilledSet);
 
             private final FrameTupleAppender outputAppender = new FrameTupleAppender(new VSizeFrame(ctx));
 
@@ -166,12 +160,9 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 for (int p = getFirstEntryInHashTable(partition); p < getLastEntryInHashTable(partition); p++) {
                     hashTableForTuplePointer.delete(p);
                 }
-                // Temp:
-//                System.out.println("HashTable clear: Deleted from " + getFirstEntryInHashTable(partition) + " to "
-//                        + getLastEntryInHashTable(partition));
 
-                //                 Check whether the garbage collection is required and conduct a garbage collection if so.
-                if (needToCheckGarbageCollection && hashTableForTuplePointer.isGarbageCollectionNeeded()) {
+                // Check whether the garbage collection is required and conduct a garbage collection if so.
+                if (hashTableForTuplePointer.isGarbageCollectionNeeded()) {
                     int numberOfFramesReclaimed = hashTableForTuplePointer.executeGarbageCollection(bufferAccessor,
                             tpcIntermediate);
                     if (LOGGER.isLoggable(Level.FINE)) {
@@ -181,9 +172,6 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 }
 
                 bufferManager.clearPartition(partition);
-                // Temp:
-//                System.out.println("DataTable clear: partition " + partition);
-                needToCheckGarbageCollection = false;
             }
 
             private int getPartition(int entryInHashTable) {
@@ -201,24 +189,22 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             @Override
             public boolean insert(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException {
                 int entryInHashTable = tpc.partition(accessor, tIndex, tableSize);
-                // Temp: to be deleted
-//                System.out.println("insert() h:" + entryInHashTable + " tIndex " + tIndex + " at partition "
-//                        + getPartition(entryInHashTable));
                 for (int i = 0; i < hashTableForTuplePointer.getTupleCount(entryInHashTable); i++) {
                     hashTableForTuplePointer.getTuplePointer(entryInHashTable, i, pointer);
                     bufferAccessor.reset(pointer);
                     int c = ftpcInputCompareToAggregate.compare(accessor, tIndex, bufferAccessor);
                     if (c == 0) {
                         aggregateExistingTuple(accessor, tIndex, bufferAccessor, pointer.getTupleIndex());
-                        // Temp: to be deleted
-//                        count++;
-//                        System.out.println("aggregateExistingTuple done - current count: " + count);
                         return true;
                     }
                 }
                 return insertNewAggregateEntry(entryInHashTable, accessor, tIndex);
             }
 
+            /**
+             * Insert a new aggregate entry into the data table and hash table.
+             * This insertion must be an atomic operation. We cannot have partial success (failure).
+             */
             private boolean insertNewAggregateEntry(int entryInHashTable, IFrameTupleAccessor accessor,
                     int tIndex)
                     throws HyracksDataException {
@@ -227,22 +213,16 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
 
                 if (!bufferManager.insertTuple(pid, stateTupleBuilder.getByteArray(),
                         stateTupleBuilder.getFieldEndOffsets(), 0, stateTupleBuilder.getSize(), pointer)) {
-                    // Temp:
-//                    System.out.println(
-//                            "insertNewAggregateEntry : insert into the data table failed. This is #" + (count + 1));
                     return false;
                 }
 
                 if (!hashTableForTuplePointer.insert(entryInHashTable, pointer)) {
+                    // To preserve the atomicity of this method, we need to undo the effect
+                    // of the above bufferManager.insertTuple() call.
                     bufferManager.cancelInsertTuple(pid);
-                    // Temp:
-//                    System.out.println(
-//                            "insertNewAggregateEntry : insert into the hash table failed. This #" + (count + 1));
                     return false;
                 }
 
-                // Temp:
-                //                count++;
                 return true;
             }
 
@@ -265,10 +245,6 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 for (int hashEntryPid = getFirstEntryInHashTable(partition); hashEntryPid < getLastEntryInHashTable(
                         partition); hashEntryPid++) {
                     count += hashTableForTuplePointer.getTupleCount(hashEntryPid);
-                    // Temp:
-                    //                    System.out.println("flushFrames() h" + hashEntryPid + " count "
-                    //                            + hashTableForTuplePointer.getTupleCount(hashEntryPid) + " total " + count);
-
                     for (int tid = 0; tid < hashTableForTuplePointer.getTupleCount(hashEntryPid); tid++) {
                         hashTableForTuplePointer.getTuplePointer(hashEntryPid, tid, pointer);
                         bufferAccessor.reset(pointer);
@@ -315,9 +291,6 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             public int findVictimPartition(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException {
                 int entryInHashTable = tpc.partition(accessor, tIndex, tableSize);
                 int partition = getPartition(entryInHashTable);
-                // Temp: to be deleted
-//                System.out.println("HashSpillableTableFactory::findVictimPartition h " + entryInHashTable
-//                        + "  partition " + partition);
                 return spillPolicy.selectVictimPartition(partition);
             }
         };
@@ -342,8 +315,6 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             numberOfPartitions = (int) Math.ceil(Math.sqrt(nubmerOfInputFrames * FUDGE_FACTOR));
             return Math.max(2, Math.min(numberOfPartitions, frameLimit));
         }
-        // Temp:
-        //        System.out.println(nubmerOfInputFrames + " " + frameLimit + "  " + numberOfPartitions);
         return numberOfPartitions;
     }
 

@@ -42,7 +42,7 @@ import org.apache.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNod
 import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
-import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
+import org.apache.hyracks.dataflow.std.buffermanager.FramePoolBackedFrameBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -117,7 +117,7 @@ class GraceHashJoinOperatorNodePushable extends AbstractUnaryOutputSourceOperato
             int tableSize = (int) (numPartitions * recordsPerFrame * factor);
             int memSizeInBytes = memSizeInFrames * ctx.getInitialFrameSize();
             IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
-            ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
+            ISimpleFrameBufferManager bufferManager = new FramePoolBackedFrameBufferManager(framePool);
 
             ISerializableTable table = new SerializableHashTable(tableSize, ctx, bufferManager);
 

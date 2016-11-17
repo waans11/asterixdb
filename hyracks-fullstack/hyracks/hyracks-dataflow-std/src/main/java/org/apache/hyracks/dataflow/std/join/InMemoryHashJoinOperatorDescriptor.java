@@ -50,9 +50,9 @@ import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.FramePoolBackedFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
-import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -188,7 +188,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
 
             final int memSizeInBytes = memSizeInFrames * ctx.getInitialFrameSize();
             final IDeallocatableFramePool framePool = new DeallocatableFramePool(ctx, memSizeInBytes);
-            final ISimpleFrameBufferManager bufferManager = new SimpleFrameBufferManager(framePool);
+            final ISimpleFrameBufferManager bufferManager = new FramePoolBackedFrameBufferManager(framePool);
 
             IOperatorNodePushable op = new AbstractUnaryInputSinkOperatorNodePushable() {
                 private HashBuildTaskState state;
@@ -211,8 +211,6 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
                 @Override
                 public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
                     ByteBuffer copyBuffer = allocateBuffer(buffer.capacity());
-                    // Temp:
-                    //                    ByteBuffer copyBuffer = ctx.allocateFrame(buffer.capacity());
                     FrameUtils.copyAndFlip(buffer, copyBuffer);
                     state.joiner.build(copyBuffer);
                 }
@@ -222,17 +220,16 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
                     if (newBuffer != null) {
                         return newBuffer;
                     }
-                    // There may be a chance if we can compact the hash table.
-                    // At least, one frame needs to be reclaimed when compacting the hash table.
+                    // There may be a chance if we can compact the table, one or more frame may be reclaimed.
                     if (state.joiner.compactHashTable() > 0) {
                         newBuffer = bufferManager.acquireFrame(frameSize);
                         if (newBuffer != null) {
                             return newBuffer;
                         }
                     }
-                    // null - couldn't get a buffer.
+                    // At this point, we have no way to get a frame.
                     throw new HyracksDataException(
-                            "Can't allocate more frames. Assign more memory to InMemoryHashJoin.");
+                            "Can't allocate one more frame. Assign more memory to InMemoryHashJoin.");
                 }
 
                 @Override

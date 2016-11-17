@@ -105,15 +105,6 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
 
     private void doPass(ISpillableTable table, RunFileWriter[] runs, int[] numOfTuples, IFrameWriter writer, int level)
             throws HyracksDataException {
-        // Temp: to be deleted
-//        int count = 0;
-//        for (int i = 0; i < numOfTuples.length; i++) {
-//            count += numOfTuples[i];
-//        }
-//        System.out.println(
-//                "\n\n======ExternalGroupWriteOperatorNodePushable:: doPass " + " numOfTuples " + count + " level "
-//                        + level);
-
         assert table.getNumPartitions() == runs.length;
         for (int i = 0; i < runs.length; i++) {
             if (runs[i] == null) {

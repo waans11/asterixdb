@@ -27,9 +27,10 @@ import static org.junit.Assert.assertNull;
 
 import java.util.HashSet;
 
-import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.junit.Before;
 import org.junit.Test;
+
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 public class DeletableFramePoolTest extends AbstractFramePoolTest {
 

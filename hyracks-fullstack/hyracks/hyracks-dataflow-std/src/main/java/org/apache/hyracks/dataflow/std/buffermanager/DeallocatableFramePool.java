@@ -54,21 +54,11 @@ public class DeallocatableFramePool implements IDeallocatableFramePool {
     public ByteBuffer allocateFrame(int frameSize) throws HyracksDataException {
         ByteBuffer buffer = findExistingFrame(frameSize);
         if (buffer != null) {
-            // Temp:
-//            System.out.println("DeallocatableFramePool::allocateFrame memBudget " + memBudget + " allocated "
-//                    + allocated + " buffers.size() " + buffers.size() + " case: an existing buffer found");
             return buffer;
         }
         if (haveEnoughFreeSpace(frameSize)) {
-            // Temp:
-//            System.out
-//                    .println("DeallocatableFramePool::allocateFrame memBudget " + memBudget + " allocated " + allocated
-//                            + " buffers.size() " + buffers.size() + " case: new frame size " + frameSize + " created.");
             return createNewFrame(frameSize);
         }
-        // Temp:
-//        System.out.println("DeallocatableFramePool::allocateFrame memBudget " + memBudget + " allocated " + allocated
-//                + " buffers.size() " + buffers.size() + " case: trying to merge.");
         return mergeExistingFrames(frameSize);
     }
 
@@ -81,15 +71,9 @@ public class DeallocatableFramePool implements IDeallocatableFramePool {
             ctx.deallocateFrames(buffer.capacity());
             allocated -= buffer.capacity();
             if (mergedSize >= frameSize) {
-                // Temp:
-//                System.out.println("DeallocatableFramePool::allocateFrame memBudget " + memBudget + " allocated "
-//                        + allocated + " buffers.size() " + buffers.size() + " case: merged frame found " + mergedSize);
                 return createNewFrame(mergedSize);
             }
         }
-        // Temp:
-//        System.out.println("DeallocatableFramePool::allocateFrame memBudget " + memBudget + " allocated " + allocated
-//                + " buffers.size() " + buffers.size() + " case: faii");
         return null;
 
     }
@@ -136,5 +120,4 @@ public class DeallocatableFramePool implements IDeallocatableFramePool {
         buffers.clear();
         allocated = 0;
     }
-
 }

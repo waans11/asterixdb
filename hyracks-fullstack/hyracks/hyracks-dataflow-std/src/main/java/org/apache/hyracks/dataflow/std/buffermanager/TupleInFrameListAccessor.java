@@ -28,6 +28,9 @@ import org.apache.hyracks.dataflow.std.sort.util.DeletableFrameTupleAppender;
 import org.apache.hyracks.dataflow.std.sort.util.IAppendDeletableFrameTupleAccessor;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 
+/**
+ * tuple accessor class for a frame in a frame list using a tuple pointer.
+ */
 public class TupleInFrameListAccessor extends AbstractTuplePointerAccessor {
 
     private IAppendDeletableFrameTupleAccessor bufferAccessor;

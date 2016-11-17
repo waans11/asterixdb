@@ -715,7 +715,7 @@ public class TPCHCustomerOrderHashJoinTest extends AbstractIntegrationTest {
 
         GraceHashJoinOperatorDescriptor join = new GraceHashJoinOperatorDescriptor(
                 spec,
-                3,
+                10,
                 20,
                 100,
                 1.2,

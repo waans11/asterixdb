@@ -30,62 +30,40 @@ public class PreferToSpillFullyOccupiedFramePolicy {
 
     private final IPartitionedTupleBufferManager bufferManager;
     private final BitSet spilledStatus;
-    private final int minFrameSize;
 
-    public PreferToSpillFullyOccupiedFramePolicy(IPartitionedTupleBufferManager bufferManager, BitSet spilledStatus,
-            int minFrameSize) {
+    public PreferToSpillFullyOccupiedFramePolicy(IPartitionedTupleBufferManager bufferManager, BitSet spilledStatus) {
         this.bufferManager = bufferManager;
         this.spilledStatus = spilledStatus;
-        this.minFrameSize = minFrameSize;
     }
 
     /**
-     * This method tries to find a victim partition from the already spilled partitions.
-     * The reason is that we want to keep in-memory partition (not spilled to the disk yet) as long as possible
-     * to reduce the overhead of writing to and reading from disk.
-     * If we couldn't find an already spilled partition, or it is too small to flush that one,
-     * try to flush an in memory partition.
+     * This method tries to find a victim partition.
+     * We want to keep in-memory partitions (not spilled to the disk yet) as long as possible to reduce the overhead
+     * of writing to and reading from the disk.
+     * If the given partition contains one or more tuple, then try to spill the given partition.
+     * If not, try to flush another an in-memory partition.
      * Note: right now, the createAtMostOneFrameForSpilledPartitionConstrain we are using for a spilled partition
-     * enforces that the number of maximum frame for a spilled partition is 1. So, the second if statement
-     * is always evaluated to true. i.e. we need to spill an in-memory partition anyway.
-     * But, when we will have another policy, the if statement will make more sense.
+     * enforces that the number of maximum frame for a spilled partition is 1.
      */
     public int selectVictimPartition(int failedToInsertPartition) {
-        // To avoid flush a half-full frame, it's better to spill itself.
+        // To avoid flushing another partition with the last half-full frame, it's better to spill the given partition
+        // since one partition needs to be spilled to the disk anyway. The given partition may have been flushed
+        // to the disk one or multiple times or but it's OK.
         if (bufferManager.getNumTuples(failedToInsertPartition) > 0) {
-            // Temp: to be deleted
-//            System.out.println(
-//                    "PreferToSpillFullyOccupiedFramePolicy::selectVictimPartition failedToInsertPartition "
-//                            + failedToInsertPartition);
             return failedToInsertPartition;
         }
-        // If we couldn't find an already spilled partition, or it is too small to flush that one,
-        // try to flush an in memory partition.
-        int partitionToSpill = findSpilledPartitionWithMaxMemoryUsage();
-        // Temp: to be deleted
-//        System.out.println("partitionToSpill " + partitionToSpill);
-        int maxToSpillPartSize = 0;
-        if (partitionToSpill < 0
-                || (maxToSpillPartSize = bufferManager.getPhysicalSize(partitionToSpill)) <= minFrameSize) {
-            int partitionInMem = findInMemPartitionWithMaxMemoryUsage();
-            if (partitionInMem >= 0 && bufferManager.getPhysicalSize(partitionInMem) > maxToSpillPartSize) {
-                partitionToSpill = partitionInMem;
-            }
-        }
-        // Temp: to be deleted
-//        System.out.println("partitionToSpill " + partitionToSpill);
-        return partitionToSpill;
+        // If the given partition doesn't contain any tuple in memory, try to flush a different in-memory partition.
+        // We are not trying to steal a frame from another spilled partition since once spilled, a partition can only
+        // have only one frame and we don't know whether it's fully occupied or not. Once we change this policy,
+        // we need to revise this method, too.
+        return findInMemPartitionWithMaxMemoryUsage();
     }
 
     public int findInMemPartitionWithMaxMemoryUsage() {
-        // Temp: to be deleted
-//        System.out.println("findInMemPartitionWithMaxMemoryUsage");
         return findMaxSize(spilledStatus.nextClearBit(0), (i) -> spilledStatus.nextClearBit(i + 1));
     }
 
     public int findSpilledPartitionWithMaxMemoryUsage() {
-        // Temp: to be deleted
-//        System.out.println("findSpilledPartitionWithMaxMemoryUsage");
         return findMaxSize(spilledStatus.nextSetBit(0), (i) -> spilledStatus.nextSetBit(i + 1));
     }
 
@@ -94,20 +72,16 @@ public class PreferToSpillFullyOccupiedFramePolicy {
         int max = 0;
         for (int i = startIndex; i >= 0 && i < bufferManager.getNumPartitions(); i = nextIndexOp.applyAsInt(i)) {
             int partSize = bufferManager.getPhysicalSize(i);
-            // Temp: to be deleted
-//            System.out.println(i + " partSize " + partSize);
             if (partSize > max) {
                 max = partSize;
                 pid = i;
             }
         }
-        // Temp: to be deleted
-//        System.out.println("findMaxSize " + pid + " " + max);
         return pid;
     }
 
     /**
-     * Create an constrain for the already spilled partition that it can only use at most one frame.
+     * Create a constrain for the already spilled partition that it can only use at most one frame.
      *
      * @param spillStatus
      * @return

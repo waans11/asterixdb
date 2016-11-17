@@ -280,10 +280,6 @@ public class SerializableHashTable implements ISerializableTable {
                 if (currentLargestFrameNumber >= contents.size() - 1) {
                     ByteBuffer newFrame = bufferManager.acquireFrame(frameSize);
                     if (newFrame == null) {
-                        // Temp:
-                        //                        System.out.println("HashTable insertNewEntry:: capacity " + entryCapacity + " fails. frameSize "
-                        //                                + frameSize + " current #frames: " + (currentByteSize / frameSize) + " total Byte "
-                        //                                + currentByteSize);
                         return false;
                     }
                     newContentFrame = new IntSerDeBuffer(newFrame);
@@ -402,15 +398,11 @@ public class SerializableHashTable implements ISerializableTable {
                 tIndex = contentFrame.getInt(startOffsetInContentFrame + 1);
                 tempTuplePointer.reset(fIndex, tIndex);
                 if (!insertNonFirstTuple(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex, tempTuplePointer)) {
-                    // Temp:
-                    //                    System.out.println("insertNonFirstTuple error!!!!!");
                     return false;
                 }
             }
             // Now, insert the new entry that caused an overflow to the old bucket.
             if (!insertNonFirstTuple(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex, pointer)) {
-                // Temp:
-                //                System.out.println("insertNonFirstTuple error!!!!!");
                 return false;
             }
             wastedIntSpaceCount += capacity;
@@ -458,7 +450,7 @@ public class SerializableHashTable implements ISerializableTable {
         int numberOfHeaderFrame = (int) (Math.ceil((double) tableSize * 2 / (double) frameSize));
         int numberOfContentFrame = (int) (Math
                 .ceil(((double) getNumberOfEntryInSlot() * 2 * getUnitSize() * tableSize) / (double) frameSize));
-        return (numberOfHeaderFrame + numberOfContentFrame);
+        return numberOfHeaderFrame + numberOfContentFrame;
     }
 
     public static int getExpectedTableSizeInByte(int tableSize, int frameSize) {

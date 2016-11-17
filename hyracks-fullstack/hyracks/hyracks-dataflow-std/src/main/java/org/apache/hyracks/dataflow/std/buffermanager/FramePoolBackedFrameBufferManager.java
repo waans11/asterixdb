@@ -27,11 +27,11 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
  * This is a simple frame based buffer manager that uses a deallocatable frame pool.
  * We assume that the list of assigned buffers are managed by another classes that call the methods of this class.
  */
-public class SimpleFrameBufferManager implements ISimpleFrameBufferManager {
+public class FramePoolBackedFrameBufferManager implements ISimpleFrameBufferManager {
 
     private final IDeallocatableFramePool framePool;
 
-    public SimpleFrameBufferManager(IDeallocatableFramePool framePool) {
+    public FramePoolBackedFrameBufferManager(IDeallocatableFramePool framePool) {
         this.framePool = framePool;
     }
 

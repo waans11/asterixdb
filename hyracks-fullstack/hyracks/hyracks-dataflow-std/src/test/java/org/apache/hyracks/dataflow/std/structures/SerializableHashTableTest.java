@@ -29,7 +29,7 @@ import org.apache.hyracks.control.nc.resources.memory.FrameManager;
 import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
-import org.apache.hyracks.dataflow.std.buffermanager.SimpleFrameBufferManager;
+import org.apache.hyracks.dataflow.std.buffermanager.FramePoolBackedFrameBufferManager;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -47,7 +47,7 @@ public class SerializableHashTableTest {
     public void setup() throws HyracksDataException {
         ctx = new FrameManager(256);
         framePool = new DeallocatableFramePool(ctx, ctx.getInitialFrameSize() * 2048);
-        bufferManager = new SimpleFrameBufferManager(framePool);
+        bufferManager = new FramePoolBackedFrameBufferManager(framePool);
         nsTable = new SerializableHashTable(NUM_PART, ctx, bufferManager);
     }
 

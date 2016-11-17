@@ -258,9 +258,10 @@ public class ExternalGroupByPOperator extends AbstractPhysicalOperator {
                 .variablesToAscNormalizedKeyComputerFactory(gbyCols, aggOpInputEnv, context);
 
         // Calculate the hash table size (# of unique hash values) based on the budget and a tuple size.
-        int memoryBudget = context.getFrameSize() * frameLimit;
+        int memoryBudgetInBytes = context.getFrameSize() * frameLimit;
         int groupByColumnsCount = gby.getGroupByList().size() + numFds;
-        int hashTableSize = calculateGroupByTableEntrySize(memoryBudget, groupByColumnsCount);
+        int hashTableSize = calculateGroupByTableEntrySize(memoryBudgetInBytes, groupByColumnsCount,
+                context.getFrameSize());
 
         ExternalGroupOperatorDescriptor gbyOpDesc = new ExternalGroupOperatorDescriptor(spec, hashTableSize, inputSize,
                 keyAndDecFields, frameLimit, comparatorFactories, normalizedKeyFactory, aggregatorFactory, mergeFactory,
@@ -283,44 +284,43 @@ public class ExternalGroupByPOperator extends AbstractPhysicalOperator {
     }
 
     /**
-     * Based on a rough estimation of a tuple (each field size: 4 bytes) and possible hash values
+     * Based on a rough estimation of a tuple (each field size: 4 bytes) size and the number of possible hash values
      * for the given number of group-by columns, calculate the number of hash entries for the hash table in Group-by.
-     * The formula is MIN(# of hash values, # of possible tuples in the data table).
+     * The formula is min(# of hash values, # of possible tuples in the data table).
      * We assume that the group-by table consists of hash table that stores hash value of tuple pointer and data table
      * actually stores the aggregated tuple.
      * For more details, refer to this JIRA issue: https://issues.apache.org/jira/browse/ASTERIXDB-1556
      *
-     * @param memoryBudget
+     * @param memoryBudgetInBytes
      * @param numberOfGroupByColumns
      * @return group-by table size (the cardinality of group-by table)
      */
-    public static int calculateGroupByTableEntrySize(int memoryBudget, int numberOfGroupByColumns) {
-        // Estimate a tuple size with n fields:
+    public static int calculateGroupByTableEntrySize(int memoryBudgetInBytes, int numberOfGroupByColumns,
+            int frameSize) {
+        // Estimate a minimum tuple size with n fields:
         // (4:tuple offset in a frame, 4n:each field offset in a tuple, 4n:each field size 4 bytes)
         int tupleByteSize = 4 + 8 * numberOfGroupByColumns;
 
-        int maxNumberOfTuplesInDataTable = (int) Math.floor(memoryBudget / tupleByteSize);
+        int maxNumberOfTuplesInDataTable = memoryBudgetInBytes / tupleByteSize;
 
         // To calculate possible hash values, we count the number of bits.
         // We assume that each field consists of 4 bytes.
-        int numberOfBits = numberOfGroupByColumns * 4 * 8;
-
-        // Too high range that is greater than Long.MAXVALUE (64 bits) is not necessary for our calculation.
+        // Also, too high range that is greater than Long.MAXVALUE (64 bits) is not necessary for our calculation.
         // And, this should not generate negative numbers when shifting the number.
-        numberOfBits = Math.min(61, numberOfBits);
+        int numberOfBits = Math.min(61, numberOfGroupByColumns * 4 * 8);
 
         // Possible number of unique hash entries
         long possibleNumberOfHashEntries = (long) 2 << numberOfBits;
 
         // Between # of entries in Data table and # of possible hash values, we choose smaller one.
         long groupByTableSize = Math.min(possibleNumberOfHashEntries, maxNumberOfTuplesInDataTable);
-        long groupByTableByteSize = groupByTableSize * SerializableHashTable.getExpectedByteSizePerHashValue();
+        long groupByTableByteSize = SerializableHashTable.getExpectedTableSizeInByte((int) groupByTableSize, frameSize);
 
         // Get the ratio of hash-table size in the total size (hash + data table).
-        double hashTableRatio = (double) groupByTableByteSize / (groupByTableByteSize + memoryBudget);
+        double hashTableRatio = (double) groupByTableByteSize / (groupByTableByteSize + memoryBudgetInBytes);
 
         // Get the table size based on the ratio that we have calculated.
-        long finalGroupByTableByteSize = (long) (hashTableRatio * memoryBudget);
+        long finalGroupByTableByteSize = (long) (hashTableRatio * memoryBudgetInBytes);
 
         long finalGroupByTableSize = finalGroupByTableByteSize
                 / SerializableHashTable.getExpectedByteSizePerHashValue();

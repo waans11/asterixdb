@@ -134,14 +134,9 @@ public abstract class AbstractExternalGroupbyTest {
                 Result result = answer.get(keyValue.getValue());
                 if (result == null) {
                     answer.put(keyValue.getValue(), new Result(keyValue.getKey()));
-                    // Temp:
-                    //                    System.out.println("result created: 1 " + keyValue.getValue() + " answer size: " + answer.size());
                 } else {
                     result.sum += keyValue.getKey();
                     result.count++;
-                    // Temp;
-                    //                    System.out.println("result increased: now " + result.count + " " + keyValue.getValue()
-                    //                            + " answer size:" + answer.size());
                 }
             }
         }
@@ -154,9 +149,6 @@ public abstract class AbstractExternalGroupbyTest {
 
             Object[] outRecord = new Object[outputRec.getFieldCount()];
 
-            // Temp:
-//            int count = 0;
-
             for (int tid = 0; tid < resultAccessor.getTupleCount(); tid++) {
                 for (int fid = 0; fid < outputRec.getFieldCount(); fid++) {
                     bbis.setByteBuffer(resultAccessor.getBuffer(),
@@ -164,18 +156,10 @@ public abstract class AbstractExternalGroupbyTest {
                     outRecord[fid] = outputRec.getFields()[fid].deserialize(di);
                 }
                 Result result = answer.remove((String) outRecord[0]);
-                // Temp:
-//                System.out.println("result decreased: now " + result.count + " " + (String) outRecord[0]
-//                        + " answer size:" + answer.size());
                 assertNotNull(result);
                 assertEquals(result.sum, (int) outRecord[1]);
                 assertEquals(result.count, (int) outRecord[2]);
-                // Temp:
-//                count++;
             }
-            // Temp:
-//            System.out.println("nextFrame: getTupleCount(): " + resultAccessor.getTupleCount() + " processed " + count
-//                    + (count == resultAccessor.getTupleCount()) + "\n");
         }
 
         @Override
@@ -243,20 +227,12 @@ public abstract class AbstractExternalGroupbyTest {
 
         ResultValidateWriter writer = new ResultValidateWriter(keyValueMap);
 
-        // Temp:
-//        System.out.println("builder open");
         getBuilder().open();
         for (IFrame frame : input) {
             getBuilder().nextFrame(frame.getBuffer());
-            // Temp:
-//            System.out.println("builder - frame processed.\n");
         }
         getBuilder().close();
-        // Temp:
-//        System.out.println("builder - close");
         getMerger().setOutputFrameWriter(0, writer, outputRec);
-        // Temp:
-//        System.out.println("merger - initialize()");
         getMerger().initialize();
     }
 

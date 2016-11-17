@@ -54,15 +54,13 @@ public class ExternalHashGroupBy {
                 do {
                     int partition = table.findVictimPartition(accessor, i);
                     if (partition < 0) {
-                        throw new HyracksDataException("Failed to insert a new buffer into the aggregate operator!");
+                        throw new HyracksDataException("Failed to allocate a new buffer to the aggregate operator!");
                     }
                     RunFileWriter writer = getPartitionWriterOrCreateOneIfNotExist(partition);
                     flushPartitionToRun(partition, writer);
                 } while (!table.insert(accessor, i));
             }
         }
-        // Temp:
-//        System.out.println("the number of tuples inserted: " + tupleCount + "\n");
     }
 
     private void flushPartitionToRun(int partition, RunFileWriter writer)
@@ -70,14 +68,6 @@ public class ExternalHashGroupBy {
         try {
             spilledNumTuples[partition] += table.flushFrames(partition, writer, AggregateType.PARTIAL);
             table.clear(partition);
-            // Temp:
-//            int count = 0;
-//            System.out.print("flushPartitionToRun: ");
-//            for (int i = 0; i < spilledNumTuples.length; i++) {
-//                System.out.print("partition " + i + " #spilled " + spilledNumTuples[i] + "   ");
-//                count += spilledNumTuples[i];
-//            }
-//            System.out.println(" total " + count);
         } catch (Exception ex) {
             writer.fail();
             throw new HyracksDataException(ex);

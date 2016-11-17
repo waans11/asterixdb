@@ -45,7 +45,6 @@ import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
 
 public class InMemoryHashJoin {
 
-    private final IHyracksTaskContext ctx;
     private final List<ByteBuffer> buffers;
     private final FrameTupleAccessor accessorBuild;
     private final ITuplePartitionComputer tpcBuild;
@@ -82,7 +81,6 @@ public class InMemoryHashJoin {
             boolean isLeftOuter, IMissingWriter[] missingWritersBuild, ISerializableTable table,
             IPredicateEvaluator predEval, boolean reverse, ISimpleFrameBufferManager bufferManager)
             throws HyracksDataException {
-        this.ctx = ctx;
         this.tableSize = tableSize;
         this.table = table;
         storedTuplePointer = new TuplePointer();
@@ -122,9 +120,9 @@ public class InMemoryHashJoin {
             int entry = tpcBuild.partition(accessorBuild, i, tableSize);
             storedTuplePointer.reset(bIndex, i);
             if (!table.insert(entry, storedTuplePointer)) {
-                // Tries to insert the same tuple pointer again after compacting the hash table.
+                // Tries to insert the same tuple pointer again after compacting the table.
                 // Still, if we can't, then we are out of memory.
-                if (!compactHashTableAndInsertAgain(entry, storedTuplePointer)) {
+                if (!compactTableAndInsertAgain(entry, storedTuplePointer)) {
                     throw new HyracksDataException(
                             "Can't insert an entry into hash table. Please assign more memory to InMemoryHashJoin.");
                 }
@@ -132,10 +130,8 @@ public class InMemoryHashJoin {
         }
     }
 
-    public boolean compactHashTableAndInsertAgain(int entry, TuplePointer tPointer) throws HyracksDataException {
+    public boolean compactTableAndInsertAgain(int entry, TuplePointer tPointer) throws HyracksDataException {
         boolean oneMoreTry = false;
-        // Tries to insert the same tuple pointer again after compacting the hash table.
-        // Still, if we can't, then we are out of memory.
         if (compactHashTable() >= 0) {
             oneMoreTry = table.insert(entry, tPointer);
         }
@@ -143,9 +139,9 @@ public class InMemoryHashJoin {
     }
 
     /**
-     * Tries to compact the hash table to make some space.
+     * Tries to compact the table to make some space.
      *
-     * @return the number of frames that have been reclaimed. If not, the value -1 is returned.
+     * @return the number of frames that have been reclaimed. If no compaction has happened, the value -1 is returned.
      */
     public int compactHashTable() throws HyracksDataException {
         if (table.isGarbageCollectionNeeded()) {
@@ -203,8 +199,6 @@ public class InMemoryHashJoin {
         buffers.clear();
         // Frames assigned to the hash table will be released here.
         table.close();
-        // Temp:
-        //        ctx.deallocateFrames(nFrames);
         LOGGER.fine("InMemoryHashJoin has finished using " + nFrames + " frames for Thread ID "
                 + Thread.currentThread().getId() + ".");
     }

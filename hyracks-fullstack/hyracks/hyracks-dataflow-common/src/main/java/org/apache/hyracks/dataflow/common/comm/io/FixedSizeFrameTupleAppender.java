@@ -36,12 +36,15 @@ public class FixedSizeFrameTupleAppender extends FrameTupleAppender implements I
 
     @Override
     public boolean cancelAppend() throws HyracksDataException {
-        // Decrease tupleCount by one;
+        // Decrease tupleCount by one.
         tupleCount = IntSerDeUtils.getInt(array, FrameHelper.getTupleCountOffset(frame.getFrameSize()));
-        if (tupleCount > 0) {
-            tupleCount = tupleCount - 1;
+        if (tupleCount == 0) {
+            // There is no inserted tuple in the given frame. Something is wrong.
+            return false;
         }
-        // Reset tupleCount.
+        tupleCount = tupleCount - 1;
+
+        // Reset tupleCount and DataEndOffset.
         IntSerDeUtils.putInt(array, FrameHelper.getTupleCountOffset(frame.getFrameSize()), tupleCount);
         tupleDataEndOffset = tupleCount == 0 ? FrameConstants.TUPLE_START_OFFSET
                 : IntSerDeUtils.getInt(array,
