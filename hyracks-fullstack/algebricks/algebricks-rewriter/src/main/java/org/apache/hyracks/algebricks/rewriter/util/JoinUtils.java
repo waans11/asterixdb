@@ -94,7 +94,6 @@ public class JoinUtils {
         op.setPhysicalOperator(new HybridHashJoinPOperator(op.getJoinKind(), partitioningType, sideLeft, sideRight,
                 context.getPhysicalOptimizationConfig().getMaxFramesForJoin(),
                 context.getPhysicalOptimizationConfig().getMaxFramesForJoinLeftInput(),
-                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(),
                 context.getPhysicalOptimizationConfig().getFudgeFactor()));
         if (partitioningType == JoinPartitioningType.BROADCAST) {
             hybridToInMemHashJoin(op, context);
