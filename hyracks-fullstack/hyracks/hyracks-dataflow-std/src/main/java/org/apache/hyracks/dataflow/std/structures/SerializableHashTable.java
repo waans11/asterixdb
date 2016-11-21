@@ -477,7 +477,7 @@ public class SerializableHashTable implements ISerializableTable {
      * @return the number of frames that are reclaimed. The value -1 is returned when no space was reclaimed.
      */
     @Override
-    public int executeGarbageCollection(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
+    public int collectGarbage(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
             throws HyracksDataException {
         // Keeps the garbage collection related variable
         GarbageCollectionInfo gcInfo = new GarbageCollectionInfo();

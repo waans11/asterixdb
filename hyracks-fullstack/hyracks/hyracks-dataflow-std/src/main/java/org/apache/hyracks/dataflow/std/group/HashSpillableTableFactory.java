@@ -163,7 +163,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
 
                 // Check whether the garbage collection is required and conduct a garbage collection if so.
                 if (hashTableForTuplePointer.isGarbageCollectionNeeded()) {
-                    int numberOfFramesReclaimed = hashTableForTuplePointer.executeGarbageCollection(bufferAccessor,
+                    int numberOfFramesReclaimed = hashTableForTuplePointer.collectGarbage(bufferAccessor,
                             tpcIntermediate);
                     if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.fine("Garbage Collection on Hash table is done. Deallocated frames:"

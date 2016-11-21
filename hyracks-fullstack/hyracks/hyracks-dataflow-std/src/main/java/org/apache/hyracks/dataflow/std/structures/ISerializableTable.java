@@ -46,7 +46,9 @@ public interface ISerializableTable {
     boolean isGarbageCollectionNeeded();
 
     /**
-     * Execute the garbage collection of the given table.
+     * Collect garbages in the given table, if any. For example, compact the table by
+     * removing the garbage created by internal migration or lazy deletion operation.
+     * The desired result of this method is a compacted table without any garbage (no space waste).
      *
      * @param bufferAccessor:
      *            required to access the real tuple to calculate the original hash value
@@ -55,6 +57,6 @@ public interface ISerializableTable {
      * @return the number of frames that are reclaimed.
      * @throws HyracksDataException
      */
-    int executeGarbageCollection(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
+    int collectGarbage(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
             throws HyracksDataException;
 }

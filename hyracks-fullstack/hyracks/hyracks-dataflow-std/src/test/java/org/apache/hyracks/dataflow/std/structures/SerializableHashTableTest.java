@@ -27,9 +27,9 @@ import org.apache.hyracks.api.context.IHyracksFrameMgrContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.control.nc.resources.memory.FrameManager;
 import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.FramePoolBackedFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
 import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
-import org.apache.hyracks.dataflow.std.buffermanager.FramePoolBackedFrameBufferManager;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -86,8 +86,9 @@ public class SerializableHashTableTest {
                 loop++;
             }
         }
+        int tupleCntPerPart = (int) Math.ceil((double) num / NUM_PART);
         for (int i = 0; i < NUM_PART; i++) {
-            assertTrue(nsTable.getTupleCount(i) == 100 || nsTable.getTupleCount(i) == 99);
+            assertTrue(nsTable.getTupleCount(i) == tupleCntPerPart || nsTable.getTupleCount(i) == tupleCntPerPart - 1);
         }
 
     }

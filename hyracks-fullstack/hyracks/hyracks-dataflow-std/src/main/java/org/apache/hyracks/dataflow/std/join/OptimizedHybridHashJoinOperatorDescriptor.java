@@ -138,7 +138,6 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
     private boolean forceRoleReversal = false;
 
     private static final Logger LOGGER = Logger.getLogger(OptimizedHybridHashJoinOperatorDescriptor.class.getName());
-    private static final boolean isLogableAtFINELevel = LOGGER.isLoggable(Level.FINE);
 
     public OptimizedHybridHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSizeInFrames,
             int inputsize0, double factor, int[] keys0, int[] keys1,
@@ -292,7 +291,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                             buildHpc, predEvaluator, isLeftOuter, nonMatchWriterFactories);
 
                     state.hybridHJ.initBuild();
-                    if (isLogableAtFINELevel) {
+                    if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.fine("OptimizedHybridHashJoin is starting the build phase with " + state.numOfPartitions
                                 + " partitions using " + state.memForJoin + " frames for memory.");
                     }
@@ -310,7 +309,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                         state.hybridHJ.clearBuildTempFiles();
                     } else {
                         ctx.setStateObject(state);
-                        if (isLogableAtFINELevel) {
+                        if (LOGGER.isLoggable(Level.FINE)) {
                             LOGGER.fine("OptimizedHybridHashJoin closed its build phase");
                         }
                     }
@@ -392,7 +391,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                     writer.open();
                     state.hybridHJ.initProbe();
 
-                    if (isLogableAtFINELevel) {
+                    if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.fine("OptimizedHybridHashJoin is starting the probe phase.");
                     }
                 }
@@ -434,7 +433,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                     } finally {
                         writer.close();
                     }
-                    if (isLogableAtFINELevel) {
+                    if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.fine("OptimizedHybridHashJoin closed its probe phase");
                     }
                 }
@@ -452,7 +451,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                     long probePartSize = probeSideReader.getFileSize() / frameSize;
                     int beforeMax = Math.max(buildSizeInTuple, probeSizeInTuple);
 
-                    if (isLogableAtFINELevel) {
+                    if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.fine("\n>>>Joining Partition Pairs (thread_id " + Thread.currentThread().getId()
                                 + ") (pid " + ") - (level " + level + ")" + " - BuildSize:\t" + buildPartSize
                                 + "\tProbeSize:\t" + probePartSize + " - MemForJoin " + (state.memForJoin)
@@ -473,7 +472,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                         int tabSize = -1;
                         if (!forceRoleReversal && (isLeftOuter || (buildPartSize < probePartSize))) {
                             //Case 1.1 - InMemHJ (without Role-Reversal)
-                            if (isLogableAtFINELevel) {
+                            if (LOGGER.isLoggable(Level.FINE)) {
                                 LOGGER.fine("\t>>>Case 1.1 (IsLeftOuter || buildSize<probe) AND ApplyInMemHJ - [Level "
                                         + level + "]");
                             }
@@ -486,7 +485,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                             applyInMemHashJoin(buildKeys, probeKeys, tabSize, buildRd, probeRd, buildHpc, probeHpc,
                                     buildSideReader, probeSideReader); // checked-confirmed
                         } else { //Case 1.2 - InMemHJ with Role Reversal
-                            if (isLogableAtFINELevel) {
+                            if (LOGGER.isLoggable(Level.FINE)) {
                                 LOGGER.fine(
                                         "\t>>>Case 1.2. (NoIsLeftOuter || probe<build) AND ApplyInMemHJ WITH RoleReversal - [Level "
                                                 + level + "]");
@@ -503,7 +502,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                     }
                     //Apply (Recursive) HHJ
                     else {
-                        if (isLogableAtFINELevel) {
+                        if (LOGGER.isLoggable(Level.FINE)) {
                             LOGGER.fine("\t>>>Case 2. ApplyRecursiveHHJ - [Level " + level + "]");
                         }
                         if (!forceRoleReversal && (isLeftOuter || buildPartSize < probePartSize)) {
@@ -517,7 +516,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                                     beforeMax);
 
                         } else { //Case 2.2 - Recursive HHJ (with Role-Reversal)
-                            if (isLogableAtFINELevel) {
+                            if (LOGGER.isLoggable(Level.FINE)) {
                                 LOGGER.fine(
                                         "\t\t>>>Case 2.2. - RecursiveHHJ WITH RoleReversal - [Level " + level + "]");
                             }
@@ -573,7 +572,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
 
                     BitSet rPStatus = rHHj.getPartitionStatus();
                     if (!forceNLJ && (afterMax < (NLJ_SWITCH_THRESHOLD * beforeMax))) { //Case 2.1.1 - Keep applying HHJ
-                        if (isLogableAtFINELevel) {
+                        if (LOGGER.isLoggable(Level.FINE)) {
                             LOGGER.fine("\t\t>>>Case 2.1.1 - KEEP APPLYING RecursiveHHJ WITH "
                                     + "(isLeftOuter || build<probe) - [Level " + level + "]");
                         }
@@ -598,7 +597,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                         }
 
                     } else { //Case 2.1.2 - Switch to NLJ
-                        if (isLogableAtFINELevel) {
+                        if (LOGGER.isLoggable(Level.FINE)) {
                             LOGGER.fine(
                                     "\t\t>>>Case 2.1.2 - SWITCHED to NLJ RecursiveHHJ WITH (isLeftOuter || build<probe)"
                                             + " - [Level " + level + "]");

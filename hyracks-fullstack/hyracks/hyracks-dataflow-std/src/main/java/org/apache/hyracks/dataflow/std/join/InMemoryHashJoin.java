@@ -145,7 +145,7 @@ public class InMemoryHashJoin {
      */
     public int compactHashTable() throws HyracksDataException {
         if (table.isGarbageCollectionNeeded()) {
-            return table.executeGarbageCollection(tupleAccessor, tpcBuild);
+            return table.collectGarbage(tupleAccessor, tpcBuild);
         }
         return -1;
     }
