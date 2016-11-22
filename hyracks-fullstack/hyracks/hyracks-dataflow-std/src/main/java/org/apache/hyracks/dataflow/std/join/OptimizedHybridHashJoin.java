@@ -267,7 +267,7 @@ public class OptimizedHybridHashJoin {
      * to the disk until the hash table can fit into the memory. After this, bring back spilled partitions
      * if there is available memory.
      *
-     * @return the number of tuples in memory
+     * @return the number of tuples in memory after this method is executed.
      * @throws HyracksDataException
      */
     private int makeSpaceForHashTableAndBringBackSpilledPartitions() throws HyracksDataException {
@@ -294,23 +294,38 @@ public class OptimizedHybridHashJoin {
         // TODO: there may be different policies (keep spilling minimum, spilling maximum, find a similar size to the
         //                                        hash table, or keep spilling from the first partition)
         boolean moreSpilled = false;
+
+        // No space to accommodate the hash table? Then, we spill one or more partitions to the disk.
         if (freeSpace <= 0) {
-            for (int p = spilledStatus.nextClearBit(0); p >= 0
-                    && p < numOfPartitions; p = spilledStatus.nextClearBit(p + 1)) {
-                int spaceToBeReturned = bufferManager.getPhysicalSize(p);
-                int numberOfTuplesToBeSpilled = buildPSizeInTups[p];
-                if (spaceToBeReturned == 0) {
-                    continue;
-                }
-                spillPartition(p);
+            // Try to find a best-fit partition not to spill many partitions.
+            int pidToSpill = selectSinglePartitionToSpill(freeSpace, inMemTupCount, hashTableByteSizeForInMemTuples,
+                    frameSize);
+            if (pidToSpill >= 0) {
+                // There is a suitable one. We spill that partition to the disk.
+                inMemTupCount -= buildPSizeInTups[pidToSpill];
+                spillPartition(pidToSpill);
                 moreSpilled = true;
-                inMemTupCount -= numberOfTuplesToBeSpilled;
-                // Since the number of tuples in memory has been decreased, the hash table size will be decreased, too.
-                int expectedHashTableSizeDecrease = hashTableByteSizeForInMemTuples
-                        - SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount, frameSize);
-                freeSpace = freeSpace + spaceToBeReturned + expectedHashTableSizeDecrease;
-                if (freeSpace > 0) {
-                    break;
+            } else {
+                // There is no single suitable partition. So, we need to spill multiple partitions to the disk
+                // in order to accommodate the hash table.
+                for (int p = spilledStatus.nextClearBit(0); p >= 0
+                        && p < numOfPartitions; p = spilledStatus.nextClearBit(p + 1)) {
+                    int spaceToBeReturned = bufferManager.getPhysicalSize(p);
+                    int numberOfTuplesToBeSpilled = buildPSizeInTups[p];
+                    if (spaceToBeReturned == 0) {
+                        continue;
+                    }
+                    spillPartition(p);
+                    moreSpilled = true;
+                    inMemTupCount -= numberOfTuplesToBeSpilled;
+                    // Since the number of tuples in memory has been decreased,
+                    // the hash table size will be decreased, too.
+                    int expectedHashTableSizeDecrease = hashTableByteSizeForInMemTuples
+                            - SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount, frameSize);
+                    freeSpace = freeSpace + spaceToBeReturned + expectedHashTableSizeDecrease;
+                    if (freeSpace > 0) {
+                        break;
+                    }
                 }
             }
         }
@@ -318,7 +333,8 @@ public class OptimizedHybridHashJoin {
         // If more partitions have been spilled to the disk, calculate the expected hash table size again
         // before bringing some partitions to main memory.
         if (moreSpilled) {
-            hashTableByteSizeForInMemTuples = SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount, frameSize);
+            hashTableByteSizeForInMemTuples = SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount,
+                    frameSize);
         }
 
         // Bring back some partitions if we have enough free space.
@@ -334,6 +350,41 @@ public class OptimizedHybridHashJoin {
         }
 
         return inMemTupCount;
+    }
+
+    /**
+     * Find a best-fit partition that will be spilled to the disk to make enough space to accommodate the hash table.
+     *
+     * @param currentFreeSpace
+     * @param currentInMemTupCount
+     * @param currentHashTableByteSizeForInMemTuples
+     * @param partPhysicalByteSizesInMem
+     * @param partNumTuplesInMem
+     * @return the partition id that will be spilled to the disk. Returns -1 if there is no single suitable partition.
+     */
+    private int selectSinglePartitionToSpill(int currentFreeSpace, int currentInMemTupCount,
+            int currentHashTableByteSizeForInMemTuples, int frameSize) {
+
+        int spaceAfterIncrease = -1;
+        int minSpaceAfterIncrease = memSizeInFrames * ctx.getInitialFrameSize();
+        int minSpaceAfterIncreasePartID = -1;
+
+        for (int p = spilledStatus.nextClearBit(0); p >= 0
+                && p < numOfPartitions; p = spilledStatus.nextClearBit(p + 1)) {
+            spaceAfterIncrease = currentFreeSpace + bufferManager.getPhysicalSize(p)
+                    + (currentHashTableByteSizeForInMemTuples - SerializableHashTable
+                            .getExpectedTableSizeInByte(currentInMemTupCount - buildPSizeInTups[p], frameSize));
+            if (spaceAfterIncrease == 0) {
+                // Found the perfect one. Just return this partition.
+                return p;
+            } else if (spaceAfterIncrease > 0 && spaceAfterIncrease < minSpaceAfterIncrease) {
+                // We want to find the best-fit partition to avoid many partition spills.
+                minSpaceAfterIncrease = spaceAfterIncrease;
+                minSpaceAfterIncreasePartID = p;
+            }
+        }
+
+        return minSpaceAfterIncreasePartID;
     }
 
     private int selectPartitionsToReload(int freeSpace, int pid, int inMemTupCount, int originalHashTableSize) {

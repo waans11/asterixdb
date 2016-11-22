@@ -199,7 +199,11 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
             throw new HyracksDataException("Not enough memory is available for Hybrid Hash Join.");
         }
         if (memorySize > buildSize * factor) {
-            return 1; // We will switch to in-Mem HJ eventually
+            // We will switch to in-Mem HJ eventually: create two big partitions.
+            // We set 2 (not 1) to avoid a corner case where the only partition may be spilled to the disk.
+            // This may happen since this formula doesn't consider the hash table size. If this is the case,
+            // we will do a nested loop join after some iterations. But, this is not effective.
+            return 2;
         }
         numberOfPartitions = (int) (Math.ceil((buildSize * factor / nPartitions - memorySize) / (memorySize - 1)));
         numberOfPartitions = Math.max(2, numberOfPartitions);
@@ -486,9 +490,8 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                                     buildSideReader, probeSideReader); // checked-confirmed
                         } else { //Case 1.2 - InMemHJ with Role Reversal
                             if (LOGGER.isLoggable(Level.FINE)) {
-                                LOGGER.fine(
-                                        "\t>>>Case 1.2. (NoIsLeftOuter || probe<build) AND ApplyInMemHJ WITH RoleReversal - [Level "
-                                                + level + "]");
+                                LOGGER.fine("\t>>>Case 1.2. (NoIsLeftOuter || probe<build) AND ApplyInMemHJ"
+                                        + "WITH RoleReversal - [Level " + level + "]");
                             }
                             tabSize = probeSizeInTuple;
                             if (tabSize == 0) {
@@ -700,7 +703,8 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
 
                 private void applyNestedLoopJoin(RecordDescriptor outerRd, RecordDescriptor innerRd, int memorySize,
                         RunFileReader outerReader, RunFileReader innerReader) throws HyracksDataException {
-                    // The nested loop join result is outer + inner. All the other operator is probe + build. Hence the reverse relation is different
+                    // The nested loop join result is outer + inner. All the other operator is probe + build.
+                    // Hence the reverse relation is different.
                     boolean isReversed = outerRd == buildRd && innerRd == probeRd;
                     assert isLeftOuter ? !isReversed : true : "LeftOut Join can not reverse roles";
                     ITuplePairComparator nljComptorOuterInner = isReversed ? nljComparatorBuild2Probe

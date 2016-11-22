@@ -306,7 +306,11 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
      */
     private int getNumOfPartitions(int nubmerOfInputFrames, int frameLimit) {
         if (frameLimit >= nubmerOfInputFrames * FUDGE_FACTOR) {
-            return 1; // all in memory, we will create a big partition.
+            // all in memory, we will create two big partitions. We set 2 (not 1) to avoid a corner case
+            // where the only partition may be spilled to the disk. This may happen since this formula doesn't consider
+            // the hash table size. If this is the case, we will have an indefinite loop - keep spilling the same
+            // partition again and again.
+            return 2;
         }
         int numberOfPartitions = (int) (Math
                 .ceil((nubmerOfInputFrames * FUDGE_FACTOR - frameLimit) / (frameLimit - 1)));
