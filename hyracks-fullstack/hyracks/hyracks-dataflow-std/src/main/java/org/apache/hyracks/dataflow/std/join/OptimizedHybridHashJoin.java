@@ -365,7 +365,7 @@ public class OptimizedHybridHashJoin {
     private int selectSinglePartitionToSpill(int currentFreeSpace, int currentInMemTupCount,
             int currentHashTableByteSizeForInMemTuples, int frameSize) {
 
-        int spaceAfterIncrease = -1;
+        int spaceAfterIncrease;
         int minSpaceAfterIncrease = memSizeInFrames * ctx.getInitialFrameSize();
         int minSpaceAfterIncreasePartID = -1;
 

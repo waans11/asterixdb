@@ -119,13 +119,11 @@ public class InMemoryHashJoin {
         for (int i = 0; i < tCount; ++i) {
             int entry = tpcBuild.partition(accessorBuild, i, tableSize);
             storedTuplePointer.reset(bIndex, i);
-            if (!table.insert(entry, storedTuplePointer)) {
-                // Tries to insert the same tuple pointer again after compacting the table.
-                // Still, if we can't, then we are out of memory.
-                if (!compactTableAndInsertAgain(entry, storedTuplePointer)) {
-                    throw new HyracksDataException(
-                            "Can't insert an entry into hash table. Please assign more memory to InMemoryHashJoin.");
-                }
+            // If an insertion fails, tries to insert the same tuple pointer again after compacting the table.
+            // Still, if we can't, then we are out of memory.
+            if (!table.insert(entry, storedTuplePointer) && !compactTableAndInsertAgain(entry, storedTuplePointer)) {
+                throw new HyracksDataException(
+                        "Can't insert an entry into hash table. Please assign more memory to InMemoryHashJoin.");
             }
         }
     }
