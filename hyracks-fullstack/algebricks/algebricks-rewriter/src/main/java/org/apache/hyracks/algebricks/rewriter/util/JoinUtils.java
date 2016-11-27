@@ -94,6 +94,7 @@ public class JoinUtils {
         op.setPhysicalOperator(new HybridHashJoinPOperator(op.getJoinKind(), partitioningType, sideLeft, sideRight,
                 context.getPhysicalOptimizationConfig().getMaxFramesForJoin(),
                 context.getPhysicalOptimizationConfig().getMaxFramesForJoinLeftInput(),
+                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(),
                 context.getPhysicalOptimizationConfig().getFudgeFactor()));
         if (partitioningType == JoinPartitioningType.BROADCAST) {
             hybridToInMemHashJoin(op, context);
@@ -114,9 +115,9 @@ public class JoinUtils {
                 AlgebricksConfig.ALGEBRICKS_LOGGER
                         .fine("// HybridHashJoin inner branch " + opBuild + " fits in memory\n");
                 // maintains the local properties on the probe side
-                op.setPhysicalOperator(new InMemoryHashJoinPOperator(hhj.getKind(), hhj.getPartitioningType(),
-                        hhj.getKeysLeftBranch(), hhj.getKeysRightBranch(), v.getNumberOfTuples() * 2,
-                        hhj.getMemSizeInFrames()));
+                op.setPhysicalOperator(
+                        new InMemoryHashJoinPOperator(hhj.getKind(), hhj.getPartitioningType(), hhj.getKeysLeftBranch(),
+                                hhj.getKeysRightBranch(), v.getNumberOfTuples() * 2, hhj.getMemSizeInFrames()));
             }
         }
 
