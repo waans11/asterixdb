@@ -16,14 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-/*
- * Test case Name  : node_failback.aql
- * Description     : Make sure node failback completes as expected.
-                     The test goes as follows:
-                     start 2 nodes, bulkload a dataset, copy it to in-memory dataset,
-                     kill one node and wait until the failover complete, query cluster state,
-                     query data, insert new data, start the killed node and wait for failback,
-                     query cluster state, query data.
- * Expected Result : Success
- * Date            : February 3 2016
- */
+package org.apache.asterix.common.transactions;
+
+import java.io.Serializable;
+
+@FunctionalInterface
+public interface IResourceFactory extends Serializable {
+    /**
+     * Create a serializable resource for the task partition
+     * @param partition
+     *            Hyracks task partition
+     * @return the serializable resource
+     */
+    Resource resource(int partition);
+}

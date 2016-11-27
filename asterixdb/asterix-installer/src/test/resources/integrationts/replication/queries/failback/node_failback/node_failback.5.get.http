@@ -16,18 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.asterix.common.api;
-
-import java.io.Serializable;
-
-import org.apache.asterix.common.transactions.IAsterixAppRuntimeContextProvider;
-import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
-
-public interface ILocalResourceMetadata extends Serializable {
-
-    public ILSMIndex createIndexInstance(IAsterixAppRuntimeContextProvider runtimeContextProvider, String filePath,
-                                         int partition, int ioDeviceNum) throws HyracksDataException;
-
-    public int getDatasetID();
-}
+/*
+ * Test case Name  : node_failback.aql
+ * Description     : Make sure node failback completes as expected.
+                     The test goes as follows:
+                     start 2 nodes, bulkload a dataset, copy it to in-memory dataset,
+                     kill one node and wait until the failover complete, query cluster state,
+                     query data, insert new data, start the killed node and wait for failback,
+                     query cluster state, query data.
+ * Expected Result : Success
+ * Date            : February 3 2016
+ */
+admin/cluster
