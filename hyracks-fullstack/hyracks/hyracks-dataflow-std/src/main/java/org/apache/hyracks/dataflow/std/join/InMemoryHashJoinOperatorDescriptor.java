@@ -67,6 +67,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
     private final boolean isLeftOuter;
     private final IMissingWriterFactory[] nonMatchWriterFactories;
     private final int tableSize;
+    // The maximum number of in-memory frames that this hash join can use.
     private final int memSizeInFrames;
 
     public InMemoryHashJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int[] keys0, int[] keys1,
@@ -215,7 +216,7 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
                     state.joiner.build(copyBuffer);
                 }
 
-                public ByteBuffer allocateBuffer(int frameSize) throws HyracksDataException {
+                private ByteBuffer allocateBuffer(int frameSize) throws HyracksDataException {
                     ByteBuffer newBuffer = bufferManager.acquireFrame(frameSize);
                     if (newBuffer != null) {
                         return newBuffer;

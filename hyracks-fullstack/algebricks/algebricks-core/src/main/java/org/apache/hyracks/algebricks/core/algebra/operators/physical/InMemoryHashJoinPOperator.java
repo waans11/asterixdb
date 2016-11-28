@@ -50,6 +50,7 @@ import org.apache.hyracks.dataflow.std.join.InMemoryHashJoinOperatorDescriptor;
 public class InMemoryHashJoinPOperator extends AbstractHashJoinPOperator {
 
     private final int tableSize;
+    // The maximum number of in-memory frames that this hash join can use.
     private final int memSizeInFrames;
 
     /**

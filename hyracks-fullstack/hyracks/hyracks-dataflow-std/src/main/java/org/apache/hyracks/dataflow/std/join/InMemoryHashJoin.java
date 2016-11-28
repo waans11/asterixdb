@@ -45,6 +45,7 @@ import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
 
 public class InMemoryHashJoin {
 
+    private final IHyracksTaskContext ctx;
     private final List<ByteBuffer> buffers;
     private final FrameTupleAccessor accessorBuild;
     private final ITuplePartitionComputer tpcBuild;
@@ -81,6 +82,7 @@ public class InMemoryHashJoin {
             boolean isLeftOuter, IMissingWriter[] missingWritersBuild, ISerializableTable table,
             IPredicateEvaluator predEval, boolean reverse, ISimpleFrameBufferManager bufferManager)
             throws HyracksDataException {
+        this.ctx = ctx;
         this.tableSize = tableSize;
         this.table = table;
         storedTuplePointer = new TuplePointer();
@@ -191,12 +193,17 @@ public class InMemoryHashJoin {
         appender.write(writer, true);
         int nFrames = buffers.size();
         // Frames assigned to the data table will be released here.
-        for (int i = 0; i < nFrames; i++) {
-            bufferManager.releaseFrame(buffers.get(i));
+        if (bufferManager != null) {
+            for (int i = 0; i < nFrames; i++) {
+                bufferManager.releaseFrame(buffers.get(i));
+            }
         }
         buffers.clear();
         // Frames assigned to the hash table will be released here.
         table.close();
+        if (bufferManager == null) {
+            ctx.deallocateFrames(nFrames);
+        }
         LOGGER.fine("InMemoryHashJoin has finished using " + nFrames + " frames for Thread ID "
                 + Thread.currentThread().getId() + ".");
     }

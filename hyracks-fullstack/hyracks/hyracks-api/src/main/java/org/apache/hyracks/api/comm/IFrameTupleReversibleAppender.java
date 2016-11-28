@@ -21,6 +21,9 @@ package org.apache.hyracks.api.comm;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
+/**
+ * A Tuple Appender class whose last append action can be canceled.
+ */
 public interface IFrameTupleReversibleAppender {
 
     /**

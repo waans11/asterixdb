@@ -54,7 +54,7 @@ public class ExternalHashGroupBy {
                 do {
                     int partition = table.findVictimPartition(accessor, i);
                     if (partition < 0) {
-                        throw new HyracksDataException("Failed to allocate a new buffer to the aggregate operator!");
+                        throw new HyracksDataException("Failed to insert a new buffer into the aggregate operator!");
                     }
                     RunFileWriter writer = getPartitionWriterOrCreateOneIfNotExist(partition);
                     flushPartitionToRun(partition, writer);

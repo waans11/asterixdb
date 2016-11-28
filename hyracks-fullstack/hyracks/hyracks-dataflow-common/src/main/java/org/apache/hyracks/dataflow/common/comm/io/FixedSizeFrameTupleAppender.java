@@ -34,6 +34,9 @@ public class FixedSizeFrameTupleAppender extends FrameTupleAppender implements I
         return false;
     }
 
+    /**
+     * Cancel the lastly performed append operation. i.e. decrease the tuple count and reset the data end offset.
+     */
     @Override
     public boolean cancelAppend() throws HyracksDataException {
         // Decrease tupleCount by one.
