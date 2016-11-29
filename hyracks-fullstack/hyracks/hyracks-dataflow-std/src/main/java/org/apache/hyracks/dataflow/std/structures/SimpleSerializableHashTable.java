@@ -77,6 +77,9 @@ public class SimpleSerializableHashTable implements ISerializableTable {
         this.tableSize = tableSize;
         if (frameInitRequired) {
             ByteBuffer newFrame = getFrame(frameSize);
+            if (newFrame == null) {
+                throw new HyracksDataException("Can't initialize the Hash Table. Please assign more memory.");
+            }
             IntSerDeBuffer frame = new IntSerDeBuffer(newFrame);
             frameCapacity = frame.capacity();
             contents.add(frame);
@@ -100,6 +103,9 @@ public class SimpleSerializableHashTable implements ISerializableTable {
         IntSerDeBuffer headerFrame = headers[headerFrameIndex];
         if (headerFrame == null) {
             ByteBuffer newFrame = getFrame(frameSize);
+            if (newFrame == null) {
+                return false;
+            }
             headerFrame = new IntSerDeBuffer(newFrame);
             headers[headerFrameIndex] = headerFrame;
         }
@@ -271,6 +277,9 @@ public class SimpleSerializableHashTable implements ISerializableTable {
             do {
                 if (currentLargestFrameNumber >= contents.size() - 1) {
                     ByteBuffer newFrame = getFrame(frameSize);
+                    if (newFrame == null) {
+                        return false;
+                    }
                     newContentFrame = new IntSerDeBuffer(newFrame);
                     currentLargestFrameNumber++;
                     contents.add(newContentFrame);
