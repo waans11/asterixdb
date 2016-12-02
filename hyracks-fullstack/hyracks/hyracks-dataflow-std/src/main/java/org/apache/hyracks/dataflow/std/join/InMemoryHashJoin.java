@@ -199,8 +199,6 @@ public class InMemoryHashJoin {
             }
         }
         buffers.clear();
-        // Frames assigned to the hash table will be released here.
-        table.close();
         if (bufferManager == null) {
             ctx.deallocateFrames(nFrames);
         }

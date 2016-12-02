@@ -36,8 +36,9 @@ import org.apache.hyracks.dataflow.std.buffermanager.ITuplePointerAccessor;
  * An entry slot in the content frame is as follows.
  * [capacity of the slot], [# of occupied elements], {[frameIndex], [tupleIndex]}+;
  * <fIndex, tIndex> forms a tuple pointer.
- * Warning: this hash table can grow up indefinitely and generate Out Of Memory Exception.
- * Use SerializableHashTable class instead that is managed by buffer manager.
+ * WARNING: this hash table can grow up indefinitely and may generate Out Of Memory Exception.
+ * So, do not use this in production and use SerializableHashTable class instead
+ * since that should be managed by a buffer manager.
  */
 public class SimpleSerializableHashTable implements ISerializableTable {
 

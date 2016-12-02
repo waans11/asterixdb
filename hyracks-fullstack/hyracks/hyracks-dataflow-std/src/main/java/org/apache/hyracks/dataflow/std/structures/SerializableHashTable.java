@@ -29,7 +29,7 @@ import org.apache.hyracks.dataflow.std.buffermanager.ITuplePointerAccessor;
 /**
  * This is an extension of SimpleSerializableHashTable class.
  * A buffer manager needs to be assigned to allocate/release frames for this table so that
- * the maximum memory usage can be bounded.
+ * the maximum memory usage can be bounded under the certain limit.
  */
 public class SerializableHashTable extends SimpleSerializableHashTable {
 
