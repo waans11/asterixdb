@@ -37,8 +37,6 @@ import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
-import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
-import org.apache.hyracks.dataflow.std.buffermanager.TupleInFrameListAccessor;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -63,6 +61,7 @@ public class InMemoryHashJoin {
     private TupleInFrameListAccessor tupleAccessor;
     // To release frames
     ISimpleFrameBufferManager bufferManager;
+    private final boolean isTableCapacityNotZero;
 
     private static final Logger LOGGER = Logger.getLogger(InMemoryHashJoin.class.getName());
 
@@ -109,6 +108,11 @@ public class InMemoryHashJoin {
         reverseOutputOrder = reverse;
         this.tupleAccessor = new TupleInFrameListAccessor(rDBuild, buffers);
         this.bufferManager = bufferManager;
+        if (tableSize != 0) {
+            isTableCapacityNotZero = true;
+        } else {
+            isTableCapacityNotZero = false;
+        }
         LOGGER.fine("InMemoryHashJoin has been created for a table size of " + tableSize + " for Thread ID "
                 + Thread.currentThread().getId() + ".");
     }
@@ -150,17 +154,17 @@ public class InMemoryHashJoin {
         return -1;
     }
 
-    void join(IFrameTupleAccessor accessorProbe, int tid, IFrameWriter writer) throws HyracksDataException {
-        this.accessorProbe = accessorProbe;
+    /**
+     * Reads the given tuple from the probe side and joins it with tuples from the build side.
+     * This method assumes that the accessorProbe is already set to the current probe frame.
+     */
+    void join(int tid, IFrameWriter writer) throws HyracksDataException {
         boolean matchFound = false;
-        if (tableSize != 0) {
+        if (isTableCapacityNotZero) {
             int entry = tpcProbe.partition(accessorProbe, tid, tableSize);
-            int offset = 0;
-            do {
-                table.getTuplePointer(entry, offset++, storedTuplePointer);
-                if (storedTuplePointer.getFrameIndex() < 0) {
-                    break;
-                }
+            int tupleCount = table.getTupleCount(entry);
+            for (int i = 0; i < tupleCount; i++) {
+                table.getTuplePointer(entry, i, storedTuplePointer);
                 int bIndex = storedTuplePointer.getFrameIndex();
                 int tIndex = storedTuplePointer.getTupleIndex();
                 accessorBuild.reset(buffers.get(bIndex));
@@ -172,7 +176,7 @@ public class InMemoryHashJoin {
                         appendToResult(tid, tIndex, writer);
                     }
                 }
-            } while (true);
+            }
         }
         if (!matchFound && isLeftOuter) {
             FrameUtils.appendConcatToWriter(writer, appender, accessorProbe, tid,
@@ -185,8 +189,12 @@ public class InMemoryHashJoin {
         accessorProbe.reset(buffer);
         int tupleCount0 = accessorProbe.getTupleCount();
         for (int i = 0; i < tupleCount0; ++i) {
-            join(accessorProbe, i, writer);
+            join(i, writer);
         }
+    }
+
+    public void resetAccessorProbe(IFrameTupleAccessor newAccessorProbe) {
+        accessorProbe.reset(newAccessorProbe.getBuffer());
     }
 
     public void closeJoin(IFrameWriter writer) throws HyracksDataException {
@@ -199,11 +207,12 @@ public class InMemoryHashJoin {
             }
         }
         buffers.clear();
-        if (bufferManager == null) {
-            ctx.deallocateFrames(nFrames);
-        }
         LOGGER.fine("InMemoryHashJoin has finished using " + nFrames + " frames for Thread ID "
                 + Thread.currentThread().getId() + ".");
+    }
+
+    public void closeTable() throws HyracksDataException {
+        table.close();
     }
 
     private boolean evaluatePredicate(int tIx1, int tIx2) {

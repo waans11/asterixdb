@@ -247,6 +247,11 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
 
     @Override
     public void close() {
+        for (IFrameBufferManager part : partitionArray) {
+            if (part != null) {
+                part.close();
+            }
+        }
         framePool.close();
         Arrays.fill(partitionArray, null);
     }

@@ -16,9 +16,32 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.hyracks.api.job;
+package org.apache.hyracks.data.std.util;
 
-public enum JobFlag {
-    PROFILE_RUNTIME,
-    STORE_JOB
+import java.io.ByteArrayOutputStream;
+
+/**
+ * This is an extended class of ByteArrayOutputStream class that can return the current buffer array and its length.
+ * Use this class to avoid a new byte[] creation when using toArray() method.
+ */
+public class ExtendedByteArrayOutputStream extends ByteArrayOutputStream {
+
+    public ExtendedByteArrayOutputStream() {
+        super();
+    }
+
+    public ExtendedByteArrayOutputStream(int size) {
+        super(size);
+    }
+
+    public synchronized byte[] getByteArray() {
+        return buf;
+    }
+
+    /**
+     * Returns the current length of this stream (not capacity).
+     */
+    public synchronized int getLength() {
+        return count;
+    }
 }
