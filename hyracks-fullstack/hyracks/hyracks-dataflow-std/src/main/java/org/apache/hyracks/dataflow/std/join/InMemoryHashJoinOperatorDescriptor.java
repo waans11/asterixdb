@@ -221,7 +221,8 @@ public class InMemoryHashJoinOperatorDescriptor extends AbstractOperatorDescript
                     if (newBuffer != null) {
                         return newBuffer;
                     }
-                    // There may be a chance if we can compact the table, one or more frame may be reclaimed.
+                    // At this moment, there is no enough memory since the newBuffer is null.
+                    // But, there may be a chance if we can compact the table, one or more frame may be reclaimed.
                     if (state.joiner.compactHashTable() > 0) {
                         newBuffer = bufferManager.acquireFrame(frameSize);
                         if (newBuffer != null) {

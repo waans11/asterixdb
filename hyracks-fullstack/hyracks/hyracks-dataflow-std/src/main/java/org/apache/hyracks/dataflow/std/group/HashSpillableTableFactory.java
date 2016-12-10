@@ -71,7 +71,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             final int seed) throws HyracksDataException {
         final int tableSize = suggestTableSize;
 
-        // We check whether the given table size is within the budget of the groupFrameLimit.
+        // Checks whether the given table size is within the budget of the groupFrameLimit.
         int expectedFrameCountOfHashTableForGroupBy = SerializableHashTable.getExpectedTableSizeInFrame(tableSize,
                 ctx.getInitialFrameSize());
 
@@ -94,8 +94,8 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
         final ITuplePartitionComputer tpc = new FieldHashPartitionComputerFamily(keyFields, hashFunctionFamilies)
                 .createPartitioner(seed);
 
-        // For calculating hash value from the already aggregated tuples (not incoming tuples)
-        // This computer is needed to calculate the hash value of a aggregated tuple
+        // For calculating hash value for the already aggregated tuples (not incoming tuples)
+        // This computer is required to calculate the hash value of a aggregated tuple
         // while doing the garbage collection work on Hash Table.
         final ITuplePartitionComputer tpcIntermediate = new FieldHashPartitionComputerFamily(intermediateResultKeys,
                 hashFunctionFamilies).createPartitioner(seed);
@@ -109,7 +109,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
 
         //TODO(jf) research on the optimized partition size
         // Since the memory budget is shared between the data table and hash table, when calculating the number of
-        // partitions, we should not make a case where the number of partitions is one.
+        // partitions, we should not make the case where the number of partitions is one.
         int memoryBudget = Math.max(MIN_FRAME_LIMT, framesLimit - 1 - expectedFrameCountOfHashTableForGroupBy);
 
         final int numPartitions = getNumOfPartitions((int) (inputDataBytesSize / ctx.getInitialFrameSize()),
@@ -161,7 +161,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                     hashTableForTuplePointer.delete(p);
                 }
 
-                // Check whether the garbage collection is required and conduct a garbage collection if so.
+                // Checks whether the garbage collection is required and conducts a garbage collection if so.
                 if (hashTableForTuplePointer.isGarbageCollectionNeeded()) {
                     int numberOfFramesReclaimed = hashTableForTuplePointer.collectGarbage(bufferAccessor,
                             tpcIntermediate);
@@ -202,23 +202,26 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             }
 
             /**
-             * Insert a new aggregate entry into the data table and hash table.
-             * This insertion must be an atomic operation. We cannot have partial success (failure).
+             * Inserts a new aggregate entry into the data table and hash table.
+             * This insertion must be an atomic operation. We cannot have a partial success or failure.
+             * So, if an insertion succeeds on the data table and the same insertion on the hash table fails, then
+             * we need to revert the effect of data table insertion.
              */
-            private boolean insertNewAggregateEntry(int entryInHashTable, IFrameTupleAccessor accessor,
-                    int tIndex)
+            private boolean insertNewAggregateEntry(int entryInHashTable, IFrameTupleAccessor accessor, int tIndex)
                     throws HyracksDataException {
                 initStateTupleBuilder(accessor, tIndex);
                 int pid = getPartition(entryInHashTable);
 
+                // Insertion to the data table
                 if (!bufferManager.insertTuple(pid, stateTupleBuilder.getByteArray(),
                         stateTupleBuilder.getFieldEndOffsets(), 0, stateTupleBuilder.getSize(), pointer)) {
                     return false;
                 }
 
+                // Insertion to the hash table
                 if (!hashTableForTuplePointer.insert(entryInHashTable, pointer)) {
                     // To preserve the atomicity of this method, we need to undo the effect
-                    // of the above bufferManager.insertTuple() call.
+                    // of the above bufferManager.insertTuple() call since the given insertion has failed.
                     bufferManager.cancelInsertTuple(pid);
                     return false;
                 }
@@ -297,7 +300,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
     }
 
     /**
-     * Calculate the number of partitions for Data table. The formula is from Shapiro's paper -
+     * Calculates the number of partitions for Data table. The formula is from Shapiro's paper -
      * http://cs.stanford.edu/people/chrismre/cs345/rl/shapiro.pdf. Check the page 249 for more details.
      * If the required number of frames is greater than the number of available frames, we make sure that
      * at least two partitions will be created. Also, if the number of partitions is greater than the memory budget,
@@ -306,7 +309,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
      */
     private int getNumOfPartitions(int nubmerOfInputFrames, int frameLimit) {
         if (frameLimit >= nubmerOfInputFrames * FUDGE_FACTOR) {
-            // all in memory, we will create two big partitions. We set 2 (not 1) to avoid a corner case
+            // all in memory, we will create two big partitions. We set 2 (not 1) to avoid the corner case
             // where the only partition may be spilled to the disk. This may happen since this formula doesn't consider
             // the hash table size. If this is the case, we will have an indefinite loop - keep spilling the same
             // partition again and again.

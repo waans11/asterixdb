@@ -37,6 +37,8 @@ import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
+import org.apache.hyracks.dataflow.std.buffermanager.TupleInFrameListAccessor;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -125,7 +127,7 @@ public class InMemoryHashJoin {
         for (int i = 0; i < tCount; ++i) {
             int entry = tpcBuild.partition(accessorBuild, i, tableSize);
             storedTuplePointer.reset(bIndex, i);
-            // If an insertion fails, tries to insert the same tuple pointer again after compacting the table.
+            // If an insertion fails, then tries to insert the same tuple pointer again after compacting the table.
             // Still, if we can't, then we are out of memory.
             if (!table.insert(entry, storedTuplePointer) && !compactTableAndInsertAgain(entry, storedTuplePointer)) {
                 throw new HyracksDataException(

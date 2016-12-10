@@ -218,11 +218,11 @@ public class OptimizedHybridHashJoin {
     }
 
     public void closeBuild() throws HyracksDataException {
-
         // Flushes the remaining chunks of the all spilled partition to the disk.
         closeAllSpilledPartitions(SIDE.BUILD);
 
-        // Makes the space for the in-memory hash table (some partitions can be spilled to the disk during this step)
+        // Makes the space for the in-memory hash table (some partitions may need to be spilled to the disk
+        // during this step in order to makes the space)
         // and tries to bring back as many spilled partitions as possible if there is free space.
         int inMemTupCount = makeSpaceForHashTableAndBringBackSpilledPartitions();
 
@@ -283,13 +283,13 @@ public class OptimizedHybridHashJoin {
             inMemTupCount += buildPSizeInTups[p];
         }
 
-        // Calculate the expected hash table size for the given number of tuples in main memory
-        // and deduct it from the free space.
+        // Calculates the expected hash table size for the given number of tuples in main memory
+        // and deducts it from the free space.
         int hashTableByteSizeForInMemTuples = SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount,
                 frameSize);
         freeSpace -= hashTableByteSizeForInMemTuples;
 
-        // In a case where free space is less than zero after considering the hash table size,
+        // In the case where free space is less than zero after considering the hash table size,
         // we need to spill more partitions until we can accommodate the hash table in memory.
         // TODO: there may be different policies (keep spilling minimum, spilling maximum, find a similar size to the
         //                                        hash table, or keep spilling from the first partition)
@@ -297,7 +297,7 @@ public class OptimizedHybridHashJoin {
 
         // No space to accommodate the hash table? Then, we spill one or more partitions to the disk.
         if (freeSpace <= 0) {
-            // Try to find a best-fit partition not to spill many partitions.
+            // Tries to find a best-fit partition not to spill many partitions.
             int pidToSpill = selectSinglePartitionToSpill(freeSpace, inMemTupCount, hashTableByteSizeForInMemTuples,
                     frameSize);
             if (pidToSpill >= 0) {
@@ -353,7 +353,7 @@ public class OptimizedHybridHashJoin {
     }
 
     /**
-     * Find a best-fit partition that will be spilled to the disk to make enough space to accommodate the hash table.
+     * Finds a best-fit partition that will be spilled to the disk to make enough space to accommodate the hash table.
      *
      * @param currentFreeSpace
      * @param currentInMemTupCount

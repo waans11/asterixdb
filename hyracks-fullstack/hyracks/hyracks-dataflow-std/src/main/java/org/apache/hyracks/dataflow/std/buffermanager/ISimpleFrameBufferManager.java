@@ -23,19 +23,19 @@ import java.nio.ByteBuffer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 /**
- * Manage the buffer space in the unit of frame.
+ * Manages the buffer space in the unit of frame.
  * This buffer manager is suitable for a structure that manages
  * the list of assigned frames on its own (e.g., SerializableHashTable class).
  */
 public interface ISimpleFrameBufferManager {
 
     /**
-     * Get a frame from this buffer manager.
+     * Gets a frame from this buffer manager.
      */
     public ByteBuffer acquireFrame(int frameSize) throws HyracksDataException;
 
     /**
-     * Release a frame to this buffer manager.
+     * Releases a frame to this buffer manager.
      */
     public void releaseFrame(ByteBuffer frame);
 

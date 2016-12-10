@@ -48,15 +48,15 @@ public class PreferToSpillFullyOccupiedFramePolicy {
     public int selectVictimPartition(int failedToInsertPartition) {
         // To avoid flushing another partition with the last half-full frame, it's better to spill the given partition
         // since one partition needs to be spilled to the disk anyway. Another reason is that we know that
-        // the last frame in this partition is full. The given partition may have been flushed to the disk one or
-        // multiple times or but it's OK.
+        // the last frame in this partition is full.
         if (bufferManager.getNumTuples(failedToInsertPartition) > 0) {
             return failedToInsertPartition;
         }
         // If the given partition doesn't contain any tuple in memory, try to flush a different in-memory partition.
         // We are not trying to steal a frame from another spilled partition since once spilled, a partition can only
         // have only one frame and we don't know whether the frame is fully occupied or not.
-        // TODO: Once we change this policy, we need to revise this method, too.
+        // TODO: Once we change this policy (spilled partition can have only one frame in memory),
+        //       we need to revise this method, too.
         return findInMemPartitionWithMaxMemoryUsage();
     }
 

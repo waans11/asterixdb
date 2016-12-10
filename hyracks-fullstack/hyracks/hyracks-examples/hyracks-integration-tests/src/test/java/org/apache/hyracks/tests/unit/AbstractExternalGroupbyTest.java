@@ -232,6 +232,7 @@ public abstract class AbstractExternalGroupbyTest {
             getBuilder().nextFrame(frame.getBuffer());
         }
         getBuilder().close();
+
         getMerger().setOutputFrameWriter(0, writer, outputRec);
         getMerger().initialize();
     }

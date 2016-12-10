@@ -27,7 +27,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 public interface IFrameTupleReversibleAppender {
 
     /**
-     * Cancel the effect of the last append operation. i.e. undo the last append operation.
+     * Cancels the effect of the last append operation. i.e. undoes the last append operation.
      */
     boolean cancelAppend() throws HyracksDataException;
 

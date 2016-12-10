@@ -31,7 +31,7 @@ public interface ISerializableTable {
     boolean getTuplePointer(int entry, int offset, TuplePointer tuplePointer);
 
     /**
-     * Return the byte size of entire frames that are currently allocated to the table.
+     * Returns the byte size of entire frames that are currently allocated to the table.
      */
     int getCurrentByteSize();
 
@@ -46,9 +46,9 @@ public interface ISerializableTable {
     boolean isGarbageCollectionNeeded();
 
     /**
-     * Collect garbages in the given table, if any. For example, compact the table by
+     * Collects garbages in the given table, if any. For example, compacts the table by
      * removing the garbage created by internal migration or lazy deletion operation.
-     * The desired result of this method is a compacted table without any garbage (no space waste).
+     * The desired result of this method is a compacted table without any garbage (no wasted space).
      *
      * @param bufferAccessor:
      *            required to access the real tuple to calculate the original hash value

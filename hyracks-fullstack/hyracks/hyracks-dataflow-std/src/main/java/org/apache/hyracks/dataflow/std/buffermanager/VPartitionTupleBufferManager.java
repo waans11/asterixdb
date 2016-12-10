@@ -223,7 +223,6 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     }
 
     private void deleteTupleFromBuffer(BufferInfo bufferInfo) throws HyracksDataException {
-        assert bufferInfo.getStartOffset() == 0 : "Haven't supported yet in FrameTupleAppender";
         if (bufferInfo.getBuffer() != appendFrame.getBuffer()) {
             appendFrame.reset(bufferInfo.getBuffer());
             appender.reset(appendFrame, false);
@@ -238,7 +237,7 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
             partitionArray[partition] = new FrameBufferManager();
             return createNewBuffer(partition, actualSize);
         }
-        return partitionArray[partition].getNumFrames() - 1;
+        return getLastBuffer(partition);
     }
 
     private int getLastBuffer(int partition) throws HyracksDataException {

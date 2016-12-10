@@ -60,7 +60,9 @@ import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.buffermanager.DeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.FramePoolBackedFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.IDeallocatableFramePool;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.SerializableHashTable;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
@@ -269,7 +271,6 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
             final IPredicateEvaluator predEvaluator = (predEvaluatorFactory == null ? null
                     : predEvaluatorFactory.createPredicateEvaluator());
 
-
             IOperatorNodePushable op = new AbstractUnaryInputSinkOperatorNodePushable() {
                 private BuildAndPartitionTaskState state = new BuildAndPartitionTaskState(
                         ctx.getJobletContext().getJobId(), new TaskId(getActivityId(), partition));
@@ -282,8 +283,8 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
 
                 @Override
                 public void open() throws HyracksDataException {
-                    if (memSizeInFrames <= 2) { //Dedicated buffers: One buffer to read and one buffer for output
-                        throw new HyracksDataException("not enough memory for Hybrid Hash Join");
+                    if (memSizeInFrames <= 2) { //Dedicated buffers: One buffer to read and two buffers for output
+                        throw new HyracksDataException("Not enough memory is assigend for Hybrid Hash Join.");
                     }
                     state.memForJoin = memSizeInFrames - 2;
                     state.numOfPartitions = getNumberOfPartitions(state.memForJoin, inputsize0, fudgeFactor,

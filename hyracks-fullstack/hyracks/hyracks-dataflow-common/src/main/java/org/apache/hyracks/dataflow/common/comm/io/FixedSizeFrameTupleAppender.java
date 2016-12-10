@@ -35,19 +35,19 @@ public class FixedSizeFrameTupleAppender extends FrameTupleAppender implements I
     }
 
     /**
-     * Cancel the lastly performed append operation. i.e. decrease the tuple count and reset the data end offset.
+     * Cancels the lastly performed append operation. i.e. decreases the tuple count and resets the data end offset.
      */
     @Override
     public boolean cancelAppend() throws HyracksDataException {
-        // Decrease tupleCount by one.
+        // Decreases tupleCount by one.
         tupleCount = IntSerDeUtils.getInt(array, FrameHelper.getTupleCountOffset(frame.getFrameSize()));
         if (tupleCount == 0) {
-            // There is no inserted tuple in the given frame. Something is wrong.
+            // There is no inserted tuple in the given frame. This should not happen.
             return false;
         }
         tupleCount = tupleCount - 1;
 
-        // Reset tupleCount and DataEndOffset.
+        // Resets tupleCount and DataEndOffset.
         IntSerDeUtils.putInt(array, FrameHelper.getTupleCountOffset(frame.getFrameSize()), tupleCount);
         tupleDataEndOffset = tupleCount == 0 ? FrameConstants.TUPLE_START_OFFSET
                 : IntSerDeUtils.getInt(array,

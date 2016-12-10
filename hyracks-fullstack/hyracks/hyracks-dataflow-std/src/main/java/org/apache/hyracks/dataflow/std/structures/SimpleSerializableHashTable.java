@@ -93,7 +93,7 @@ public class SimpleSerializableHashTable implements ISerializableTable {
         return ctx.allocateFrame(size);
     }
 
-    void increaseWastedSpace(int size) {
+    void increaseWastedSpaceCount(int size) {
         // Do nothing. For this simple implementation, we don't count the wasted space.
     }
 
@@ -153,7 +153,7 @@ public class SimpleSerializableHashTable implements ISerializableTable {
                 // Also reset the header (frmaeIdx, offset) to content frame pointer.
                 header.writeInvalidVal(offsetInHeaderFrame, 2);
                 tupleCount = tupleCount - entryUsedItems;
-                increaseWastedSpace((entrySlotCapacity + 1) * 2);
+                increaseWastedSpaceCount((entrySlotCapacity + 1) * 2);
             }
         }
     }
@@ -253,8 +253,6 @@ public class SimpleSerializableHashTable implements ISerializableTable {
         ctx.deallocateFrames(nFrames);
     }
 
-
-
     protected boolean insertNewEntry(IntSerDeBuffer header, int offsetInHeaderFrame, int entryCapacity,
             TuplePointer pointer) throws HyracksDataException {
         IntSerDeBuffer lastContentFrame = contents.get(currentLargestFrameNumber);
@@ -297,11 +295,11 @@ public class SimpleSerializableHashTable implements ISerializableTable {
             lastContentFrame = contents.get(currentFrameNumber);
         }
 
-        // set header
+        // sets the header
         header.writeInt(offsetInHeaderFrame, currentFrameNumber);
         header.writeInt(offsetInHeaderFrame + 1, lastOffsetInCurrentFrame);
 
-        // set the entry & its slot.
+        // sets the entry & its slot.
         // 1. slot capacity
         lastContentFrame.writeInt(lastOffsetInCurrentFrame, entryCapacity - 1);
         // 2. used count in the slot
@@ -326,7 +324,6 @@ public class SimpleSerializableHashTable implements ISerializableTable {
         return true;
     }
 
-
     protected boolean insertNonFirstTuple(IntSerDeBuffer header, int offsetInHeaderFrame, int contentFrameIndex,
             int offsetInContentFrame, TuplePointer pointer) throws HyracksDataException {
         int frameIndex = contentFrameIndex;
@@ -338,7 +335,7 @@ public class SimpleSerializableHashTable implements ISerializableTable {
             // The slot has at least one space to accommodate this tuple pointer.
             // Increase the used count by 1.
             contentFrame.writeInt(offsetInContentFrame + 1, entryUsedCountInSlot + 1);
-            // Calculate the first empty spot in the slot.
+            // Calculates the first empty spot in the slot.
             // +2: (capacity, # of used entry count)
             // *2: each tuplePointer's occupation (frame index + offset in that frame)
             int startOffsetInContentFrame = offsetInContentFrame + 2 + entryUsedCountInSlot * 2;
@@ -360,20 +357,20 @@ public class SimpleSerializableHashTable implements ISerializableTable {
             // New capacity: double the original capacity
             int capacity = (entrySlotCapacity + 1) * 2;
 
-            // Temporarily set the header (frameIdx, offset) as (-1,-1) for the slot.
+            // Temporarily sets the header (frameIdx, offset) as (-1,-1) for the slot.
             header.writeInvalidVal(offsetInHeaderFrame, 2);
-            // Mark the old slot as obsolete - set the used count as -1 so that its space can be reclaimed
+            // Marks the old slot as obsolete - set the used count as -1 so that its space can be reclaimed
             // when a garbage collection is executed.
             contentFrame.writeInvalidVal(offsetInContentFrame + 1, 1);
 
-            // Get the location of the initial entry.
+            // Gets the location of the initial entry.
             int fIndex = contentFrame.getInt(offsetInContentFrame + 2);
             int tIndex = contentFrame.getInt(offsetInContentFrame + 3);
             tempTuplePointer.reset(fIndex, tIndex);
-            // Create a new double-sized slot for the current entries and
-            // migrate the initial entry in the slot to the new slot.
+            // Creates a new double-sized slot for the current entries and
+            // migrates the initial entry in the slot to the new slot.
             if (!this.insertNewEntry(header, offsetInHeaderFrame, capacity, tempTuplePointer)) {
-                // Reverse the effect of change.
+                // Reverses the effect of change.
                 header.writeInt(offsetInHeaderFrame, contentFrameIndex);
                 header.writeInt(offsetInHeaderFrame + 1, offsetInContentFrame);
                 contentFrame.writeInt(offsetInContentFrame + 1, entryUsedCountInSlot);
@@ -383,7 +380,7 @@ public class SimpleSerializableHashTable implements ISerializableTable {
             int newFrameIndex = header.getInt(offsetInHeaderFrame);
             int newTupleIndex = header.getInt(offsetInHeaderFrame + 1);
 
-            // Migrate the existing entries (from 2nd to the last).
+            // Migrates the existing entries (from 2nd to the last).
             for (int i = 1; i < entryUsedCountInSlot; i++) {
                 int startOffsetInContentFrame = offsetInContentFrame + 2 + i * 2;
                 int startFrameIndex = frameIndex;
@@ -399,11 +396,11 @@ public class SimpleSerializableHashTable implements ISerializableTable {
                     return false;
                 }
             }
-            // Now, insert the new entry that caused an overflow to the old bucket.
+            // Now, inserts the new entry that caused an overflow to the old bucket.
             if (!insertNonFirstTuple(header, offsetInHeaderFrame, newFrameIndex, newTupleIndex, pointer)) {
                 return false;
             }
-            increaseWastedSpace(capacity);
+            increaseWastedSpaceCount(capacity);
         }
         return true;
     }
@@ -433,8 +430,8 @@ public class SimpleSerializableHashTable implements ISerializableTable {
     }
 
     /**
-     * Calculate the expected hash table size based on the worst scenario: there is no duplicated entries so that
-     * each entry is assigned to a different slot.
+     * Calculates the expected hash table size based on a scenario: there are no duplicated entries so that
+     * each entry is assigned to all possible slots.
      *
      * @param tableSize
      *            : the cardinality of the hash table - number of slots

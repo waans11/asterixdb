@@ -75,7 +75,7 @@ public interface IPartitionedTupleBufferManager {
             throws HyracksDataException;
 
     /**
-     * Cancel the effect of last insertTuple() operation. i.e. undo the last insertTuple() operation.
+     * Cancels the effect of last insertTuple() operation. i.e. undoes the last insertTuple() operation.
      */
     void cancelInsertTuple(int partition) throws HyracksDataException;
 
@@ -112,6 +112,5 @@ public interface IPartitionedTupleBufferManager {
      * @throws HyracksDataException
      */
     void clearPartition(int partition) throws HyracksDataException;
-
 
 }

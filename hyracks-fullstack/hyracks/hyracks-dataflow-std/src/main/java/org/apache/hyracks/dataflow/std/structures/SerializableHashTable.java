@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import org.apache.hyracks.api.context.IHyracksFrameMgrContext;
 import org.apache.hyracks.api.dataflow.value.ITuplePartitionComputer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.ITuplePointerAccessor;
 
 /**
@@ -68,7 +69,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
     }
 
     @Override
-    void increaseWastedSpace(int size) {
+    void increaseWastedSpaceCount(int size) {
         wastedIntSpaceCount += size;
     }
 
@@ -102,18 +103,19 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
     }
 
     /**
-     * Conduct a garbage collection. The steps are as follows.
-     * #1. Initialize the Reader and Writer. The frame index is zero at this moment.
+     * Collects garbages. The steps are as follows.
+     * #1. Initialize the Reader and Writer. The starting frame index is set to zero at this moment.
      * #2. Read a content frame. Find and read a slot data. Check the number of used count for the slot.
      * If it's not -1 (meaning that it is being used now), we move it to to the
-     * current offset of the Writer frame. Update the corresponding h() value pointer for this location
+     * current writing offset of the Writer frame. Update the corresponding h() value pointer for this location
      * in the header frame. We can find the h() value of the slot using a first tuple pointer in the slot.
      * If the number is -1 (meaning that it is migrated to a new place due to an overflow or deleted),
-     * just reclaim the space.
-     * #3. Once a Reader reaches the end of a frame, read next frame. This applies to the Writer, too.
+     * just reclaim the space by letting other slot move to this space.
+     * #3. Once a Reader reaches the end of a frame, read next frame by frame. This applies to the Writer, too. i.e.
+     * If the writing offset pointer reaches at the end of a frame, then writing frame will be set to the next frame.
      * #4. Repeat #1 ~ #3 until all frames are read.
      *
-     * @return the number of frames that are reclaimed. The value -1 is returned when no space was reclaimed.
+     * @return the number of frames that are reclaimed. The value -1 is returned when no compaction was happened.
      */
     @Override
     public int collectGarbage(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
@@ -130,28 +132,28 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
         IntSerDeBuffer currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
         int lastOffsetInLastFrame = currentOffsetInEachFrameList.get(contents.size() - 1);
 
-        // Step #1. Read a content frame until it reaches the end of content frames.
+        // Step #1. Reads a content frame until it reaches the end of content frames.
         while (gcInfo.currentReadPageForGC <= currentLargestFrameNumber) {
 
             gcInfo.currentReadIntOffsetInPageForGC = 0;
             currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
 
-            // Step #2. Advance the reader until it hits the end of the given frame.
+            // Step #2. Advances the reader until it hits the end of the given frame.
             while (gcInfo.currentReadIntOffsetInPageForGC < frameCapacity) {
                 nextSlotIntPosInPageForGC = findNextSlotInPage(currentReadContentFrameForGC,
                         gcInfo.currentReadIntOffsetInPageForGC);
 
                 if (nextSlotIntPosInPageForGC == INVALID_VALUE) {
-                    // There isn't a valid slot in the page. Exit the loop #2 and read the next frame.
+                    // There isn't a valid slot in the page. Exits the loop #2 and reads the next frame.
                     break;
                 }
 
-                // Valid slot found. Read the given slot information
+                // Valid slot found. Reads the given slot information.
                 slotCapacity = currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC);
                 slotUsedCount = currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC + 1);
                 capacityInIntCount = (slotCapacity + 1) * 2;
 
-                // Used count should not be -1 (spilled to the disk or migrated).
+                // Used count should not be -1 (migrated or deleted).
                 if (slotUsedCount != INVALID_VALUE) {
                     // To prepare hash pointer (header -> content) update, read the first tuple pointer in the old slot.
                     tempTuplePointer.reset(currentReadContentFrameForGC.getInt(nextSlotIntPosInPageForGC + 2),
@@ -169,7 +171,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
                         gcInfo.currentWriteIntOffsetInPageForGC = 0;
                     }
 
-                    // Migrate this slot to the current offset in Writer's Frame if possible.
+                    // Migrates this slot to the current offset in Writer's Frame if possible.
                     currentPageChanged = MigrateSlot(gcInfo, bufferAccessor, tpc, capacityInIntCount,
                             nextSlotIntPosInPageForGC);
 
@@ -178,7 +180,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
                         currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
                     }
                 } else {
-                    // A useless slot (either migrated or deleted) is found. Reset the space
+                    // A useless slot (either migrated or deleted) is found. Resets the space
                     // so it will be occupied by the next valid slot.
                     currentPageChanged = resetSlotSpace(gcInfo, nextSlotIntPosInPageForGC, capacityInIntCount);
 
@@ -189,7 +191,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
                 }
             }
 
-            // We reach the end of a frame. Advance the Reader.
+            // Reached the end of a frame. Advances the Reader.
             if (gcInfo.currentReadPageForGC == currentLargestFrameNumber) {
                 break;
             }
@@ -202,7 +204,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
             extraFrames = contents.size() - (currentLargestFrameNumber + 1);
         }
 
-        // Done reading all frames. So, release unnecessary frames.
+        // Done reading all frames. So, releases unnecessary frames.
         int numberOfFramesToBeDeallocated = gcInfo.currentReadPageForGC + extraFrames - gcInfo.currentGCWritePageForGC;
 
         if (numberOfFramesToBeDeallocated >= 1) {
@@ -221,7 +223,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
             }
         }
 
-        // Reset the current offset in the final page so that the future insertions will work without an issue.
+        // Resets the current offset in the last frame so that the future insertions will work without an issue.
         currentLargestFrameNumber = gcInfo.currentGCWritePageForGC;
         currentOffsetInEachFrameList.set(gcInfo.currentGCWritePageForGC, gcInfo.currentWriteIntOffsetInPageForGC);
 
@@ -232,9 +234,9 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
     }
 
     /**
-     * Migrate the current slot to the designated place and reset the current space using INVALID_VALUE.
+     * Migrates the current slot to the designated place and reset the current space using INVALID_VALUE.
      *
-     * @return true if the current page has been changed. false if the current page has not been changed.
+     * @return true if the current page has been changed. false if not.
      */
     private boolean MigrateSlot(GarbageCollectionInfo gcInfo, ITuplePointerAccessor bufferAccessor,
             ITuplePartitionComputer tpc, int capacityInIntCount, int nextSlotIntPosInPageForGC)
@@ -281,7 +283,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
         IntSerDeBuffer currentReadContentFrameForGC = contents.get(gcInfo.currentReadPageForGC);
         IntSerDeBuffer currentWriteContentFrameForGC = contents.get(gcInfo.currentGCWritePageForGC);
 
-        // Move the slot.
+        // Moves the slot.
         while (chunksToMove > 0) {
             oneTimeIntCapacityForWriter = Math.min(chunksToMove, frameCapacity - tempWriteIntPosInPage);
             oneTimeIntCapacityForReader = Math.min(chunksToMove, frameCapacity - tempReadIntPosInPage);
@@ -295,7 +297,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
                     currentWriteContentFrameForGC.bytes, tempWriteIntPosInPage * INT_SIZE,
                     chunksToMoveAtThisTime * INT_SIZE);
 
-            // Clear that part in the Reader
+            // Clears that part in the Reader
             for (int i = 0; i < chunksToMoveAtThisTime; i++) {
                 // Do not blindly put -1 since there might be overlapping between writer and reader.
                 if ((gcInfo.currentReadPageForGC != tempWritePage)
@@ -305,7 +307,7 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
                 }
             }
 
-            // Advance the pointer
+            // Advances the pointer
             tempWriteIntPosInPage += chunksToMoveAtThisTime;
             tempReadIntPosInPage += chunksToMoveAtThisTime;
 
@@ -339,10 +341,10 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
     }
 
     /**
-     * Completely remove the slot in the given content frame(s) and reset the space.
+     * Completely removes the slot in the given content frame(s) and resets the space.
      * For this method, we assume that this slot is not moved to somewhere else.
      *
-     * @return true if the current page has been changed. false if the current page has not been changed.
+     * @return true if the current page has been changed. false if not.
      */
     private boolean resetSlotSpace(GarbageCollectionInfo gcInfo, int slotIntPos, int capacityInIntCount) {
         boolean currentPageChanged = false;
@@ -354,10 +356,10 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
         while (chunksToDelete > 0) {
             chunksToDeleteAtThisTime = Math.min(chunksToDelete, frameCapacity - tempReadIntPosInPage);
 
-            // Clear that part in the Reader
+            // Clears that part in the Reader
             currentReadContentFrameForGC.writeInvalidVal(tempReadIntPosInPage, chunksToDeleteAtThisTime);
 
-            // Advance the pointer
+            // Advances the pointer
             tempReadIntPosInPage += chunksToDeleteAtThisTime;
 
             // Once the reader pointer hits the end of the page, we move to the next content page.
@@ -377,29 +379,29 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
     }
 
     /**
-     * Update the given Header to Content Frame Pointer after calculating the corresponding hash value from the
+     * Updates the given Header to Content Frame Pointer after calculating the corresponding hash value from the
      * given tuple pointer.
      */
     private void updateHeaderToContentPointerInHeaderFrame(ITuplePointerAccessor bufferAccessor,
             ITuplePartitionComputer tpc, TuplePointer hashedTuple, int newContentFrame,
             int newOffsetInContentFrame) throws HyracksDataException {
-        // Find the original hash value. We assume that bufferAccessor and tpc is already assigned.
+        // Finds the original hash value. We assume that bufferAccessor and tpc is already assigned.
         bufferAccessor.reset(hashedTuple);
         int entry = tpc.partition(bufferAccessor, hashedTuple.getTupleIndex(), tableSize);
 
-        // Find the location of the hash value in the header frame arrays.
+        // Finds the location of the hash value in the header frame arrays.
         int headerFrameIndex = getHeaderFrameIndex(entry);
         int offsetInHeaderFrame = getHeaderFrameOffset(entry);
         IntSerDeBuffer headerFrame = headers[headerFrameIndex];
 
-        // Update the hash value.
+        // Updates the hash value.
         headerFrame.writeInt(offsetInHeaderFrame, newContentFrame);
         headerFrame.writeInt(offsetInHeaderFrame + 1, newOffsetInContentFrame);
     }
 
 
     /**
-     * Try to find the next valid slot position in the given content frame from the current position.
+     * Tries to find the next valid slot position in the given content frame from the current position.
      */
     private int findNextSlotInPage(IntSerDeBuffer frame, int readIntPosAtPage) {
         // Sanity check
@@ -421,7 +423,6 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
      * Keeps the garbage collection related variables
      */
     private static class GarbageCollectionInfo {
-        // For garbage collection
         int currentReadPageForGC;
         int currentReadIntOffsetInPageForGC;
         int currentGCWritePageForGC;
@@ -434,6 +435,9 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
             currentWriteIntOffsetInPageForGC = 0;
         }
 
+        /**
+         * Checks whether the writing position and the reading position are the same.
+         */
         public boolean isReaderWriterAtTheSamePos() {
             return currentReadPageForGC == currentGCWritePageForGC
                     && currentReadIntOffsetInPageForGC == currentWriteIntOffsetInPageForGC;

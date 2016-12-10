@@ -257,7 +257,7 @@ public class ExternalGroupByPOperator extends AbstractPhysicalOperator {
         INormalizedKeyComputerFactory normalizedKeyFactory = JobGenHelper
                 .variablesToAscNormalizedKeyComputerFactory(gbyCols, aggOpInputEnv, context);
 
-        // Calculate the hash table size (# of unique hash values) based on the budget and a tuple size.
+        // Calculates the hash table size (# of unique hash values) based on the budget and a tuple size.
         int memoryBudgetInBytes = context.getFrameSize() * frameLimit;
         int groupByColumnsCount = gby.getGroupByList().size() + numFds;
         int hashTableSize = calculateGroupByTableEntrySize(memoryBudgetInBytes, groupByColumnsCount,
@@ -285,10 +285,10 @@ public class ExternalGroupByPOperator extends AbstractPhysicalOperator {
 
     /**
      * Based on a rough estimation of a tuple (each field size: 4 bytes) size and the number of possible hash values
-     * for the given number of group-by columns, calculate the number of hash entries for the hash table in Group-by.
-     * The formula is min(# of hash values, # of possible tuples in the data table).
-     * We assume that the group-by table consists of hash table that stores hash value of tuple pointer and data table
-     * actually stores the aggregated tuple.
+     * for the given number of group-by columns, calculates the number of hash entries for the hash table in Group-by.
+     * The formula is min(# of possible hash values, # of possible tuples in the data table).
+     * This method assumes that the group-by table consists of hash table that stores hash value of tuple pointer
+     * and data table actually stores the aggregated tuple.
      * For more details, refer to this JIRA issue: https://issues.apache.org/jira/browse/ASTERIXDB-1556
      *
      * @param memoryBudgetInBytes
@@ -297,13 +297,13 @@ public class ExternalGroupByPOperator extends AbstractPhysicalOperator {
      */
     public static int calculateGroupByTableEntrySize(int memoryBudgetInBytes, int numberOfGroupByColumns,
             int frameSize) {
-        // Estimate a minimum tuple size with n fields:
+        // Estimates a minimum tuple size with n fields:
         // (4:tuple offset in a frame, 4n:each field offset in a tuple, 4n:each field size 4 bytes)
         int tupleByteSize = 4 + 8 * numberOfGroupByColumns;
 
         int maxNumberOfTuplesInDataTable = memoryBudgetInBytes / tupleByteSize;
 
-        // To calculate possible hash values, we count the number of bits.
+        // To calculate possible hash values, this counts the number of bits.
         // We assume that each field consists of 4 bytes.
         // Also, too high range that is greater than Long.MAXVALUE (64 bits) is not necessary for our calculation.
         // And, this should not generate negative numbers when shifting the number.
@@ -312,20 +312,20 @@ public class ExternalGroupByPOperator extends AbstractPhysicalOperator {
         // Possible number of unique hash entries
         long possibleNumberOfHashEntries = (long) 2 << numberOfBits;
 
-        // Between # of entries in Data table and # of possible hash values, we choose smaller one.
+        // Between # of entries in Data table and # of possible hash values, we choose the smaller one.
         long groupByTableSize = Math.min(possibleNumberOfHashEntries, maxNumberOfTuplesInDataTable);
         long groupByTableByteSize = SerializableHashTable.getExpectedTableSizeInByte((int) groupByTableSize, frameSize);
 
-        // Get the ratio of hash-table size in the total size (hash + data table).
+        // Gets the ratio of hash-table size in the total size (hash + data table).
         double hashTableRatio = (double) groupByTableByteSize / (groupByTableByteSize + memoryBudgetInBytes);
 
-        // Get the table size based on the ratio that we have calculated.
+        // Gets the table size based on the ratio that we have calculated.
         long finalGroupByTableByteSize = (long) (hashTableRatio * memoryBudgetInBytes);
 
         long finalGroupByTableSize = finalGroupByTableByteSize
                 / SerializableHashTable.getExpectedByteSizePerHashValue();
 
-        // Find the next prime number to be used as the hash-table size (# of entries).
+        // Finds the next prime number to be used as the hash-table size (# of entries).
         BigInteger groupByPrimeNumberTableSize = BigInteger.valueOf((long) finalGroupByTableSize).nextProbablePrime();
 
         return groupByPrimeNumberTableSize.intValue();
