@@ -390,7 +390,6 @@ public class OptimizedHybridHashJoin {
     private int selectPartitionsToReload(int freeSpace, int pid, int inMemTupCount, int originalHashTableSize) {
         for (int i = spilledStatus.nextSetBit(pid); i >= 0
                 && i < numOfPartitions; i = spilledStatus.nextSetBit(i + 1)) {
-            assert buildRFWriters[i].getFileSize() > 0 : "How come a spilled partition has size 0?";
             int spilledTupleCount = buildPSizeInTups[i];
             // Expected hash table size increase after reloading this partition
             int expectedHashTableSizeIncrease = SerializableHashTable.getExpectedTableSizeInByte(
