@@ -312,7 +312,7 @@ public class OptimizedHybridHashJoin {
                         && p < numOfPartitions; p = spilledStatus.nextClearBit(p + 1)) {
                     int spaceToBeReturned = bufferManager.getPhysicalSize(p);
                     int numberOfTuplesToBeSpilled = buildPSizeInTups[p];
-                    if (spaceToBeReturned == 0) {
+                    if (spaceToBeReturned == 0 || numberOfTuplesToBeSpilled == 0) {
                         continue;
                     }
                     spillPartition(p);
@@ -323,6 +323,8 @@ public class OptimizedHybridHashJoin {
                     int expectedHashTableSizeDecrease = hashTableByteSizeForInMemTuples
                             - SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount, frameSize);
                     freeSpace = freeSpace + spaceToBeReturned + expectedHashTableSizeDecrease;
+                    // Adjusts the hash table size
+                    hashTableByteSizeForInMemTuples -= expectedHashTableSizeDecrease;
                     if (freeSpace > 0) {
                         break;
                     }
@@ -337,7 +339,7 @@ public class OptimizedHybridHashJoin {
                     frameSize);
         }
 
-        // Bring back some partitions if we have enough free space.
+        // Brings back some partitions if there is enough free space.
         int pid = 0;
         while ((pid = selectPartitionsToReload(freeSpace, pid, inMemTupCount, hashTableByteSizeForInMemTuples)) >= 0) {
             if (!loadSpilledPartitionToMem(pid, buildRFWriters[pid])) {
@@ -347,6 +349,8 @@ public class OptimizedHybridHashJoin {
             int expectedHashTableSizeIncrease = SerializableHashTable.getExpectedTableSizeInByte(inMemTupCount,
                     frameSize) - hashTableByteSizeForInMemTuples;
             freeSpace = freeSpace - bufferManager.getPhysicalSize(pid) - expectedHashTableSizeIncrease;
+            // Adjusts the hash table size
+            hashTableByteSizeForInMemTuples += expectedHashTableSizeIncrease;
         }
 
         return inMemTupCount;
@@ -389,7 +393,7 @@ public class OptimizedHybridHashJoin {
             // Expected hash table size increase after reloading this partition
             int expectedHashTableSizeIncrease = SerializableHashTable.getExpectedTableSizeInByte(
                     inMemTupCount + spilledTupleCount, ctx.getInitialFrameSize()) - originalHashTableSize;
-            if (freeSpace >= buildRFWriters[i].getFileSize() + expectedHashTableSizeIncrease) {
+            if (freeSpace > buildRFWriters[i].getFileSize() + expectedHashTableSizeIncrease) {
                 return i;
             }
         }
