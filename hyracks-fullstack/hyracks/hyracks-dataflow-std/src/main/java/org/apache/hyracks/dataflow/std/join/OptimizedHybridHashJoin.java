@@ -355,11 +355,6 @@ public class OptimizedHybridHashJoin {
     /**
      * Finds a best-fit partition that will be spilled to the disk to make enough space to accommodate the hash table.
      *
-     * @param currentFreeSpace
-     * @param currentInMemTupCount
-     * @param currentHashTableByteSizeForInMemTuples
-     * @param partPhysicalByteSizesInMem
-     * @param partNumTuplesInMem
      * @return the partition id that will be spilled to the disk. Returns -1 if there is no single suitable partition.
      */
     private int selectSinglePartitionToSpill(int currentFreeSpace, int currentInMemTupCount,
