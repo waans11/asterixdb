@@ -77,6 +77,7 @@ public class ErrorCode {
     public static final int COMPILATION_PRIMARY_KEY_CANNOT_BE_NULLABLE = 1021;
     public static final int COMPILATION_ILLEGAL_PRIMARY_KEY_TYPE = 1022;
     public static final int COMPILATION_CANT_DROP_ACTIVE_DATASET = 1023;
+    public static final int COMPILATION_TRANSLATION_ERROR = 1024;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;

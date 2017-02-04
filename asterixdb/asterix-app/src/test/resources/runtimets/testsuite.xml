@@ -2660,7 +2660,7 @@
     <test-case FilePath="fuzzyjoin">
       <compilation-unit name="dblp-aqlplus_2">
         <output-dir compare="Text">dblp-aqlplus_2</output-dir>
-        <expected-error>Type mismatch: function similarity-jaccard expects its 1st input parameter to be type orderedlist or unorderedlist, but the actual input type is string</expected-error>
+        <expected-error>Type mismatch: function scan-collection expects its 1st input parameter to be type orderedlist or unorderedlist, but the actual input type is string</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="fuzzyjoin">
@@ -2764,6 +2764,46 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="fuzzyjoin">
+        <compilation-unit name="dblp-csx-4.1.1">
+            <output-dir compare="Text">dblp-csx-4.1.1</output-dir>
+        </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+        <compilation-unit name="dblp-csx-4.1.2">
+            <output-dir compare="Text">dblp-csx-4.1.2</output-dir>
+        </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+        <compilation-unit name="dblp-csx-4.2.1">
+            <output-dir compare="Text">dblp-csx-4.2.1</output-dir>
+        </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+        <compilation-unit name="dblp-csx-4.2.2">
+            <output-dir compare="Text">dblp-csx-4.2.2</output-dir>
+        </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+        <compilation-unit name="dblp-csx-4.3.1">
+            <output-dir compare="Text">dblp-csx-4.3.1</output-dir>
+        </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+        <compilation-unit name="dblp-csx-4.3.2">
+            <output-dir compare="Text">dblp-csx-4.3.2</output-dir>
+        </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+        <compilation-unit name="dblp-csx-4.4.1">
+            <output-dir compare="Text">dblp-csx-4.4.1</output-dir>
+        </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+        <compilation-unit name="dblp-csx-4.4.2">
+            <output-dir compare="Text">dblp-csx-4.4.2</output-dir>
+        </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
       <compilation-unit name="dblp-csx-aqlplus_1">
         <output-dir compare="Text">dblp-csx-aqlplus_1</output-dir>
       </compilation-unit>
@@ -2786,6 +2826,11 @@
     <test-case FilePath="fuzzyjoin">
       <compilation-unit name="dblp-csx-aqlplus_5">
         <output-dir compare="Text">dblp-csx-aqlplus_5</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fuzzyjoin">
+      <compilation-unit name="dblp-csx-aqlplus_6">
+        <output-dir compare="Text">dblp-csx-aqlplus_6</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="fuzzyjoin">

@@ -48,9 +48,9 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOpera
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.NestedTupleSourceOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SubplanOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.algebricks.core.algebra.plan.ALogicalPlanImpl;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorManipulationUtil;
@@ -255,20 +255,13 @@ distribute result [%0->$$17] -- |UNPARTITIONED|
 */
 public class InlineSubplanInputForNestedTupleSourceRule implements IAlgebraicRewriteRule {
 
-    // To make sure the rule only runs once.
-    private boolean hasRun = false;
-
     @Override
     public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
             throws AlgebricksException {
-        if (hasRun) {
-            return false;
-        }
         if (context.checkIfInDontApplySet(this, opRef.getValue())) {
             return false;
         }
         Pair<Boolean, LinkedHashMap<LogicalVariable, LogicalVariable>> result = rewriteSubplanOperator(opRef, context);
-        hasRun = true;
         return result.first;
     }
 
