@@ -79,6 +79,7 @@ public class ErrorCode {
     public static final int COMPILATION_CANT_DROP_ACTIVE_DATASET = 1023;
     public static final int COMPILATION_AQLPLUS_IDENTIFIER_NOT_FOUND = 1024;
     public static final int COMPILATION_AQLPLUS_NO_SUCH_JOIN_TYPE = 1025;
+    public static final int COMPILATION_TRANSLATION_ERROR = 1026;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;
