@@ -69,6 +69,11 @@ public class EditDistanceSearchModifier implements IInvertedIndexSearchModifier 
 
     @Override
     public String toString() {
-        return "Edit Distance Search Modifier, GramLen: " + gramLength + ", Threshold: " + edThresh;
+        return "Edit Distance Search Modifier, GramLen:\t" + gramLength + "\tThreshold\t" + edThresh;
+    }
+
+    @Override
+    public float getThreshold() {
+        return edThresh;
     }
 }

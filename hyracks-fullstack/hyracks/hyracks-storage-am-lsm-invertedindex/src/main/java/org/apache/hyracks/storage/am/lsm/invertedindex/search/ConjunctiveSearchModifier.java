@@ -47,4 +47,10 @@ public class ConjunctiveSearchModifier implements IInvertedIndexSearchModifier {
     public short getNumTokensUpperBound(short numQueryTokens) {
         return -1;
     }
+
+    @Override
+    public float getThreshold() {
+        return -1;
+    }
+
 }

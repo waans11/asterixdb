@@ -98,4 +98,10 @@ public class InvertedIndexSearchPredicate extends AbstractSearchPredicate {
     public ITupleReference getLowKey() {
         return null;
     }
+
+    @Override
+    public String toString() {
+        return "InvertedIndexSearchPredicate: " + searchModifier.toString();
+    }
+
 }

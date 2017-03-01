@@ -21,6 +21,8 @@ package org.apache.hyracks.storage.am.common.dataflow;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
@@ -71,6 +73,9 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
     protected final int[] maxFilterFieldIndexes;
     protected PermutingFrameTupleReference minFilterKey;
     protected PermutingFrameTupleReference maxFilterKey;
+
+    // Temp: for debug purpose only
+    protected int totalResultCount = 0;
 
     public IndexSearchOperatorNodePushable(IIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition,
             IRecordDescriptorProvider recordDescProvider, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes)
@@ -151,6 +156,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
             matched = true;
             tb.reset();
             cursor.next();
+            totalResultCount++;
             if (retainInput) {
                 frameTuple.reset(accessor, tupleIndex);
                 for (int i = 0; i < frameTuple.getFieldCount(); i++) {
@@ -196,6 +202,11 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
     @Override
     public void close() throws HyracksDataException {
+        // Temp:
+        String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
+        System.out.println(dateTimeNow + " IndexSearchOperatorNodePushable.close() " + index.toString() + " "
+                + searchPred.toString() + "\t" + totalResultCount);
+
         HyracksDataException closeException = null;
         if (index != null) {
             // if index == null, then the index open was not successful

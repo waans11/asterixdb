@@ -20,6 +20,8 @@
 package org.apache.hyracks.storage.am.lsm.invertedindex.search;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 
 import org.apache.hyracks.api.context.IHyracksCommonContext;
@@ -106,6 +108,12 @@ public class PartitionedTOccurrenceSearcher extends AbstractTOccurrenceSearcher 
         if (occurrenceThreshold <= 0) {
             throw new OccurrenceThresholdPanicException("Merge Threshold is <= 0. Failing Search.");
         }
+
+        // Temp:
+        String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
+        System.out.println(dateTimeNow + " PartitionedTOccurrenceSearcher.search() " + searchModifier.toString()
+                + " numQueryTokens " + numQueryTokens + " lowerBound " + numTokensLowerBound + " upperBound "
+                + numTokensUpperBound + " occurrenceThreshold " + occurrenceThreshold);
 
         short maxCountPossible = numQueryTokens;
         invListCursorCache.reset();

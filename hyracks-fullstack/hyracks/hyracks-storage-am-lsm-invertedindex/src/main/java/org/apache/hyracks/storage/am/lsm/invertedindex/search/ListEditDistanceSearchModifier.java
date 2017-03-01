@@ -61,4 +61,10 @@ public class ListEditDistanceSearchModifier implements IInvertedIndexSearchModif
     public String toString() {
         return "List Edit Distance Search Modifier, Threshold: " + edThresh;
     }
+
+    @Override
+    public float getThreshold() {
+        return edThresh;
+    }
+
 }

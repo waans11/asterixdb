@@ -130,4 +130,11 @@ public class RangePredicate extends AbstractSearchPredicate {
     public void setHighKeyCmp(MultiComparator highKeyCmp) {
         this.highKeyCmp = highKeyCmp;
     }
+
+    @Override
+    public String toString() {
+        return "BTreeRangePredicate: low " + lowKey + " incl " + lowKeyInclusive + "  high " + highKey + " incl "
+                + highKeyInclusive;
+    }
+
 }

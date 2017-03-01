@@ -19,12 +19,10 @@
 
 package org.apache.asterix.runtime.job.resource;
 
-import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.resource.IClusterCapacity;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
-import org.apache.hyracks.api.job.resource.IReadOnlyClusterCapacity;
 import org.apache.hyracks.control.cc.scheduler.IResourceManager;
 
 // To avoid the computation cost for checking the capacity constraint for each node,
@@ -40,24 +38,26 @@ public class JobCapacityController implements IJobCapacityController {
 
     @Override
     public JobSubmissionStatus allocate(JobSpecification job) throws HyracksException {
-        IClusterCapacity requiredCapacity = job.getRequiredClusterCapacity();
-        long reqAggregatedMemoryByteSize = requiredCapacity.getAggregatedMemoryByteSize();
-        int reqAggregatedNumCores = requiredCapacity.getAggregatedCores();
-        IReadOnlyClusterCapacity maximumCapacity = resourceManager.getMaximumCapacity();
-        if (!(reqAggregatedMemoryByteSize <= maximumCapacity.getAggregatedMemoryByteSize()
-                && reqAggregatedNumCores <= maximumCapacity.getAggregatedCores())) {
-            throw HyracksException.create(ErrorCode.JOB_REQUIREMENTS_EXCEED_CAPACITY, requiredCapacity.toString(),
-                    maximumCapacity.toString());
-        }
-        IClusterCapacity currentCapacity = resourceManager.getCurrentCapacity();
-        long currentAggregatedMemoryByteSize = currentCapacity.getAggregatedMemoryByteSize();
-        int currentAggregatedAvailableCores = currentCapacity.getAggregatedCores();
-        if (!(reqAggregatedMemoryByteSize <= currentAggregatedMemoryByteSize
-                && reqAggregatedNumCores <= currentAggregatedAvailableCores)) {
-            return JobSubmissionStatus.QUEUE;
-        }
-        currentCapacity.setAggregatedMemoryByteSize(currentAggregatedMemoryByteSize - reqAggregatedMemoryByteSize);
-        currentCapacity.setAggregatedCores(currentAggregatedAvailableCores - reqAggregatedNumCores);
+        // Temp: disable this to execute the fuzzy join
+
+        //        IClusterCapacity requiredCapacity = job.getRequiredClusterCapacity();
+        //        long reqAggregatedMemoryByteSize = requiredCapacity.getAggregatedMemoryByteSize();
+        //        int reqAggregatedNumCores = requiredCapacity.getAggregatedCores();
+        //        IReadOnlyClusterCapacity maximumCapacity = resourceManager.getMaximumCapacity();
+        //        if (!(reqAggregatedMemoryByteSize <= maximumCapacity.getAggregatedMemoryByteSize()
+        //                && reqAggregatedNumCores <= maximumCapacity.getAggregatedCores())) {
+        //            throw HyracksException.create(ErrorCode.JOB_REQUIREMENTS_EXCEED_CAPACITY, requiredCapacity.toString(),
+        //                    maximumCapacity.toString());
+        //        }
+        //        IClusterCapacity currentCapacity = resourceManager.getCurrentCapacity();
+        //        long currentAggregatedMemoryByteSize = currentCapacity.getAggregatedMemoryByteSize();
+        //        int currentAggregatedAvailableCores = currentCapacity.getAggregatedCores();
+        //        if (!(reqAggregatedMemoryByteSize <= currentAggregatedMemoryByteSize
+        //                && reqAggregatedNumCores <= currentAggregatedAvailableCores)) {
+        //            return JobSubmissionStatus.QUEUE;
+        //        }
+        //        currentCapacity.setAggregatedMemoryByteSize(currentAggregatedMemoryByteSize - reqAggregatedMemoryByteSize);
+        //        currentCapacity.setAggregatedCores(currentAggregatedAvailableCores - reqAggregatedNumCores);
         return JobSubmissionStatus.EXECUTE;
     }
 

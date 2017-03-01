@@ -27,4 +27,6 @@ public interface IInvertedIndexSearchModifier {
     public short getNumTokensLowerBound(short numQueryTokens);
 
     public short getNumTokensUpperBound(short numQueryTokens);
+
+    public float getThreshold();
 }
