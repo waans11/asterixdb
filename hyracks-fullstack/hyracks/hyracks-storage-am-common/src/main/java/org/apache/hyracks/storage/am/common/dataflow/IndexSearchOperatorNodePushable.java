@@ -76,6 +76,14 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
     // Temp: for debug purpose only
     protected int totalResultCount = 0;
+    // For the index search only.
+    protected long startTime = 0;
+    protected long endTime = 0;
+    protected long elapsedTime = 0;
+    // For the entire duration between open() and close()
+    protected long durationStartTime = 0;
+    protected long durationEndTime = 0;
+    protected long durationElapsedTime = 0;
 
     public IndexSearchOperatorNodePushable(IIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition,
             IRecordDescriptorProvider recordDescProvider, int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes)
@@ -113,6 +121,9 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
     @Override
     public void open() throws HyracksDataException {
+        // Temp:
+        durationStartTime = System.currentTimeMillis();
+
         writer.open();
         indexHelper.open();
         index = indexHelper.getIndexInstance();
@@ -151,6 +162,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
     }
 
     protected void writeSearchResults(int tupleIndex) throws Exception {
+        startTime = System.currentTimeMillis();
         boolean matched = false;
         while (cursor.hasNext()) {
             matched = true;
@@ -169,6 +181,11 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
                 dos.write(tuple.getFieldData(i), tuple.getFieldStart(i), tuple.getFieldLength(i));
                 tb.addFieldEndOffset();
             }
+
+            // Temp:
+            endTime = System.currentTimeMillis();
+            elapsedTime = elapsedTime + (endTime - startTime);
+
             FrameUtils.appendToWriter(writer, appender, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
         }
 
@@ -181,6 +198,9 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
     @Override
     public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+        // Temp: debug
+        startTime = System.currentTimeMillis();
+
         accessor.reset(buffer);
         int tupleCount = accessor.getTupleCount();
         try {
@@ -188,11 +208,17 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
                 resetSearchPredicate(i);
                 cursor.reset();
                 indexAccessor.search(cursor, searchPred);
+                endTime = System.currentTimeMillis();
+                elapsedTime = elapsedTime + (endTime - startTime);
                 writeSearchResults(i);
+                startTime = System.currentTimeMillis();
             }
         } catch (Exception e) {
             throw new HyracksDataException(e);
         }
+
+        // Temp: debug
+        long end = System.currentTimeMillis();
     }
 
     @Override
@@ -202,11 +228,6 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
     @Override
     public void close() throws HyracksDataException {
-        // Temp:
-        String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
-        System.out.println(dateTimeNow + " IndexSearchOperatorNodePushable.close() " + index.toString() + " "
-                + searchPred.toString() + "\t" + totalResultCount);
-
         HyracksDataException closeException = null;
         if (index != null) {
             // if index == null, then the index open was not successful
@@ -250,6 +271,16 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
         if (closeException != null) {
             throw closeException;
         }
+
+        // Temp:
+        durationEndTime = System.currentTimeMillis();
+        durationElapsedTime = durationEndTime - durationStartTime;
+
+        // Temp:
+        String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
+        System.out.println(dateTimeNow + " IndexSearchOperatorNodePushable.close() " + index.toString() + " "
+                + searchPred.toString() + "\tsearch time(ms)\t" + elapsedTime + "\tduration(ms)\t" + durationElapsedTime
+                + "\tcount\t" + totalResultCount);
     }
 
     @Override
