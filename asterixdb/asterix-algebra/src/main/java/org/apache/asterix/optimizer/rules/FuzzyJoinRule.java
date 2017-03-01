@@ -122,7 +122,7 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
             + "        where $token = /*+ bcast */ $tokenRanked " + "order by $i " + "return $i "
             + "      for $prefixTokenRight in subset-collection($tokensRight, 0, prefix-len-%s(len($tokensRight), %ff)) "
             + "      ), $prefixTokenLeft = $prefixTokenRight) "
-            + "    let $sim := similarity-%s-prefix($lenLeft, $tokensLeft, $lenRight, $tokensRight, $prefixTokenLeft, %ff) "
+            + "    let $sim := similarity-%s($tokensLeft, $tokensRight) "
             + "    where $sim >= %ff " + "/*+ hash*/ " + "group by %s, %s with $sim "
             //
             // -- -- -
@@ -355,7 +355,7 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
         }
         return String
                 .format(Locale.US, prepareJoin, tokenizer, tokenizer, simFunction, simThreshold, tokenizer, tokenizer,
-                        simFunction, simThreshold, simFunction, simThreshold, simThreshold, groupByLeft, groupByRight,
+                        simFunction, simThreshold, simFunction, simThreshold, groupByLeft, groupByRight,
                         joinCondRight, joinCondLeft);
     }
 
