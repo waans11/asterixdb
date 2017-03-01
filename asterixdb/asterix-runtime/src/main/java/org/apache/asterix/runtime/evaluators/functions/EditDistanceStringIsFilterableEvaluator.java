@@ -84,7 +84,7 @@ public class EditDistanceStringIsFilterableEvaluator implements IScalarEvaluator
             throw new TypeMismatchException(BuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE, 0, typeTag,
                     ATypeTag.SERIALIZED_STRING_TYPE_TAG);
         }
-        utf8Ptr.set(stringPtr.getByteArray(), stringPtr.getStartOffset() + 1, stringPtr.getLength());
+        utf8Ptr.set(stringPtr.getByteArray(), stringPtr.getStartOffset() + 1, stringPtr.getLength() - 1);
         int strLen = utf8Ptr.getStringLength();
 
         // Check type and extract edit-distance threshold.
