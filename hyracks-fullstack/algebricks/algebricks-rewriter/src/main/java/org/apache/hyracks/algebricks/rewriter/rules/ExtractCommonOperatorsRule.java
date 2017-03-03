@@ -37,6 +37,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractReplicateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExchangeOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ProjectOperator;
@@ -461,8 +462,9 @@ public class ExtractCommonOperatorsRule implements IAlgebraicRewriteRule {
             MutableInt currentClusterId) {
         // only replicate operator has multiple outputs
         int outputIndex = 0;
-        if (opRef.getValue().getOperatorTag() == LogicalOperatorTag.REPLICATE) {
-            ReplicateOperator rop = (ReplicateOperator) opRef.getValue();
+        if (opRef.getValue().getOperatorTag() == LogicalOperatorTag.REPLICATE
+                || opRef.getValue().getOperatorTag() == LogicalOperatorTag.SPLIT) {
+            AbstractReplicateOperator rop = (AbstractReplicateOperator) opRef.getValue();
             List<Mutable<ILogicalOperator>> outputs = rop.getOutputs();
             for (outputIndex = 0; outputIndex < outputs.size(); outputIndex++) {
                 if (outputs.get(outputIndex).equals(parentRef)) {

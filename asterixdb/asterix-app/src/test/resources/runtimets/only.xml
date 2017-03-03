@@ -19,5 +19,10 @@
  !-->
 <test-suite xmlns="urn:xml.testframework.asterix.apache.org" ResultOffsetPath="results" QueryOffsetPath="queries">
   <test-group name="failed">
+    <test-case FilePath="inverted-index-join">
+      <compilation-unit name="ngram-edit-distance">
+        <output-dir compare="Text">ngram-edit-distance</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
 </test-suite>

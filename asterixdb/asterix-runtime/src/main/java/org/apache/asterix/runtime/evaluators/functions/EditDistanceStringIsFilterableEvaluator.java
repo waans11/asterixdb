@@ -24,7 +24,8 @@ import java.io.IOException;
 
 import org.apache.asterix.dataflow.data.nontagged.serde.ABooleanSerializerDeserializer;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
-import org.apache.asterix.om.base.ABoolean;
+import org.apache.asterix.om.base.AInt32;
+import org.apache.asterix.om.base.AMutableInt32;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
@@ -55,9 +56,10 @@ public class EditDistanceStringIsFilterableEvaluator implements IScalarEvaluator
     protected final IScalarEvaluator gramLenEval;
     protected final IScalarEvaluator usePrePostEval;
 
+    protected final AMutableInt32 aInt32 = new AMutableInt32(-1);
     @SuppressWarnings("unchecked")
-    private final ISerializerDeserializer<ABoolean> booleanSerde =
-            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABOOLEAN);
+    private ISerializerDeserializer<AInt32> int32Serde =
+            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
 
     private final UTF8StringPointable utf8Ptr = new UTF8StringPointable();
 
@@ -109,9 +111,11 @@ public class EditDistanceStringIsFilterableEvaluator implements IScalarEvaluator
         long lowerBound = numGrams - edThresh * gramLen;
         try {
             if (lowerBound <= 0 || strLen == 0) {
-                booleanSerde.serialize(ABoolean.FALSE, output);
+                aInt32.setValue(1);
+                int32Serde.serialize(aInt32, output);
             } else {
-                booleanSerde.serialize(ABoolean.TRUE, output);
+                aInt32.setValue(0);
+                int32Serde.serialize(aInt32, output);
             }
         } catch (IOException e) {
             throw new HyracksDataException(e);

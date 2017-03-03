@@ -30,8 +30,8 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 /**
  * Checks whether a string with an edit distance threshold can be filtered with a lower bounding
- * on number of common grams. This function returns 'true' if the lower bound on the number of
- * common grams is positive, 'false' otherwise. For example, this function is used during an indexed
+ * on number of common grams. This function returns 0 if the lower bound on the number of
+ * common grams is positive, 1 otherwise. For example, this function is used during an indexed
  * nested-loop join based on edit distance. We partition the tuples of the probing dataset into those
  * that are filterable and those that are not. Those that are filterable are forwarded to the index.
  * The others are fed into a (non indexed) nested-loop join.

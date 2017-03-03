@@ -19,8 +19,6 @@
 
 package org.apache.hyracks.storage.am.lsm.invertedindex.search;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 
 import org.apache.hyracks.api.context.IHyracksCommonContext;
@@ -57,12 +55,6 @@ public class TOccurrenceSearcher extends AbstractTOccurrenceSearcher {
 
         IInvertedIndexSearchModifier searchModifier = searchPred.getSearchModifier();
         occurrenceThreshold = searchModifier.getOccurrenceThreshold(numQueryTokens);
-
-        // Temp:
-        String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
-        System.out.println(dateTimeNow + " TOccurrenceSearcher.search() " + searchModifier.toString()
-                + " numQueryTokens " + numQueryTokens + " occurrenceThreshold " + occurrenceThreshold);
-
         if (occurrenceThreshold <= 0) {
             throw new OccurrenceThresholdPanicException("Merge threshold is <= 0. Failing Search.");
         }

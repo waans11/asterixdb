@@ -73,8 +73,8 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractUnne
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.ReplicateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.LogicalOperatorDeepCopyWithNewVariablesVisitor;
@@ -687,12 +687,6 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             IOptimizationContext context) throws AlgebricksException {
         LogicalVariable inputSearchVar = getInputSearchVar(optFuncExpr, indexSubTree);
 
-        // We split the plan into two "branches", and add selections on each side.
-        AbstractLogicalOperator replicateOp = new ReplicateOperator(2);
-        replicateOp.getInputs().add(new MutableObject<ILogicalOperator>(probeSubTree.getRoot()));
-        replicateOp.setExecutionMode(ExecutionMode.PARTITIONED);
-        context.computeAndSetTypeEnvironmentForOperator(replicateOp);
-
         // Create select ops for removing tuples that are filterable and not filterable, respectively.
         IVariableTypeEnvironment probeTypeEnv = context.getOutputTypeEnvironment(probeSubTree.getRoot());
         IAType inputSearchVarType;
@@ -701,17 +695,32 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         } else {
             inputSearchVarType = (IAType) probeTypeEnv.getVarType(inputSearchVar);
         }
-        Mutable<ILogicalOperator> isFilterableSelectOpRef = new MutableObject<ILogicalOperator>();
-        Mutable<ILogicalOperator> isNotFilterableSelectOpRef = new MutableObject<ILogicalOperator>();
-        createIsFilterableSelectOps(replicateOp, inputSearchVar, inputSearchVarType, optFuncExpr, chosenIndex, context,
-                isFilterableSelectOpRef, isNotFilterableSelectOpRef);
+
+        MutableObject<ILogicalExpression> isFilterableExpr =
+                createIsFilterableExpr(inputSearchVar, inputSearchVarType, optFuncExpr, chosenIndex, context);
+
+        LogicalVariable var = context.newVar();
+        AssignOperator filterAssignOp = new AssignOperator(var, isFilterableExpr);
+        filterAssignOp.getInputs().add(new MutableObject<ILogicalOperator>(probeSubTree.getRoot()));
+        filterAssignOp.setExecutionMode(ExecutionMode.PARTITIONED);
+        context.computeAndSetTypeEnvironmentForOperator(filterAssignOp);
+
+        // We split the plan into two "branches".
+        int numberOfOutputBranch = 2;
+        // When the given field is missing, then that tuple will be branched to T <= 0 case (non-index utilization).
+        int defaultBranch = 1;
+        AbstractLogicalOperator splitOp = new SplitOperator(numberOfOutputBranch,
+                new MutableObject<ILogicalExpression>(new VariableReferenceExpression(var)), defaultBranch, false);
+        splitOp.getInputs().add(new MutableObject<ILogicalOperator>(filterAssignOp));
+        splitOp.setExecutionMode(ExecutionMode.PARTITIONED);
+        context.computeAndSetTypeEnvironmentForOperator(splitOp);
 
         List<LogicalVariable> originalLiveVars = new ArrayList<LogicalVariable>();
         VariableUtilities.getLiveVariables(indexSubTree.getRoot(), originalLiveVars);
 
         // Copy the scan subtree in indexSubTree.
-        LogicalOperatorDeepCopyWithNewVariablesVisitor deepCopyVisitor = new LogicalOperatorDeepCopyWithNewVariablesVisitor(
-                context, context);
+        LogicalOperatorDeepCopyWithNewVariablesVisitor deepCopyVisitor =
+                new LogicalOperatorDeepCopyWithNewVariablesVisitor(context, context);
         ILogicalOperator scanSubTree = deepCopyVisitor.deepCopy(indexSubTree.getRoot());
 
         Map<LogicalVariable, LogicalVariable> copyVarMap = deepCopyVisitor.getInputToOutputVariableMapping();
@@ -731,17 +740,16 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         joinOp.getInputs().add(new MutableObject<ILogicalOperator>(scanSubTree));
         // Make sure that the build input (which may be materialized causing blocking) comes from
         // the split+select, otherwise the plan will have a deadlock.
-        joinOp.getInputs().add(isNotFilterableSelectOpRef);
+        joinOp.getInputs().add(new MutableObject<ILogicalOperator>(splitOp));
         context.computeAndSetTypeEnvironmentForOperator(joinOp);
 
         // Return the new root of the probeSubTree.
-        return isFilterableSelectOpRef;
+        return new MutableObject<ILogicalOperator>(splitOp);
     }
 
-    private void createIsFilterableSelectOps(ILogicalOperator inputOp, LogicalVariable inputSearchVar,
+    private MutableObject<ILogicalExpression> createIsFilterableExpr(LogicalVariable inputSearchVar,
             IAType inputSearchVarType, IOptimizableFuncExpr optFuncExpr, Index chosenIndex,
-            IOptimizationContext context, Mutable<ILogicalOperator> isFilterableSelectOpRef,
-            Mutable<ILogicalOperator> isNotFilterableSelectOpRef) throws AlgebricksException {
+            IOptimizationContext context) throws AlgebricksException {
         // Create select operator for removing tuples that are not filterable.
         // First determine the proper filter function and args based on the type of the input search var.
         ILogicalExpression isFilterableExpr = null;
@@ -750,7 +758,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 List<Mutable<ILogicalExpression>> isFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>(4);
                 isFilterableArgs
                         .add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(inputSearchVar)));
-                // Since we are optimizing a join, the similarity threshold should be the only constant in the optimizable function expression.
+                // Since we are optimizing a join, the similarity threshold should be
+                // the only constant in the optimizable function expression.
                 isFilterableArgs.add(new MutableObject<ILogicalExpression>(optFuncExpr.getConstantExpr(0)));
                 isFilterableArgs.add(new MutableObject<ILogicalExpression>(
                         AccessMethodUtils.createInt32Constant(chosenIndex.getGramLength())));
@@ -767,7 +776,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 List<Mutable<ILogicalExpression>> isFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>(2);
                 isFilterableArgs
                         .add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(inputSearchVar)));
-                // Since we are optimizing a join, the similarity threshold should be the only constant in the optimizable function expression.
+                // Since we are optimizing a join, the similarity threshold should be
+                // the only constant in the optimizable function expression.
                 isFilterableArgs.add(new MutableObject<ILogicalExpression>(optFuncExpr.getConstantExpr(0)));
                 isFilterableExpr = new ScalarFunctionCallExpression(
                         FunctionUtil.getFunctionInfo(BuiltinFunctions.EDIT_DISTANCE_LIST_IS_FILTERABLE),
@@ -779,25 +789,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             }
         }
 
-        SelectOperator isFilterableSelectOp = new SelectOperator(
-                new MutableObject<ILogicalExpression>(isFilterableExpr), false, null);
-        isFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
-        isFilterableSelectOp.setExecutionMode(ExecutionMode.LOCAL);
-        context.computeAndSetTypeEnvironmentForOperator(isFilterableSelectOp);
-
-        // Select operator for removing tuples that are filterable.
-        List<Mutable<ILogicalExpression>> isNotFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        isNotFilterableArgs.add(new MutableObject<ILogicalExpression>(isFilterableExpr));
-        ILogicalExpression isNotFilterableExpr = new ScalarFunctionCallExpression(
-                FunctionUtil.getFunctionInfo(BuiltinFunctions.NOT), isNotFilterableArgs);
-        SelectOperator isNotFilterableSelectOp = new SelectOperator(
-                new MutableObject<ILogicalExpression>(isNotFilterableExpr), false, null);
-        isNotFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
-        isNotFilterableSelectOp.setExecutionMode(ExecutionMode.LOCAL);
-        context.computeAndSetTypeEnvironmentForOperator(isNotFilterableSelectOp);
-
-        isFilterableSelectOpRef.setValue(isFilterableSelectOp);
-        isNotFilterableSelectOpRef.setValue(isNotFilterableSelectOp);
+        return new MutableObject<ILogicalExpression>(isFilterableExpr);
     }
 
     private void addSearchKeyType(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree indexSubTree,

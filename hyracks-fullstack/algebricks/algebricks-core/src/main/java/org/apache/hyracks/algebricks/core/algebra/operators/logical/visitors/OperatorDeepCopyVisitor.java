@@ -35,11 +35,11 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExp
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.DelegateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DistinctOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DistributeResultOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.EmptyTupleSourceOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExchangeOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.DelegateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IndexInsertDeleteUpsertOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
@@ -173,7 +173,8 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
 
     @Override
     public ILogicalOperator visitSplitOperator(SplitOperator op, Void arg) throws AlgebricksException {
-        return new SplitOperator(op.getOutputArity(), op.getBranchingExpression());
+        return new SplitOperator(op.getOutputArity(), op.getBranchingExpression(),
+                op.getDefaultBranch(), op.getPropageToAllBranchAsDefault());
     }
 
     @Override
