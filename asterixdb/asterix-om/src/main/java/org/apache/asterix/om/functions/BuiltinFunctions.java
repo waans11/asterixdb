@@ -868,8 +868,8 @@ public class BuiltinFunctions {
         addFunction(DAY_TIME_DURATION_CONSTRUCTOR, ADayTimeDurationTypeComputer.INSTANCE, true);
         addFunction(EDIT_DISTANCE, AInt64TypeComputer.INSTANCE, true);
         addFunction(EDIT_DISTANCE_CHECK, OrderedListOfAnyTypeComputer.INSTANCE, true);
-        addPrivateFunction(EDIT_DISTANCE_STRING_IS_FILTERABLE, AInt32TypeComputer.INSTANCE, true);
-        addPrivateFunction(EDIT_DISTANCE_LIST_IS_FILTERABLE, AInt32TypeComputer.INSTANCE, true);
+        addPrivateFunction(EDIT_DISTANCE_STRING_IS_FILTERABLE, ABooleanTypeComputer.INSTANCE, true);
+        addPrivateFunction(EDIT_DISTANCE_LIST_IS_FILTERABLE, ABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(EMPTY_STREAM, ABooleanTypeComputer.INSTANCE, true);
 
         addFunction(FLOAT_CONSTRUCTOR, AFloatTypeComputer.INSTANCE, true);

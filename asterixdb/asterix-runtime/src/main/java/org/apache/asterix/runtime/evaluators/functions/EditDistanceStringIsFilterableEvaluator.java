@@ -24,8 +24,7 @@ import java.io.IOException;
 
 import org.apache.asterix.dataflow.data.nontagged.serde.ABooleanSerializerDeserializer;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
-import org.apache.asterix.om.base.AInt32;
-import org.apache.asterix.om.base.AMutableInt32;
+import org.apache.asterix.om.base.ABoolean;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
@@ -56,10 +55,9 @@ public class EditDistanceStringIsFilterableEvaluator implements IScalarEvaluator
     protected final IScalarEvaluator gramLenEval;
     protected final IScalarEvaluator usePrePostEval;
 
-    protected final AMutableInt32 aInt32 = new AMutableInt32(-1);
     @SuppressWarnings("unchecked")
-    private ISerializerDeserializer<AInt32> int32Serde =
-            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
+    private final ISerializerDeserializer<ABoolean> booleanSerde =
+            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABOOLEAN);
 
     private final UTF8StringPointable utf8Ptr = new UTF8StringPointable();
 
@@ -86,7 +84,7 @@ public class EditDistanceStringIsFilterableEvaluator implements IScalarEvaluator
             throw new TypeMismatchException(BuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE, 0, typeTag,
                     ATypeTag.SERIALIZED_STRING_TYPE_TAG);
         }
-        utf8Ptr.set(stringPtr.getByteArray(), stringPtr.getStartOffset() + 1, stringPtr.getLength() - 1);
+        utf8Ptr.set(stringPtr.getByteArray(), stringPtr.getStartOffset() + 1, stringPtr.getLength());
         int strLen = utf8Ptr.getStringLength();
 
         // Check type and extract edit-distance threshold.
@@ -111,11 +109,9 @@ public class EditDistanceStringIsFilterableEvaluator implements IScalarEvaluator
         long lowerBound = numGrams - edThresh * gramLen;
         try {
             if (lowerBound <= 0 || strLen == 0) {
-                aInt32.setValue(1);
-                int32Serde.serialize(aInt32, output);
+                booleanSerde.serialize(ABoolean.FALSE, output);
             } else {
-                aInt32.setValue(0);
-                int32Serde.serialize(aInt32, output);
+                booleanSerde.serialize(ABoolean.TRUE, output);
             }
         } catch (IOException e) {
             throw new HyracksDataException(e);

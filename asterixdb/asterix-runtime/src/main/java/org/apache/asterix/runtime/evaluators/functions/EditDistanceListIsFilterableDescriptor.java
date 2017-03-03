@@ -24,8 +24,7 @@ import java.io.IOException;
 import org.apache.asterix.dataflow.data.nontagged.serde.AOrderedListSerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AUnorderedListSerializerDeserializer;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
-import org.apache.asterix.om.base.AInt32;
-import org.apache.asterix.om.base.AMutableInt32;
+import org.apache.asterix.om.base.ABoolean;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
@@ -48,8 +47,8 @@ import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 /**
  * Checks whether a list with an edit distance threshold can be filtered with a lower bounding on the number
- * of common list elements. This function returns 0 if the lower bound on the number of common elements
- * is positive, 1 otherwise. For example, this function is used during an indexed nested-loop join based
+ * of common list elements. This function returns 'true' if the lower bound on the number of common elements
+ * is positive, 'false' otherwise. For example, this function is used during an indexed nested-loop join based
  * on edit distance. We partition the tuples of the probing dataset into those that are filterable and those
  * that are not. Those that are filterable are forwarded to the index. The others are are fed into a (non
  * indexed) nested-loop join.
@@ -92,10 +91,9 @@ public class EditDistanceListIsFilterableDescriptor extends AbstractScalarFuncti
         protected final IScalarEvaluator listEval;
         protected final IScalarEvaluator edThreshEval;
 
-        protected final AMutableInt32 aInt32 = new AMutableInt32(-1);
         @SuppressWarnings("unchecked")
-        private ISerializerDeserializer<AInt32> int32Serde =
-                SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
+        private final ISerializerDeserializer<ABoolean> booleanSerde = SerializerDeserializerProvider.INSTANCE
+                .getSerializerDeserializer(BuiltinType.ABOOLEAN);
 
         public EditDistanceListIsFilterableEvaluator(IScalarEvaluatorFactory[] args, IHyracksTaskContext context)
                 throws HyracksDataException {
@@ -139,11 +137,9 @@ public class EditDistanceListIsFilterableDescriptor extends AbstractScalarFuncti
             long lowerBound = listLen - edThresh;
             try {
                 if (lowerBound <= 0) {
-                    aInt32.setValue(1);
-                    int32Serde.serialize(aInt32, output);
+                    booleanSerde.serialize(ABoolean.FALSE, output);
                 } else {
-                    aInt32.setValue(0);
-                    int32Serde.serialize(aInt32, output);
+                    booleanSerde.serialize(ABoolean.TRUE, output);
                 }
             } catch (IOException e) {
                 throw new HyracksDataException(e);
