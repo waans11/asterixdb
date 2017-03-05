@@ -107,6 +107,16 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
             maxFilterKey = new PermutingFrameTupleReference();
             maxFilterKey.setFieldPermutation(maxFilterFieldIndexes);
         }
+        // Temp:
+        totalResultCount = 0;
+        // For the index search only.
+        startTime = 0;
+        endTime = 0;
+        elapsedTime = 0;
+        // For the entire duration between open() and close()
+        durationStartTime = 0;
+        durationEndTime = 0;
+        durationElapsedTime = 0;
     }
 
     protected abstract ISearchPredicate createSearchPredicate();
@@ -162,9 +172,9 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
     }
 
     protected void writeSearchResults(int tupleIndex) throws Exception {
-        startTime = System.currentTimeMillis();
         boolean matched = false;
         while (cursor.hasNext()) {
+            startTime = System.currentTimeMillis();
             matched = true;
             tb.reset();
             cursor.next();
@@ -203,15 +213,19 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
         accessor.reset(buffer);
         int tupleCount = accessor.getTupleCount();
+        // Temp: debug
+        endTime = System.currentTimeMillis();
+
+        elapsedTime = elapsedTime + (endTime - startTime);
         try {
             for (int i = 0; i < tupleCount; i++) {
+                startTime = System.currentTimeMillis();
                 resetSearchPredicate(i);
                 cursor.reset();
                 indexAccessor.search(cursor, searchPred);
                 endTime = System.currentTimeMillis();
                 elapsedTime = elapsedTime + (endTime - startTime);
                 writeSearchResults(i);
-                startTime = System.currentTimeMillis();
             }
         } catch (Exception e) {
             throw new HyracksDataException(e);
