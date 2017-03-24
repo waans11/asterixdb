@@ -21,6 +21,8 @@ package org.apache.hyracks.dataflow.std.result;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameWriter;
@@ -83,8 +85,24 @@ public class ResultWriterOperatorDescriptor extends AbstractSingleActivityOperat
             private IFrameWriter datasetPartitionWriter;
             private boolean failed = false;
 
+            // Temp: for debug purpose only
+            protected int totalResultCount = 0;
+
+            // For the index search only.
+            protected long startTime = 0;
+            protected long endTime = 0;
+            protected long elapsedTime = 0;
+
+            // For the entire duration between open() and close()
+            protected long durationStartTime = 0;
+            protected long durationEndTime = 0;
+            protected long durationElapsedTime = 0;
+
             @Override
             public void open() throws HyracksDataException {
+                // Temp:
+                durationStartTime = System.currentTimeMillis();
+
                 try {
                     datasetPartitionWriter = dpm.createDatasetPartitionWriter(ctx, rsId, ordered, asyncMode, partition,
                             nPartitions);
@@ -97,16 +115,31 @@ public class ResultWriterOperatorDescriptor extends AbstractSingleActivityOperat
 
             @Override
             public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+                // Temp: debug
+                startTime = System.currentTimeMillis();
+
                 frameTupleAccessor.reset(buffer);
                 for (int tIndex = 0; tIndex < frameTupleAccessor.getTupleCount(); tIndex++) {
+                    totalResultCount++;
                     resultSerializer.appendTuple(frameTupleAccessor, tIndex);
                     if (!frameOutputStream.appendTuple()) {
+                        // Temp: debug
+                        endTime = System.currentTimeMillis();
+                        elapsedTime = elapsedTime + (endTime - startTime);
+
                         frameOutputStream.flush(datasetPartitionWriter);
+
+                        // Temp: debug
+                        startTime = System.currentTimeMillis();
 
                         resultSerializer.appendTuple(frameTupleAccessor, tIndex);
                         frameOutputStream.appendTuple();
                     }
                 }
+
+                // Temp: debug
+                endTime = System.currentTimeMillis();
+                elapsedTime = elapsedTime + (endTime - startTime);
             }
 
             @Override
@@ -127,7 +160,17 @@ public class ResultWriterOperatorDescriptor extends AbstractSingleActivityOperat
                 } finally {
                     datasetPartitionWriter.close();
                 }
+
+                // Temp:
+                durationEndTime = System.currentTimeMillis();
+                durationElapsedTime = durationEndTime - durationStartTime;
+
+                // Temp:
+                String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
+                System.out.println(dateTimeNow + " ResultWriterOperatorDescriptor.close() " + "\tresult time(ms)\t"
+                        + elapsedTime + "\tduration(ms)\t" + durationElapsedTime + "\tcount\t" + totalResultCount);
             }
+
         };
     }
 }

@@ -20,6 +20,8 @@ package org.apache.hyracks.algebricks.runtime.operators.std;
 
 import java.io.DataOutput;
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import org.apache.hyracks.algebricks.data.IBinaryBooleanInspector;
 import org.apache.hyracks.algebricks.data.IBinaryBooleanInspectorFactory;
@@ -87,8 +89,25 @@ public class StreamSelectRuntimeFactory extends AbstractOneInputOneOutputRuntime
             private ArrayTupleBuilder missingTupleBuilder = null;
             private boolean isOpen = false;
 
+            // Temp: for debug purpose only
+            protected int totalResultCount = 0;
+            protected int totalFalseCount = 0;
+            protected int totalTrueCount = 0;
+
+            // For the index search only.
+            protected long startTime = 0;
+            protected long endTime = 0;
+            protected long elapsedTime = 0;
+            // For the entire duration between open() and close()
+            protected long durationStartTime = 0;
+            protected long durationEndTime = 0;
+            protected long durationElapsedTime = 0;
+
             @Override
             public void open() throws HyracksDataException {
+                // Temp:
+                durationStartTime = System.currentTimeMillis();
+
                 if (eval == null) {
                     initAccessAppendFieldRef(ctx);
                     eval = cond.createScalarEvaluator(ctx);
@@ -122,32 +141,78 @@ public class StreamSelectRuntimeFactory extends AbstractOneInputOneOutputRuntime
                         writer.close();
                     }
                 }
+
+                // Temp:
+                durationEndTime = System.currentTimeMillis();
+                durationElapsedTime = durationEndTime - durationStartTime;
+
+                // Temp:
+                String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
+                System.out.println(dateTimeNow + " StreamSelectRuntimeFactory.close() " + cond.toString() + " "
+                        + "\tselect time(ms)\t" + elapsedTime + "\tduration(ms)\t" + durationElapsedTime + "\tfalse\t"
+                        + totalFalseCount + "\ttrue\t" + totalTrueCount + "\tcount\t" + totalResultCount);
+
             }
 
             @Override
             public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+                // Temp: debug
+                startTime = System.currentTimeMillis();
+
                 tAccess.reset(buffer);
                 int nTuple = tAccess.getTupleCount();
+                // Temp: debug
+                endTime = System.currentTimeMillis();
+                elapsedTime = elapsedTime + (endTime - startTime);
+
                 for (int t = 0; t < nTuple; t++) {
+                    // Temp:
+                    totalResultCount++;
+                    startTime = System.currentTimeMillis();
+
                     tRef.reset(tAccess, t);
                     eval.evaluate(tRef, p);
                     if (bbi.getBooleanValue(p.getByteArray(), p.getStartOffset(), p.getLength())) {
+                        // Temp:
+                        totalTrueCount++;
                         if (projectionList != null) {
+
+                            // Temp: debug
+                            endTime = System.currentTimeMillis();
+                            elapsedTime = elapsedTime + (endTime - startTime);
                             appendProjectionToFrame(t, projectionList);
+                            startTime = System.currentTimeMillis();
                         } else {
+                            // Temp: debug
+                            endTime = System.currentTimeMillis();
+                            elapsedTime = elapsedTime + (endTime - startTime);
                             appendTupleToFrame(t);
+                            startTime = System.currentTimeMillis();
                         }
                     } else {
+                        // Temp:
+                        totalFalseCount++;
                         if (retainMissing) {
                             for (int i = 0; i < tRef.getFieldCount(); i++) {
                                 if (i == missingPlaceholderVariableIndex) {
+                                    // Temp: debug
+                                    endTime = System.currentTimeMillis();
+                                    elapsedTime = elapsedTime + (endTime - startTime);
                                     appendField(missingTupleBuilder.getByteArray(), 0, missingTupleBuilder.getSize());
+                                    startTime = System.currentTimeMillis();
                                 } else {
+                                    // Temp: debug
+                                    endTime = System.currentTimeMillis();
+                                    elapsedTime = elapsedTime + (endTime - startTime);
                                     appendField(tAccess, t, i);
+                                    startTime = System.currentTimeMillis();
                                 }
                             }
                         }
                     }
+                    // Temp:
+                    endTime = System.currentTimeMillis();
+                    elapsedTime = elapsedTime + (endTime - startTime);
                 }
             }
 

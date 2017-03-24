@@ -19,6 +19,8 @@
 package org.apache.hyracks.dataflow.std.connectors;
 
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.BitSet;
 
 import org.apache.hyracks.api.comm.IFrameWriter;
@@ -51,8 +53,27 @@ public class MToNBroadcastConnectorDescriptor extends AbstractMToNConnectorDescr
             epWriters[i] = edwFactory.createFrameWriter(i);
         }
         return new IFrameWriter() {
+
+            // Temp: for debug purpose only
+            protected int totalResultCount = 0;
+
+            // For the index search only.
+            protected long startTime = 0;
+            protected long endTime = 0;
+            protected long elapsedTime = 0;
+
+            // For the entire duration between open() and close()
+            protected long durationStartTime = 0;
+            protected long durationEndTime = 0;
+            protected long durationElapsedTime = 0;
+
             @Override
             public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+                // Temp: debug
+                startTime = System.currentTimeMillis();
+
+                totalResultCount++;
+
                 // Record the current position, instead of using buffer.mark().
                 // The latter will be problematic because epWriters[i].nextFrame(buffer)
                 // can flip or clear the buffer.
@@ -61,8 +82,19 @@ public class MToNBroadcastConnectorDescriptor extends AbstractMToNConnectorDescr
                     if (i != 0) {
                         buffer.position(pos);
                     }
+                    // Temp: debug
+                    endTime = System.currentTimeMillis();
+                    elapsedTime = elapsedTime + (endTime - startTime);
+
                     epWriters[i].nextFrame(buffer);
+
+                    // Temp: debug
+                    startTime = System.currentTimeMillis();
                 }
+
+                // Temp: debug
+                endTime = System.currentTimeMillis();
+                elapsedTime = elapsedTime + (endTime - startTime);
             }
 
             @Override
@@ -105,10 +137,24 @@ public class MToNBroadcastConnectorDescriptor extends AbstractMToNConnectorDescr
                 if (closeException != null) {
                     throw closeException;
                 }
+
+                // Temp:
+                durationEndTime = System.currentTimeMillis();
+                durationElapsedTime = durationEndTime - durationStartTime;
+
+                // Temp:
+                String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
+                System.out.println(dateTimeNow + " MToNBroadcastConnectorDescriptor.close() " + getDisplayName() + " "
+                        + "\tMtoN time(ms)\t" + elapsedTime + "\tduration(ms)\t" + durationElapsedTime
+                        + "\tproducer count\t" + nProducerPartitions + "\t consumer count\t" + nConsumerPartitions
+                        + "\tframe count\t" + totalResultCount);
             }
 
             @Override
             public void open() throws HyracksDataException {
+                // Temp:
+                durationStartTime = System.currentTimeMillis();
+
                 for (int i = 0; i < epWriters.length; ++i) {
                     isOpen[i] = true;
                     epWriters[i].open();

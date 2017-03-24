@@ -19,6 +19,8 @@
 package org.apache.hyracks.algebricks.runtime.operators.aggreg;
 
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import org.apache.hyracks.algebricks.runtime.base.IAggregateEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IAggregateEvaluatorFactory;
@@ -69,8 +71,24 @@ public class AggregateRuntimeFactory extends AbstractOneInputOneOutputRuntimeFac
             private boolean first = true;
             private boolean isOpen = false;
 
+            // Temp: for debug purpose only
+            protected int totalResultCount = 0;
+
+            // For the index search only.
+            protected long startTime = 0;
+            protected long endTime = 0;
+            protected long elapsedTime = 0;
+
+            // For the entire duration between open() and close()
+            protected long durationStartTime = 0;
+            protected long durationEndTime = 0;
+            protected long durationElapsedTime = 0;
+
             @Override
             public void open() throws HyracksDataException {
+                // Temp:
+                durationStartTime = System.currentTimeMillis();
+
                 if (first) {
                     first = false;
                     initAccessAppendRef(ctx);
@@ -87,6 +105,9 @@ public class AggregateRuntimeFactory extends AbstractOneInputOneOutputRuntimeFac
 
             @Override
             public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+                // Temp: debug
+                startTime = System.currentTimeMillis();
+
                 tAccess.reset(buffer);
                 int nTuple = tAccess.getTupleCount();
                 for (int t = 0; t < nTuple; t++) {
@@ -94,18 +115,37 @@ public class AggregateRuntimeFactory extends AbstractOneInputOneOutputRuntimeFac
                     processTuple(tRef);
                 }
 
+                // Temp: debug
+                endTime = System.currentTimeMillis();
+                elapsedTime = elapsedTime + (endTime - startTime);
             }
 
             @Override
             public void close() throws HyracksDataException {
                 if (isOpen) {
                     try {
+                        // Temp: debug
+                        startTime = System.currentTimeMillis();
                         computeAggregate();
+                        // Temp: debug
+                        endTime = System.currentTimeMillis();
+                        elapsedTime = elapsedTime + (endTime - startTime);
                         appendToFrameFromTupleBuilder(tupleBuilder);
                     } finally {
                         super.close();
                     }
                 }
+
+                // Temp:
+                durationEndTime = System.currentTimeMillis();
+                durationElapsedTime = durationEndTime - durationStartTime;
+
+                // Temp:
+                String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
+                System.out.println(dateTimeNow + " AggregateRuntimeFactory.close() " + this.toString() + " "
+                        + "\taggregation time(ms)\t" + elapsedTime + "\tduration(ms)\t" + durationElapsedTime
+                        + "\tcount\t" + totalResultCount);
+
             }
 
             private void computeAggregate() throws HyracksDataException {
@@ -127,6 +167,20 @@ public class AggregateRuntimeFactory extends AbstractOneInputOneOutputRuntimeFac
                 if (isOpen) {
                     writer.fail();
                 }
+            }
+
+            @Override
+            public String toString() {
+                StringBuilder sb = new StringBuilder();
+                sb.append("aggregate [");
+                for (int i = 0; i < aggregFactories.length; i++) {
+                    if (i > 0) {
+                        sb.append(", ");
+                    }
+                    sb.append(aggregFactories[i]);
+                }
+                sb.append("]");
+                return sb.toString();
             }
         };
     }
