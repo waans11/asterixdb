@@ -32,6 +32,7 @@ import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.util.OperatorExecutionTimeProfiler;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.IntegerPointable;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
@@ -52,6 +53,18 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
             .getSerializerDeserializer(BuiltinType.ABOOLEAN);
     protected final AOrderedListType listType = new AOrderedListType(BuiltinType.ANY, "list");
 
+    // Temp:
+    protected long evaluateDurationStartTime = 0;
+    protected long evaluateDurationEndTime = 0;
+    protected long probeHashMapDurationStartTime = 0;
+    protected long probeHashMapDurationEndTime = 0;
+    protected long computeResultDurationStartTime = 0;
+    protected long computeResultDurationEndTime = 0;
+    protected long writeResultDurationStartTime = 0;
+    protected long writeResultDurationEndTime = 0;
+    protected long lengthFilterDurationStartTime = 0;
+    protected long lengthFilterDurationEndTime = 0;
+
     public SimilarityJaccardCheckEvaluator(IScalarEvaluatorFactory[] args, IHyracksTaskContext context)
             throws HyracksDataException {
         super(args, context);
@@ -62,6 +75,10 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
 
     @Override
     public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
+        // Temp:
+        evaluateDurationStartTime = System.currentTimeMillis();
+        OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.processTupleCount.incrementAndGet();
+
         resultStorage.reset();
 
         firstOrdListEval.evaluate(tuple, argPtr1);
@@ -86,7 +103,14 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
             return;
         }
         if (prepareLists(argPtr1, argPtr2)) {
+            // Temp:
+            computeResultDurationStartTime = System.currentTimeMillis();
             jaccSim = computeResult();
+            // Temp:
+            computeResultDurationEndTime = System.currentTimeMillis();
+            OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.computeResultDurationTime
+                    .addAndGet(computeResultDurationEndTime - computeResultDurationStartTime);
+
         } else {
             jaccSim = 0.0f;
         }
@@ -96,15 +120,30 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
             throw new HyracksDataException(e);
         }
         result.set(resultStorage);
+
+        // Temp:
+        evaluateDurationEndTime = System.currentTimeMillis();
+        OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.evaluateDurationTime
+                .addAndGet(evaluateDurationEndTime - evaluateDurationStartTime);
     }
 
     @Override
     protected int probeHashMap(AbstractAsterixListIterator probeIter, int buildListSize, int probeListSize)
             throws HyracksDataException {
+        // Temp:
+        probeHashMapDurationStartTime = System.currentTimeMillis();
+        lengthFilterDurationStartTime = probeHashMapDurationStartTime;
+
         // Apply length filter.
         int lengthLowerBound = (int) Math.ceil(jaccThresh * probeListSize);
         if ((lengthLowerBound > buildListSize)
                 || (buildListSize > (int) Math.floor(1.0f / jaccThresh * probeListSize))) {
+            lengthFilterDurationEndTime = System.currentTimeMillis();
+            OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterDurationTime
+                    .addAndGet(lengthFilterDurationEndTime - lengthFilterDurationStartTime);
+
+            OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterAppliedTupleCount
+                    .incrementAndGet();
             return -1;
         }
         // Probe phase: Probe items from second list, and compute intersection size.
@@ -145,13 +184,26 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
             }
             probeIter.next();
         }
+
+        // Temp:
+        probeHashMapDurationEndTime = System.currentTimeMillis();
+        OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.probeHashMapDurationTime
+                .addAndGet(probeHashMapDurationEndTime - probeHashMapDurationStartTime);
+
         return intersectionSize;
     }
 
     @Override
     protected void writeResult(float jacc) throws IOException {
+        // Temp:
+        writeResultDurationStartTime = System.currentTimeMillis();
+
         listBuilder.reset(listType);
         boolean matches = (jacc < jaccThresh) ? false : true;
+        // Temp:
+        if (matches) {
+            System.out.println(matches);
+        }
         inputVal.reset();
         booleanSerde.serialize(matches ? ABoolean.TRUE : ABoolean.FALSE, inputVal.getDataOutput());
         listBuilder.addItem(inputVal);
@@ -162,5 +214,11 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
         listBuilder.addItem(inputVal);
 
         listBuilder.write(out, true);
+
+        // Temp:
+        writeResultDurationEndTime = System.currentTimeMillis();
+        OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.writeResultDurationTime
+                .getAndAdd(writeResultDurationEndTime - writeResultDurationStartTime);
+
     }
 }

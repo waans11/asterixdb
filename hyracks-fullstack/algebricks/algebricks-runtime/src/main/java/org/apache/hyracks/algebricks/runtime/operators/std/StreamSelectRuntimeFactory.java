@@ -103,6 +103,26 @@ public class StreamSelectRuntimeFactory extends AbstractOneInputOneOutputRuntime
             protected long durationEndTime = 0;
             protected long durationElapsedTime = 0;
 
+            // For the entire duration for the true cases.
+            protected long trueDurationStartTime = 0;
+            protected long trueDurationEndTime = 0;
+            protected long trueDurationElapsedTime = 0;
+
+            // For the entire duration for the false cases.
+            protected long falseDurationStartTime = 0;
+            protected long falseDurationEndTime = 0;
+            protected long falseDurationElapsedTime = 0;
+
+            // For the entire duration for the false cases.
+            protected long nextFrameDurationStartTime = 0;
+            protected long nextFrameDurationEndTime = 0;
+            protected long nextFrameDurationElapsedTime = 0;
+
+            // For the eval time for each tuple.
+            protected long evalGetResultStartTime = 0;
+            protected long evalGetResultEndTime = 0;
+            protected long evalGetResultElapsedTime = 0;
+
             @Override
             public void open() throws HyracksDataException {
                 // Temp:
@@ -149,15 +169,18 @@ public class StreamSelectRuntimeFactory extends AbstractOneInputOneOutputRuntime
                 // Temp:
                 String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
                 System.out.println(dateTimeNow + " StreamSelectRuntimeFactory.close() " + cond.toString() + " "
-                        + "\tselect time(ms)\t" + elapsedTime + "\tduration(ms)\t" + durationElapsedTime + "\tfalse\t"
-                        + totalFalseCount + "\ttrue\t" + totalTrueCount + "\tcount\t" + totalResultCount);
-
+                        + "\tselect time(ms)\t" + elapsedTime + "\tduration(ms)\t" + durationElapsedTime
+                        + "\tnextFrameDuration(ms)\t" + nextFrameDurationElapsedTime + "\tEvalDuration(ms)\t"
+                        + evalGetResultElapsedTime + "\tTrueDuration(ms)\t" + trueDurationElapsedTime
+                        + "\tfalseDuration(ms)\t" + falseDurationElapsedTime + "\tfalse_count\t" + totalFalseCount
+                        + "\ttrue_count\t" + totalTrueCount + "\tcount\t" + totalResultCount);
             }
 
             @Override
             public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
                 // Temp: debug
                 startTime = System.currentTimeMillis();
+                nextFrameDurationStartTime = startTime;
 
                 tAccess.reset(buffer);
                 int nTuple = tAccess.getTupleCount();
@@ -169,14 +192,20 @@ public class StreamSelectRuntimeFactory extends AbstractOneInputOneOutputRuntime
                     // Temp:
                     totalResultCount++;
                     startTime = System.currentTimeMillis();
+                    evalGetResultStartTime = startTime;
 
                     tRef.reset(tAccess, t);
                     eval.evaluate(tRef, p);
                     if (bbi.getBooleanValue(p.getByteArray(), p.getStartOffset(), p.getLength())) {
                         // Temp:
+                        trueDurationStartTime = System.currentTimeMillis();
+                        evalGetResultEndTime = trueDurationStartTime;
+                        evalGetResultElapsedTime =
+                                evalGetResultElapsedTime + (evalGetResultEndTime - evalGetResultStartTime);
+
+                        // Temp:
                         totalTrueCount++;
                         if (projectionList != null) {
-
                             // Temp: debug
                             endTime = System.currentTimeMillis();
                             elapsedTime = elapsedTime + (endTime - startTime);
@@ -189,7 +218,18 @@ public class StreamSelectRuntimeFactory extends AbstractOneInputOneOutputRuntime
                             appendTupleToFrame(t);
                             startTime = System.currentTimeMillis();
                         }
+
+                        // Temp:
+                        trueDurationEndTime = System.currentTimeMillis();
+                        trueDurationElapsedTime =
+                                trueDurationElapsedTime + (trueDurationEndTime - trueDurationStartTime);
                     } else {
+                        // Temp:
+                        falseDurationStartTime = System.currentTimeMillis();
+                        evalGetResultEndTime = falseDurationStartTime;
+                        evalGetResultElapsedTime =
+                                evalGetResultElapsedTime + (evalGetResultEndTime - evalGetResultStartTime);
+
                         // Temp:
                         totalFalseCount++;
                         if (retainMissing) {
@@ -209,11 +249,20 @@ public class StreamSelectRuntimeFactory extends AbstractOneInputOneOutputRuntime
                                 }
                             }
                         }
+                        // Temp:
+                        falseDurationEndTime = System.currentTimeMillis();
+                        falseDurationElapsedTime =
+                                falseDurationElapsedTime + (falseDurationEndTime - falseDurationStartTime);
                     }
                     // Temp:
                     endTime = System.currentTimeMillis();
                     elapsedTime = elapsedTime + (endTime - startTime);
                 }
+
+                nextFrameDurationEndTime = System.currentTimeMillis();
+                nextFrameDurationElapsedTime =
+                        nextFrameDurationElapsedTime + (nextFrameDurationEndTime - nextFrameDurationStartTime);
+
             }
 
             @Override

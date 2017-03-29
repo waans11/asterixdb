@@ -28,6 +28,7 @@ import org.apache.hyracks.api.context.IHyracksJobletContext;
 import org.apache.hyracks.api.job.IJobletEventListener;
 import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.util.OperatorExecutionTimeProfiler;
 
 public class JobEventListenerFactory implements IJobletEventListenerFactory {
 
@@ -48,6 +49,10 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
     public IJobletEventListener createListener(final IHyracksJobletContext jobletContext) {
 
         return new IJobletEventListener() {
+
+            // Added to measure the execution time when the profiler setting is enabled
+            private String nodeJobSignature;
+
             @Override
             public void jobletFinish(JobStatus jobStatus) {
                 try {
@@ -57,6 +62,57 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
                     txnContext.setWriteTxn(transactionalWrite);
                     txnManager.completedTransaction(txnContext, new DatasetId(-1), -1,
                             !(jobStatus == JobStatus.FAILURE));
+
+                    int numPartitions =
+                            ((IAppRuntimeContext) jobletContext.getApplicationContext().getApplicationObject())
+                                    .getMetadataProperties().getNodePartitions().size();
+
+                    // Temp:
+                    System.out.println(nodeJobSignature + " SimilarityJaccardCheckEvaluator" + "\tevaluate_time(ms)\t"
+                            + OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.evaluateDurationTime.get()
+                            + " evaluate_time_avg "
+                            + (OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.evaluateDurationTime.get()
+                                    / numPartitions)
+                            + "\tcomputeResult_time(ms)\t"
+                            + OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.computeResultDurationTime
+                                    .get()
+                            + " computeResult_time_avg "
+                            + (OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.computeResultDurationTime
+                                    .get() / numPartitions)
+                            + "\tprobeHashMap_time(ms)\t"
+                            + OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.probeHashMapDurationTime
+                                    .get()
+                            + " probeHashMap_time_avg "
+                            + (OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.probeHashMapDurationTime
+                                    .get() / numPartitions)
+                            + "\twriteResult_time(ms)\t"
+                            + OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.writeResultDurationTime.get()
+                            + " writeResult_time_avg "
+                            + (OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.writeResultDurationTime
+                                    .get() / numPartitions)
+                            + "\tlengthFilter_time(ms)\t"
+                            + OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterDurationTime
+                                    .get()
+                            + " lengthFilter_time_avg "
+                            + (OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterDurationTime
+                                    .get() / numPartitions)
+                            + "\tlengthFilter_count\t"
+                            + OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterAppliedTupleCount
+                                    .get()
+                            + " lengthFilter_count_avg "
+                            + (OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterAppliedTupleCount
+                                    .get() / numPartitions)
+                            + "\tprocessedTupleCount\t"
+                            + OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.processTupleCount.get()
+                            + " processedTupleCount_avg "
+                            + (OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.processTupleCount.get()
+                                    / numPartitions)
+                            + "\tfiltered_ratio\t"
+                            + ((double) OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterAppliedTupleCount
+                                    .get()
+                                    / OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.processTupleCount
+                                            .get())
+                            + " numPart:" + numPartitions);
                 } catch (ACIDException e) {
                     throw new Error(e);
                 }
@@ -65,8 +121,20 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
             @Override
             public void jobletStart() {
                 try {
+                    OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.evaluateDurationTime.set(0);
+                    OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.computeResultDurationTime.set(0);
+                    OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.probeHashMapDurationTime.set(0);
+                    OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.writeResultDurationTime.set(0);
+                    OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterDurationTime.set(0);
+                    OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.lengthFilterAppliedTupleCount.set(0);
+                    OperatorExecutionTimeProfiler.INSTANCE.executionTimeProfiler.processTupleCount.set(0);
+
                     ((IAppRuntimeContext) jobletContext.getApplicationContext().getApplicationObject())
                             .getTransactionSubsystem().getTransactionManager().getTransactionContext(jobId, true);
+
+                    nodeJobSignature = jobletContext.getApplicationContext().getNodeId() + "_"
+                            + jobletContext.getJobId() + "_" + +jobletContext.hashCode();
+
                 } catch (ACIDException e) {
                     throw new Error(e);
                 }

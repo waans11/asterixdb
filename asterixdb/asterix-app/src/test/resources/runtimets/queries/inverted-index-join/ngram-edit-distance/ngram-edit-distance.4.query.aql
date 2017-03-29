@@ -24,8 +24,10 @@
 
 use dataverse test;
 
+count(
 for $a in dataset('Customers')
 for $b in dataset('Customers2')
 where edit-distance($a.name, $b.name) <= 4 and $a.cid < $b.cid
 order by $a.cid, $b.cid
 return { "arec": $a, "brec": $b }
+);

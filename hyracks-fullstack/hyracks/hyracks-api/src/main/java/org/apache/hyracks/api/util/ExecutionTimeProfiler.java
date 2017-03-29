@@ -19,19 +19,26 @@
 package org.apache.hyracks.api.util;
 
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class ExecutionTimeProfiler {
 
-    public static final boolean PROFILE_MODE = false;
+    public static final boolean PROFILE_MODE = true;
     private FileOutputStream fos;
     private String filePath;
     private StringBuilder sb;
     private Object lock1 = new Object();
-
+    // Temp: for the Jaccard
+    public AtomicLong evaluateDurationTime = new AtomicLong(0);
+    public AtomicLong probeHashMapDurationTime = new AtomicLong(0);
+    public AtomicLong computeResultDurationTime = new AtomicLong(0);
+    public AtomicLong writeResultDurationTime = new AtomicLong(0);
+    public AtomicLong lengthFilterDurationTime = new AtomicLong(0);
+    public AtomicLong processTupleCount = new AtomicLong(0);
+    public AtomicLong lengthFilterAppliedTupleCount = new AtomicLong(0);
 
     // [Key: Job, Value: [Key: Operator, Value: Duration of each operators]]
     private HashMap<String, LinkedHashMap<String, String>> spentTimePerJobMap;
@@ -43,12 +50,12 @@ public class ExecutionTimeProfiler {
     }
 
     public void begin() {
-        try {
-            fos = ExperimentProfilerUtils.openOutputFile(filePath);
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new IllegalStateException(e);
-        }
+        //        try {
+        //            fos = ExperimentProfilerUtils.openOutputFile(filePath);
+        //        } catch (IOException e) {
+        //            e.printStackTrace();
+        //            throw new IllegalStateException(e);
+        //        }
     }
 
     public synchronized void add(String jobSignature, String operatorSignature, String message, boolean flushNeeded) {
@@ -64,20 +71,16 @@ public class ExecutionTimeProfiler {
     }
 
     public synchronized void flush(String jobSignature) {
-        try {
-            synchronized (lock1) {
-                sb.append("\n\n");
-                for (Map.Entry<String, String> entry : spentTimePerJobMap.get(jobSignature).entrySet()) {
-                    sb.append(entry.getValue());
-                }
-                fos.write(sb.toString().getBytes());
-                fos.flush();
-                spentTimePerJobMap.get(jobSignature).clear();
-                sb.setLength(0);
+        synchronized (lock1) {
+            sb.append("\n\n");
+            for (Map.Entry<String, String> entry : spentTimePerJobMap.get(jobSignature).entrySet()) {
+                sb.append(entry.getValue());
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new IllegalStateException(e);
+            //                fos.write(sb.toString().getBytes());
+            //                fos.flush();
+            System.out.println(sb.toString());
+            spentTimePerJobMap.get(jobSignature).clear();
+            sb.setLength(0);
         }
     }
 
@@ -92,15 +95,15 @@ public class ExecutionTimeProfiler {
     }
 
     public synchronized void end() {
-        try {
-            if (fos != null) {
-                fos.flush();
-                fos.close();
-                fos = null;
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new IllegalStateException(e);
-        }
+        //        try {
+        //            if (fos != null) {
+        //                fos.flush();
+        //                fos.close();
+        //                fos = null;
+        //            }
+        //        } catch (IOException e) {
+        //            e.printStackTrace();
+        //            throw new IllegalStateException(e);
+        //        }
     }
 }

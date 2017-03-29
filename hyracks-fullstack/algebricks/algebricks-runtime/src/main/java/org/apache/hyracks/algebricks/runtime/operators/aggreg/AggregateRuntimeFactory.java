@@ -84,6 +84,11 @@ public class AggregateRuntimeFactory extends AbstractOneInputOneOutputRuntimeFac
             protected long durationEndTime = 0;
             protected long durationElapsedTime = 0;
 
+            // For the entire duration for the false cases.
+            protected long nextFrameDurationStartTime = 0;
+            protected long nextFrameDurationEndTime = 0;
+            protected long nextFrameDurationElapsedTime = 0;
+
             @Override
             public void open() throws HyracksDataException {
                 // Temp:
@@ -107,9 +112,14 @@ public class AggregateRuntimeFactory extends AbstractOneInputOneOutputRuntimeFac
             public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
                 // Temp: debug
                 startTime = System.currentTimeMillis();
+                nextFrameDurationStartTime = startTime;
 
                 tAccess.reset(buffer);
                 int nTuple = tAccess.getTupleCount();
+
+                // Temp:
+                totalResultCount = totalResultCount + nTuple;
+
                 for (int t = 0; t < nTuple; t++) {
                     tRef.reset(tAccess, t);
                     processTuple(tRef);
@@ -118,6 +128,10 @@ public class AggregateRuntimeFactory extends AbstractOneInputOneOutputRuntimeFac
                 // Temp: debug
                 endTime = System.currentTimeMillis();
                 elapsedTime = elapsedTime + (endTime - startTime);
+                nextFrameDurationEndTime = endTime;
+                nextFrameDurationElapsedTime =
+                        nextFrameDurationElapsedTime + (nextFrameDurationEndTime - nextFrameDurationStartTime);
+
             }
 
             @Override
@@ -144,7 +158,7 @@ public class AggregateRuntimeFactory extends AbstractOneInputOneOutputRuntimeFac
                 String dateTimeNow = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH:mm:ss.SSS"));
                 System.out.println(dateTimeNow + " AggregateRuntimeFactory.close() " + this.toString() + " "
                         + "\taggregation time(ms)\t" + elapsedTime + "\tduration(ms)\t" + durationElapsedTime
-                        + "\tcount\t" + totalResultCount);
+                        + "\tnextFrameDuration(ms)\t" + nextFrameDurationElapsedTime + "\tcount\t" + totalResultCount);
 
             }
 
