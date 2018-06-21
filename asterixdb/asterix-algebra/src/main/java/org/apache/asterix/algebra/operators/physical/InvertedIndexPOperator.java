@@ -118,13 +118,12 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         int frameLimit = OptimizationConfUtil.getPhysicalOptimizationConfig().getMaxFramesForTextSearch();
 
         // Build runtime.
-        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch =
-                buildInvertedIndexRuntime(metadataProvider, context, builder.getJobSpec(), unnestMapOp, opSchema,
-                        jobGenParams.getRetainInput(), retainNull, jobGenParams.getDatasetName(), dataset,
-                        jobGenParams.getIndexName(), jobGenParams.getSearchKeyType(), keyIndexes,
-                        jobGenParams.getSearchModifierType(), jobGenParams.getSimilarityThreshold(),
-                        minFilterFieldIndexes, maxFilterFieldIndexes, jobGenParams.getIsFullTextSearch(), frameLimit,
-                        limitNumberOfResult);
+        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(
+                metadataProvider, context, builder.getJobSpec(), unnestMapOp, opSchema, jobGenParams.getRetainInput(),
+                retainNull, jobGenParams.getDatasetName(), dataset, jobGenParams.getIndexName(),
+                jobGenParams.getSearchKeyType(), keyIndexes, jobGenParams.getSearchModifierType(),
+                jobGenParams.getSimilarityThreshold(), minFilterFieldIndexes, maxFilterFieldIndexes,
+                jobGenParams.getIsFullTextSearch(), frameLimit, limitNumberOfResult);
         IOperatorDescriptor opDesc = invIndexSearch.first;
         opDesc.setSourceLocation(unnestMapOp.getSourceLocation());
 

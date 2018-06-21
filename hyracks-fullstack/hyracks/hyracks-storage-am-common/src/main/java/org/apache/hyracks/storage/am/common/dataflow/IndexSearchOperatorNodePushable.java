@@ -331,8 +331,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
     @Override
     public void close() throws HyracksDataException {
         LOGGER.info("***** IndexSearch done. useLimitNumberOfResult:\t" + useLimitNumberOfResult
-                + "\tlimitNumberOfResult:\t"
-                + limitNumberOfResult + "\tsearchedTupleCount:\t" + searchedTupleCount);
+                + "\tlimitNumberOfResult:\t" + limitNumberOfResult + "\tsearchedTupleCount:\t" + searchedTupleCount);
         Throwable failure = releaseResources();
         failure = CleanupUtils.close(writer, failure);
         if (failure != null) {

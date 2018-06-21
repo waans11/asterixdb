@@ -115,8 +115,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     // In this case, an index-search alone cannot replace the given SELECT condition and
     // that SELECT condition needs to be applied after the index-search to get the correct results.
     // Currently, only full-text index search does not generate false positive results.
-    private static final List<Pair<FunctionIdentifier, Boolean>> FUNC_IDENTIFIERS = Collections.unmodifiableList(
-            Arrays.asList(new Pair<>(BuiltinFunctions.STRING_CONTAINS, true),
+    private static final List<Pair<FunctionIdentifier, Boolean>> FUNC_IDENTIFIERS =
+            Collections.unmodifiableList(Arrays.asList(new Pair<>(BuiltinFunctions.STRING_CONTAINS, true),
                     // For matching similarity-check functions. For example, similarity-jaccard-check returns
                     // a list of two items, and the select condition will get the first list-item and
                     // check whether it evaluates to true.
@@ -128,8 +128,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     // These function identifiers are matched in this AM's analyzeFuncExprArgs(),
     // and are not visible to the outside driver.
     private static final List<Pair<FunctionIdentifier, Boolean>> SECOND_LEVEL_FUNC_IDENTIFIERS =
-            Collections.unmodifiableList(Arrays.asList(
-                    new Pair<>(BuiltinFunctions.SIMILARITY_JACCARD_CHECK, true),
+            Collections.unmodifiableList(Arrays.asList(new Pair<>(BuiltinFunctions.SIMILARITY_JACCARD_CHECK, true),
                     new Pair<>(BuiltinFunctions.EDIT_DISTANCE_CHECK, true),
                     new Pair<>(BuiltinFunctions.EDIT_DISTANCE_CONTAINS, true)));
 
@@ -570,14 +569,14 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             probeSubTree.setRoot(newProbeRootRef.getValue());
         }
         // Create regular indexed-nested loop join path.
-        ILogicalOperator indexPlanRootOp = createIndexSearchPlan(afterJoinRefs, joinRef,
-                new MutableObject<>(joinCond), indexSubTree.getAssignsAndUnnestsRefs(), indexSubTree,
-                probeSubTree, chosenIndex, analysisCtx, true, isLeftOuterJoin, true, context, newNullPlaceHolderVar);
+        ILogicalOperator indexPlanRootOp = createIndexSearchPlan(afterJoinRefs, joinRef, new MutableObject<>(joinCond),
+                indexSubTree.getAssignsAndUnnestsRefs(), indexSubTree, probeSubTree, chosenIndex, analysisCtx, true,
+                isLeftOuterJoin, true, context, newNullPlaceHolderVar);
         indexSubTree.getDataSourceRef().setValue(indexPlanRootOp);
 
         // Change join into a select with the same condition.
-        SelectOperator topSelect = new SelectOperator(new MutableObject<>(joinCond), isLeftOuterJoin,
-                newNullPlaceHolderVar);
+        SelectOperator topSelect =
+                new SelectOperator(new MutableObject<>(joinCond), isLeftOuterJoin, newNullPlaceHolderVar);
         topSelect.setSourceLocation(indexPlanRootOp.getSourceLocation());
         topSelect.getInputs().add(indexSubTree.getRootRef());
         topSelect.setExecutionMode(ExecutionMode.LOCAL);
@@ -599,8 +598,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 if (panicPlanVar == null) {
                     panicPlanVar = indexSubTreeVar;
                 }
-                varMap.add(new Triple<>(indexSubTreeVar, panicPlanVar,
-                        indexSubTreeVar));
+                varMap.add(new Triple<>(indexSubTreeVar, panicPlanVar, indexSubTreeVar));
             }
             UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
             unionAllOp.setSourceLocation(topOp.getSourceLocation());
@@ -616,8 +614,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // This choice may not always be the most efficient, but it seems more robust than the alternative.
         Mutable<ILogicalExpression> eqJoinConditionRef =
                 createPrimaryKeysEqJoinCondition(originalSubTreePKs, surrogateSubTreePKs, topOp.getSourceLocation());
-        InnerJoinOperator topEqJoin = new InnerJoinOperator(eqJoinConditionRef, originalProbeSubTreeRootRef,
-                new MutableObject<>(topOp));
+        InnerJoinOperator topEqJoin =
+                new InnerJoinOperator(eqJoinConditionRef, originalProbeSubTreeRootRef, new MutableObject<>(topOp));
         topEqJoin.setSourceLocation(topOp.getSourceLocation());
         topEqJoin.setExecutionMode(ExecutionMode.PARTITIONED);
         joinRef.setValue(topEqJoin);
@@ -828,8 +826,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 throw new CompilationException(ErrorCode.NO_SUPPORTED_TYPE, sourceLoc);
         }
 
-        SelectOperator isFilterableSelectOp =
-                new SelectOperator(new MutableObject<>(isFilterableExpr), false, null);
+        SelectOperator isFilterableSelectOp = new SelectOperator(new MutableObject<>(isFilterableExpr), false, null);
         isFilterableSelectOp.setSourceLocation(sourceLoc);
         isFilterableSelectOp.getInputs().add(new MutableObject<>(inputOp));
         isFilterableSelectOp.setExecutionMode(ExecutionMode.LOCAL);

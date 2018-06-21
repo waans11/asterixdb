@@ -42,8 +42,7 @@ public class AccessMethodAnalysisContext {
     // Contains candidate indexes and a list of (integer,integer) tuples that index into matchedFuncExprs and
     // matched variable inside this expr. We are mapping from candidate indexes to a list of function expressions
     // that match one of the index's expressions.
-    private Map<Index, List<Pair<Integer, Integer>>> indexExprsAndVars =
-            new TreeMap<>();
+    private Map<Index, List<Pair<Integer, Integer>>> indexExprsAndVars = new TreeMap<>();
 
     // Maps from index to the dataset it is indexing.
     private Map<Index, Dataset> indexDatasetMap = new TreeMap<>();

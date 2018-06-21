@@ -1194,8 +1194,7 @@ public class AccessMethodUtils {
             LogicalVariable replacedVar = context.newVar();
             origPKRecAndSKVarToleftPathMap.put(tVar, replacedVar);
             origVarToOutputVarMap.put(skVarsFromSIdxUnnestMap.get(sIndexIdx), tVar);
-            unionVarMap.add(new Triple<>(replacedVar,
-                    skVarsFromSIdxUnnestMap.get(sIndexIdx), tVar));
+            unionVarMap.add(new Triple<>(replacedVar, skVarsFromSIdxUnnestMap.get(sIndexIdx), tVar));
             // Constructs the mapping between the SK from the original data-scan
             // and the SK from the secondary index search since they are different logical variables.
             origVarToSIdxUnnestMapOpVarMap.put(tVar, skVarsFromSIdxUnnestMap.get(sIndexIdx));
@@ -1228,8 +1227,7 @@ public class AccessMethodUtils {
         // Replaces the original variables in the operators after the SELECT or JOIN operator to satisfy SSA.
         if (afterTopOpRefs != null) {
             for (Mutable<ILogicalOperator> afterTopOpRef : afterTopOpRefs) {
-                VariableUtilities.substituteVariables(afterTopOpRef.getValue(),
-                        origVarToOutputVarMap, context);
+                VariableUtilities.substituteVariables(afterTopOpRef.getValue(), origVarToOutputVarMap, context);
             }
         }
 
@@ -1254,8 +1252,8 @@ public class AccessMethodUtils {
         ILogicalExpression conditionRefExpr = conditionRef.getValue().cloneExpression();
         // The retainMissing variable contains the information whether we are optimizing a left-outer join or not.
         LogicalVariable newMissingPlaceHolderVar = retainMissing ? newMissingPlaceHolderForLOJ : null;
-        newSelectOpInLeftPath = new SelectOperator(new MutableObject<>(conditionRefExpr),
-                retainMissing, newMissingPlaceHolderVar);
+        newSelectOpInLeftPath =
+                new SelectOperator(new MutableObject<>(conditionRefExpr), retainMissing, newMissingPlaceHolderVar);
         newSelectOpInLeftPath.setSourceLocation(conditionRefExpr.getSourceLocation());
         VariableUtilities.substituteVariables(newSelectOpInLeftPath, origVarToNewVarInLeftPathMap, context);
 
@@ -1278,8 +1276,7 @@ public class AccessMethodUtils {
                 }
             }
             newSelectOpInLeftPath.getInputs().clear();
-            newSelectOpInLeftPath.getInputs()
-                    .add(new MutableObject<>(assignsBeforeTopOpRef.get(0).getValue()));
+            newSelectOpInLeftPath.getInputs().add(new MutableObject<>(assignsBeforeTopOpRef.get(0).getValue()));
         } else {
             newSelectOpInLeftPath.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestMapOp));
         }
@@ -1314,8 +1311,8 @@ public class AccessMethodUtils {
             // since we need to change the variable reference in the SELECT operator.
             // For the index-nested-loop join case, we copy the condition of the join operator.
             ILogicalExpression conditionRefExpr2 = conditionRef.getValue().cloneExpression();
-            newSelectOpInRightPath = new SelectOperator(new MutableObject<>(conditionRefExpr2),
-                    retainMissing, newMissingPlaceHolderVar);
+            newSelectOpInRightPath =
+                    new SelectOperator(new MutableObject<>(conditionRefExpr2), retainMissing, newMissingPlaceHolderVar);
             newSelectOpInRightPath.setSourceLocation(conditionRefExpr2.getSourceLocation());
             newSelectOpInRightPath.getInputs().add(new MutableObject<>(currentTopOpInRightPath));
             VariableUtilities.substituteVariables(newSelectOpInRightPath, origVarToSIdxUnnestMapOpVarMap, context);
@@ -1806,10 +1803,8 @@ public class AccessMethodUtils {
         List<LogicalVariable> liveVarsInSubTreeRootOp = new ArrayList<>();
         List<LogicalVariable> producedVarsInSubTreeRootOp = new ArrayList<>();
 
-        VariableUtilities.getLiveVariables(indexSubTree.getRootRef().getValue(),
-                liveVarsInSubTreeRootOp);
-        VariableUtilities.getProducedVariables(indexSubTree.getRootRef().getValue(),
-                producedVarsInSubTreeRootOp);
+        VariableUtilities.getLiveVariables(indexSubTree.getRootRef().getValue(), liveVarsInSubTreeRootOp);
+        VariableUtilities.getProducedVariables(indexSubTree.getRootRef().getValue(), producedVarsInSubTreeRootOp);
 
         copyVarsToAnotherList(liveVarsInSubTreeRootOp, liveVarsAfterSelJoinOp);
         copyVarsToAnotherList(producedVarsInSubTreeRootOp, liveVarsAfterSelJoinOp);
@@ -2004,10 +1999,8 @@ public class AccessMethodUtils {
         for (Mutable<ILogicalOperator> afterSelectRef : afterSelectOpRefs) {
             usedVarsAfterSelectOrJoinOp.clear();
             producedVarsAfterSelectOrJoinOp.clear();
-            VariableUtilities.getUsedVariables(afterSelectRef.getValue(),
-                    usedVarsAfterSelectOrJoinOp);
-            VariableUtilities.getProducedVariables(afterSelectRef.getValue(),
-                    producedVarsAfterSelectOrJoinOp);
+            VariableUtilities.getUsedVariables(afterSelectRef.getValue(), usedVarsAfterSelectOrJoinOp);
+            VariableUtilities.getProducedVariables(afterSelectRef.getValue(), producedVarsAfterSelectOrJoinOp);
             // Checks whether COUNT exists in the given plan since we can substitute record variable
             // with the PK variable as an optimization because COUNT(record) is equal to COUNT(PK).
             // For this case only, we can replace the record variable with the PK variable.
@@ -2022,8 +2015,7 @@ public class AccessMethodUtils {
                         if (condExprFnCall.getFunctionIdentifier() == BuiltinFunctions.COUNT) {
                             // COUNT found. count on the record ($$0) can be replaced as the PK variable.
                             countAggFunctionIsUsedInThePlan = true;
-                            VariableUtilities.getUsedVariables(afterSelectRef.getValue(),
-                                    usedVarsInCount);
+                            VariableUtilities.getUsedVariables(afterSelectRef.getValue(), usedVarsInCount);
                             break;
                         }
                     }
@@ -2449,10 +2441,8 @@ public class AccessMethodUtils {
 
         if (LOJVarExist && LOJVarCanBeDeleted) {
             UnionAllOperator newUnionAllOp = new UnionAllOperator(varMap);
-            newUnionAllOp.getInputs()
-                    .add(new MutableObject<>(unionAllOp.getInputs().get(0).getValue()));
-            newUnionAllOp.getInputs()
-                    .add(new MutableObject<>(unionAllOp.getInputs().get(1).getValue()));
+            newUnionAllOp.getInputs().add(new MutableObject<>(unionAllOp.getInputs().get(0).getValue()));
+            newUnionAllOp.getInputs().add(new MutableObject<>(unionAllOp.getInputs().get(1).getValue()));
             context.computeAndSetTypeEnvironmentForOperator(newUnionAllOp);
             return newUnionAllOp;
         } else {

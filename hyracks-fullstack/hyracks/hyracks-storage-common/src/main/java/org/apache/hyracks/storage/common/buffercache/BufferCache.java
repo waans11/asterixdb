@@ -943,12 +943,14 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
             } else {
                 pinCount = cPage.pinCount.get();
             }
-            if (pinCount > 0) {
-                throw new IllegalStateException("Page " + BufferedFileHandle.getFileId(cPage.dpid) + ":"
-                        + BufferedFileHandle.getPageId(cPage.dpid)
-                        + " is pinned and file is being closed. Pincount is: " + pinCount + " Page is confiscated: "
-                        + cPage.confiscated);
-            }
+            // Temp : Disable for the Cloudberry
+            //            if (pinCount > 0) {
+            //                throw new IllegalStateException("Page " + BufferedFileHandle.getFileId(cPage.dpid) + ":"
+            //                        + BufferedFileHandle.getPageId(cPage.dpid)
+            //                        + " is pinned and file is being closed. Pincount is: " + pinCount + " Page is confiscated: "
+            //                        + cPage.confiscated);
+            //            }
+            //
             cPage.invalidate();
             return true;
         }
