@@ -110,6 +110,10 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             // tuples.
             retainNull = true;
         }
+        // Temp : limit
+        long limitNumberOfResult = jobGenParams.getSearchLimit();
+        //
+
         // In-memory budget (frame limit) for inverted-index search operations
         int frameLimit = OptimizationConfUtil.getPhysicalOptimizationConfig().getMaxFramesForTextSearch();
 
@@ -119,7 +123,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                         jobGenParams.getRetainInput(), retainNull, jobGenParams.getDatasetName(), dataset,
                         jobGenParams.getIndexName(), jobGenParams.getSearchKeyType(), keyIndexes,
                         jobGenParams.getSearchModifierType(), jobGenParams.getSimilarityThreshold(),
-                        minFilterFieldIndexes, maxFilterFieldIndexes, jobGenParams.getIsFullTextSearch(), frameLimit);
+                        minFilterFieldIndexes, maxFilterFieldIndexes, jobGenParams.getIsFullTextSearch(), frameLimit,
+                        limitNumberOfResult);
         IOperatorDescriptor opDesc = invIndexSearch.first;
         opDesc.setSourceLocation(unnestMapOp.getSourceLocation());
 
@@ -135,8 +140,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             AbstractUnnestMapOperator unnestMap, IOperatorSchema opSchema, boolean retainInput, boolean retainMissing,
             String datasetName, Dataset dataset, String indexName, ATypeTag searchKeyType, int[] keyFields,
             SearchModifierType searchModifierType, IAlgebricksConstantValue similarityThreshold,
-            int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isFullTextSearchQuery, int frameLimit)
-            throws AlgebricksException {
+            int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isFullTextSearchQuery, int frameLimit,
+            long searchLimit) throws AlgebricksException {
         boolean propagateIndexFilter = unnestMap.propagateIndexFilter();
         IAObject simThresh = ((AsterixConstantValue) similarityThreshold).getObject();
         int numPrimaryKeys = dataset.getPrimaryKeys().size();
@@ -165,7 +170,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 dataset.getSearchCallbackFactory(metadataProvider.getStorageComponentProvider(), secondaryIndex,
                         IndexOperation.SEARCH, null),
                 minFilterFieldIndexes, maxFilterFieldIndexes, isFullTextSearchQuery, numPrimaryKeys,
-                propagateIndexFilter, frameLimit);
+                propagateIndexFilter, frameLimit, searchLimit);
         return new Pair<>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 }

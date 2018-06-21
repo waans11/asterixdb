@@ -57,8 +57,8 @@ public class InvertedIndexJobGenParams extends AccessMethodJobGenParams {
     }
 
     public InvertedIndexJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
-            boolean retainInput, boolean requiresBroadcast) {
-        super(indexName, indexType, dataverseName, datasetName, retainInput, requiresBroadcast);
+            boolean retainInput, boolean requiresBroadcast, long searchLimit) {
+        super(indexName, indexType, dataverseName, datasetName, retainInput, requiresBroadcast, searchLimit);
     }
 
     public void setSearchModifierType(SearchModifierType searchModifierType) {

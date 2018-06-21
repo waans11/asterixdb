@@ -51,6 +51,8 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
     private final int numOfFields;
     // the maximum number of frames that this inverted-index-search can use
     private final int frameLimit;
+    // Temp :
+    private final long searchLimit;
 
     public LSMInvertedIndexSearchOperatorDescriptor(IOperatorDescriptorRegistry spec, RecordDescriptor outRecDesc,
             int queryField, IIndexDataflowHelperFactory indexHelperFactory,
@@ -58,7 +60,7 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
             boolean retainInput, boolean retainMissing, IMissingWriterFactory missingWriterFactory,
             ISearchOperationCallbackFactory searchCallbackFactory, int[] minFilterFieldIndexes,
             int[] maxFilterFieldIndexes, boolean isFullTextSearchQuery, int numOfFields, boolean appendIndexFilter,
-            int frameLimit) {
+            int frameLimit, long searchLimit) {
         super(spec, 1, 1);
         this.indexHelperFactory = indexHelperFactory;
         this.queryTokenizerFactory = queryTokenizerFactory;
@@ -75,6 +77,7 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
         this.numOfFields = numOfFields;
         this.outRecDescs[0] = outRecDesc;
         this.frameLimit = frameLimit;
+        this.searchLimit = searchLimit;
     }
 
     @Override
@@ -85,6 +88,6 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
                 recordDescProvider.getInputRecordDescriptor(getActivityId(), 0), partition, minFilterFieldIndexes,
                 maxFilterFieldIndexes, indexHelperFactory, retainInput, retainMissing, missingWriterFactory,
                 searchCallbackFactory, searchModifier, queryTokenizerFactory, queryField, isFullTextSearchQuery,
-                numOfFields, appendIndexFilter, frameLimit);
+                numOfFields, appendIndexFilter, frameLimit, searchLimit);
     }
 }

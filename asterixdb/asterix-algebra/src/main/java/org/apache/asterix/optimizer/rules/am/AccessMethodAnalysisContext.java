@@ -37,19 +37,19 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCall
  */
 public class AccessMethodAnalysisContext {
 
-    private List<IOptimizableFuncExpr> matchedFuncExprs = new ArrayList<IOptimizableFuncExpr>();
+    private List<IOptimizableFuncExpr> matchedFuncExprs = new ArrayList<>();
 
     // Contains candidate indexes and a list of (integer,integer) tuples that index into matchedFuncExprs and
     // matched variable inside this expr. We are mapping from candidate indexes to a list of function expressions
     // that match one of the index's expressions.
     private Map<Index, List<Pair<Integer, Integer>>> indexExprsAndVars =
-            new TreeMap<Index, List<Pair<Integer, Integer>>>();
+            new TreeMap<>();
 
     // Maps from index to the dataset it is indexing.
-    private Map<Index, Dataset> indexDatasetMap = new TreeMap<Index, Dataset>();
+    private Map<Index, Dataset> indexDatasetMap = new TreeMap<>();
 
     // Maps from an index to the number of matched fields in the query plan (for performing prefix search)
-    private Map<Index, Integer> indexNumMatchedKeys = new TreeMap<Index, Integer>();
+    private Map<Index, Integer> indexNumMatchedKeys = new TreeMap<>();
 
     // variables for resetting null placeholder for left-outer-join
     private Mutable<ILogicalOperator> lojGroupbyOpRef = null;
@@ -88,13 +88,17 @@ public class AccessMethodAnalysisContext {
     private Quadruple<Boolean, Boolean, Boolean, Boolean> indexOnlyPlanInfo =
             new Quadruple<>(false, false, false, false);
 
+    // For this access method, we push down the LIMIT from an ancestor operator (-1: no limit)
+    // That is, an index-search just generates this number of results.
+    private long limitNumberOfResult = -1;
+
     public void addIndexExpr(Dataset dataset, Index index, Integer exprIndex, Integer varIndex) {
         List<Pair<Integer, Integer>> exprs = getIndexExprsFromIndexExprsAndVars(index);
         if (exprs == null) {
-            exprs = new ArrayList<Pair<Integer, Integer>>();
+            exprs = new ArrayList<>();
             putIndexExprToIndexExprsAndVars(index, exprs);
         }
-        exprs.add(new Pair<Integer, Integer>(exprIndex, varIndex));
+        exprs.add(new Pair<>(exprIndex, varIndex));
         putDatasetIntoIndexDatasetMap(index, dataset);
     }
 
@@ -174,4 +178,11 @@ public class AccessMethodAnalysisContext {
         this.indexDatasetMap = indexDatasetMap;
     }
 
+    public void setLimitNumberOfResult(long limitNumberOfResult) {
+        this.limitNumberOfResult = limitNumberOfResult;
+    }
+
+    public long getLimitNumberOfResult() {
+        return this.limitNumberOfResult;
+    }
 }

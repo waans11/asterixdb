@@ -108,25 +108,31 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
     protected long outputCount = 0;
     protected boolean finished;
 
+    // When useOpercationCallbackProceedReturnResult is true, and
+    // this variable is set to a non-negative number, an index-search only generates the given number of results.
+    protected long limitNumberOfResult = -1;
+    protected boolean useLimitNumberOfResult = false;
+    protected long searchedTupleCount = 0;
+
     // no filter and limit pushdown
     public IndexSearchOperatorNodePushable(IHyracksTaskContext ctx, RecordDescriptor inputRecDesc, int partition,
             int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, IIndexDataflowHelperFactory indexHelperFactory,
             boolean retainInput, boolean retainMissing, IMissingWriterFactory missingWriterFactory,
-            ISearchOperationCallbackFactory searchCallbackFactory, boolean appendIndexFilter)
+            ISearchOperationCallbackFactory searchCallbackFactory, boolean appendIndexFilter, long searchLimit)
             throws HyracksDataException {
         this(ctx, inputRecDesc, partition, minFilterFieldIndexes, maxFilterFieldIndexes, indexHelperFactory,
                 retainInput, retainMissing, missingWriterFactory, searchCallbackFactory, appendIndexFilter, null, -1,
-                false, null, null);
+                false, null, null, searchLimit);
     }
 
     public IndexSearchOperatorNodePushable(IHyracksTaskContext ctx, RecordDescriptor inputRecDesc, int partition,
             int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, IIndexDataflowHelperFactory indexHelperFactory,
             boolean retainInput, boolean retainMissing, IMissingWriterFactory missingWriterFactory,
             ISearchOperationCallbackFactory searchCallbackFactory, boolean appendIndexFilter,
-            ITupleFilterFactory tupleFilterFactory, long outputLimit) throws HyracksDataException {
+            ITupleFilterFactory tupleFilterFactory, long outputLimit, long searchLimit) throws HyracksDataException {
         this(ctx, inputRecDesc, partition, minFilterFieldIndexes, maxFilterFieldIndexes, indexHelperFactory,
                 retainInput, retainMissing, missingWriterFactory, searchCallbackFactory, appendIndexFilter,
-                tupleFilterFactory, outputLimit, false, null, null);
+                tupleFilterFactory, outputLimit, false, null, null, searchLimit);
     }
 
     public IndexSearchOperatorNodePushable(IHyracksTaskContext ctx, RecordDescriptor inputRecDesc, int partition,
@@ -134,7 +140,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
             boolean retainInput, boolean retainMissing, IMissingWriterFactory missingWriterFactory,
             ISearchOperationCallbackFactory searchCallbackFactory, boolean appendIndexFilter,
             ITupleFilterFactory tupleFactoryFactory, long outputLimit, boolean appendSearchCallbackProceedResult,
-            byte[] searchCallbackProceedResultFalseValue, byte[] searchCallbackProceedResultTrueValue)
+            byte[] searchCallbackProceedResultFalseValue, byte[] searchCallbackProceedResultTrueValue, long searchLimit)
             throws HyracksDataException {
         this.ctx = ctx;
         this.indexHelper = indexHelperFactory.create(ctx.getJobletContext().getServiceContext(), partition);
@@ -169,6 +175,15 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
         if (this.tupleFilterFactory != null && this.retainMissing) {
             throw new IllegalStateException("RetainMissing with tuple filter is not supported");
         }
+
+        // Used for LIMIT push-down
+        this.limitNumberOfResult = searchLimit;
+
+        if (this.limitNumberOfResult > -1) {
+            this.useLimitNumberOfResult = true;
+        }
+        this.searchedTupleCount = 0;
+
     }
 
     protected abstract ISearchPredicate createSearchPredicate();
@@ -241,6 +256,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
         while (cursor.hasNext()) {
             cursor.next();
             matchingTupleCount++;
+            searchedTupleCount++;
             ITupleReference tuple = cursor.getTuple();
             if (tupleFilter != null && !tupleFilter.accept(referenceFilterTuple.reset(tuple))) {
                 continue;
@@ -268,6 +284,10 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
                 finished = true;
                 break;
             }
+            // If we hit the LIMIT number, no more tuples will be fetched.
+            if (useLimitNumberOfResult && searchedTupleCount >= limitNumberOfResult) {
+                break;
+            }
         }
         stats.getTupleCounter().update(matchingTupleCount);
 
@@ -280,6 +300,11 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
     @Override
     public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+        // Temp :
+        if (useLimitNumberOfResult && searchedTupleCount >= limitNumberOfResult) {
+            return;
+        }
+
         accessor.reset(buffer);
         int tupleCount = accessor.getTupleCount();
         try {
@@ -288,6 +313,10 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
                 cursor.close();
                 indexAccessor.search(cursor, searchPred);
                 writeSearchResults(i);
+                // Temp :
+                if (useLimitNumberOfResult && searchedTupleCount >= limitNumberOfResult) {
+                    return;
+                }
             }
         } catch (Exception e) {
             throw HyracksDataException.create(e);
@@ -301,6 +330,9 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
     @Override
     public void close() throws HyracksDataException {
+        LOGGER.info("***** IndexSearch done. useLimitNumberOfResult:\t" + useLimitNumberOfResult
+                + "\tlimitNumberOfResult:\t"
+                + limitNumberOfResult + "\tsearchedTupleCount:\t" + searchedTupleCount);
         Throwable failure = releaseResources();
         failure = CleanupUtils.close(writer, failure);
         if (failure != null) {
