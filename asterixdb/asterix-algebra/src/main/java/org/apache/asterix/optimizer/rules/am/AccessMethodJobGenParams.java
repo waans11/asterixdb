@@ -35,7 +35,8 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceE
  * and from a list of function arguments, typically of an unnest-map.
  */
 public class AccessMethodJobGenParams {
-    private static final int NUM_PARAMS = 6;
+    // Temp :
+    private static final int NUM_PARAMS = 7;
     protected String indexName;
     protected IndexType indexType;
     protected String dataverseName;
@@ -43,20 +44,24 @@ public class AccessMethodJobGenParams {
     protected boolean retainInput;
     protected boolean requiresBroadcast;
     protected boolean isPrimaryIndex;
+    // Temp :
+    protected long searchLimit;
+
 
     public AccessMethodJobGenParams() {
         // Enable creation of an empty object and fill members using setters
     }
 
     public AccessMethodJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
-            boolean retainInput, boolean requiresBroadcast) {
+            boolean retainInput, boolean requiresBroadcast, long searchLimit) {
         this.indexName = indexName;
         this.indexType = indexType;
         this.dataverseName = dataverseName;
         this.datasetName = datasetName;
         this.retainInput = retainInput;
         this.requiresBroadcast = requiresBroadcast;
-        this.isPrimaryIndex = datasetName.equals(indexName);
+        isPrimaryIndex = datasetName.equals(indexName);
+        this.searchLimit = searchLimit;
     }
 
     public void writeToFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
@@ -66,6 +71,7 @@ public class AccessMethodJobGenParams {
         funcArgs.add(new MutableObject<>(AccessMethodUtils.createStringConstant(datasetName)));
         funcArgs.add(new MutableObject<>(AccessMethodUtils.createBooleanConstant(retainInput)));
         funcArgs.add(new MutableObject<>(AccessMethodUtils.createBooleanConstant(requiresBroadcast)));
+        funcArgs.add(new MutableObject<>(AccessMethodUtils.createInt64Constant(searchLimit)));
     }
 
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
@@ -76,6 +82,7 @@ public class AccessMethodJobGenParams {
         retainInput = AccessMethodUtils.getBooleanConstant(funcArgs.get(4));
         requiresBroadcast = AccessMethodUtils.getBooleanConstant(funcArgs.get(5));
         isPrimaryIndex = datasetName.equals(indexName);
+        searchLimit = AccessMethodUtils.getInt64Constant(funcArgs.get(6));
     }
 
     public String getIndexName() {
@@ -100,6 +107,11 @@ public class AccessMethodJobGenParams {
 
     public boolean getRequiresBroadcast() {
         return requiresBroadcast;
+    }
+
+    // Temp :
+    public long getSearchLimit() {
+        return searchLimit;
     }
 
     protected void writeVarList(List<LogicalVariable> varList, List<Mutable<ILogicalExpression>> funcArgs) {

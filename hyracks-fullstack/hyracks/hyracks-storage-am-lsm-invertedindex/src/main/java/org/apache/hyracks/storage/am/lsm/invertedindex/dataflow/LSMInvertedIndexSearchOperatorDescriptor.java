@@ -54,6 +54,8 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
 
     // true: limit text search using the parameter.  fasle: no limit
     private final boolean limitTextSearchMemory;
+    // Temp :
+    private final long searchLimit;
 
     public LSMInvertedIndexSearchOperatorDescriptor(IOperatorDescriptorRegistry spec, RecordDescriptor outRecDesc,
             int queryField, IIndexDataflowHelperFactory indexHelperFactory,
@@ -61,7 +63,7 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
             boolean retainInput, boolean retainMissing, IMissingWriterFactory missingWriterFactory,
             ISearchOperationCallbackFactory searchCallbackFactory, int[] minFilterFieldIndexes,
             int[] maxFilterFieldIndexes, boolean isFullTextSearchQuery, int numOfFields, boolean appendIndexFilter,
-            int frameLimit) {
+            int frameLimit, long searchLimit) {
         super(spec, 1, 1);
         this.indexHelperFactory = indexHelperFactory;
         this.queryTokenizerFactory = queryTokenizerFactory;
@@ -76,9 +78,10 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
         this.isFullTextSearchQuery = isFullTextSearchQuery;
         this.appendIndexFilter = appendIndexFilter;
         this.numOfFields = numOfFields;
-        this.outRecDescs[0] = outRecDesc;
+        outRecDescs[0] = outRecDesc;
         this.frameLimit = frameLimit;
-        this.limitTextSearchMemory = true;
+        limitTextSearchMemory = true;
+        this.searchLimit = searchLimit;
     }
 
     // Temp :
@@ -88,7 +91,7 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
             boolean retainInput, boolean retainMissing, IMissingWriterFactory missingWriterFactory,
             ISearchOperationCallbackFactory searchCallbackFactory, int[] minFilterFieldIndexes,
             int[] maxFilterFieldIndexes, boolean isFullTextSearchQuery, int numOfFields, boolean appendIndexFilter,
-            int frameLimit, boolean limitTextSearchMemory) {
+            int frameLimit, boolean limitTextSearchMemory, long searchLimit) {
         super(spec, 1, 1);
         this.indexHelperFactory = indexHelperFactory;
         this.queryTokenizerFactory = queryTokenizerFactory;
@@ -103,9 +106,10 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
         this.isFullTextSearchQuery = isFullTextSearchQuery;
         this.appendIndexFilter = appendIndexFilter;
         this.numOfFields = numOfFields;
-        this.outRecDescs[0] = outRecDesc;
+        outRecDescs[0] = outRecDesc;
         this.frameLimit = frameLimit;
         this.limitTextSearchMemory = limitTextSearchMemory;
+        this.searchLimit = searchLimit;
     }
     //
 
@@ -117,6 +121,6 @@ public class LSMInvertedIndexSearchOperatorDescriptor extends AbstractSingleActi
                 recordDescProvider.getInputRecordDescriptor(getActivityId(), 0), partition, minFilterFieldIndexes,
                 maxFilterFieldIndexes, indexHelperFactory, retainInput, retainMissing, missingWriterFactory,
                 searchCallbackFactory, searchModifier, queryTokenizerFactory, queryField, isFullTextSearchQuery,
-                numOfFields, appendIndexFilter, frameLimit, limitTextSearchMemory);
+                numOfFields, appendIndexFilter, frameLimit, limitTextSearchMemory, searchLimit);
     }
 }

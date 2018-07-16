@@ -48,6 +48,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DelegateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IntersectOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LimitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
@@ -121,6 +122,10 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
     protected IVariableTypeEnvironment typeEnvironment = null;
     protected final OptimizableOperatorSubTree subTree = new OptimizableOperatorSubTree();
     protected List<Mutable<ILogicalOperator>> afterSelectRefs = null;
+
+    // Used to pass LIMIT information to a trust-worthy index-search
+    protected long limitNumberOfResult = -1;
+    protected boolean canPassLimitToIndexSearch = false;
 
     // Register access methods.
     protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<>();
@@ -319,6 +324,24 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         } else {
             // This is not a SELECT operator. Remember this operator.
             afterSelectRefs.add(opRef);
+            if (op.getOperatorTag() == LogicalOperatorTag.LIMIT) {
+                // Keep the limit number of Result
+                LimitOperator limitOp = (LimitOperator) op;
+                if (limitOp.getMaxObjects().getValue().getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+                    // Currently, we only support LIMIT with a constant value.
+                    limitNumberOfResult = AccessMethodUtils.getInt64Constant(limitOp.getMaxObjects());
+                    canPassLimitToIndexSearch = true;
+                    // Reset order-by expression since the previous one (if any)
+                    // can't be combined with this new LIMIT.
+                } else {
+                    limitNumberOfResult = -1;
+                    canPassLimitToIndexSearch = false;
+                }
+            } else if (canPassLimitToIndexSearch && op.getOperatorTag() == LogicalOperatorTag.ORDER) {
+                // Temp : no limit pushdown when the order operator is present
+                limitNumberOfResult = -1;
+                canPassLimitToIndexSearch = false;
+            }
         }
 
         // Recursively check the plan and try to optimize it. We first check the children of the given operator
@@ -410,6 +433,14 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
 
                     // Finds the field name of each variable in the sub-tree.
                     fillFieldNamesInTheSubTree(subTree);
+
+                    // Is there a LIMIT operator in the plan and can we pass
+                    // this information this to the secondary index search or primary index search?
+                    if (canPassLimitToIndexSearch && limitNumberOfResult > -1) {
+                        // To prepare for a case where an index is being updated,
+                        // we generate slightly more tuples that is specified in LIMIT.
+                        analysisCtx.setLimitNumberOfResult((long) (limitNumberOfResult * 1.2f));
+                    }
 
                     // Finally, try to apply plan transformation using chosen index.
                     res = chosenIndexes.get(0).first.applySelectPlanTransformation(afterSelectRefs, selectRef, subTree,

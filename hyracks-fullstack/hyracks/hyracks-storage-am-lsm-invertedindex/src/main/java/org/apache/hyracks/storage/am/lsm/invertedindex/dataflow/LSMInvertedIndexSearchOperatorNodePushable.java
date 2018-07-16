@@ -58,21 +58,22 @@ public class LSMInvertedIndexSearchOperatorNodePushable extends IndexSearchOpera
             IMissingWriterFactory missingWriterFactory, ISearchOperationCallbackFactory searchCallbackFactory,
             IInvertedIndexSearchModifier searchModifier, IBinaryTokenizerFactory binaryTokenizerFactory,
             int queryFieldIndex, boolean isFullTextSearchQuery, int numOfFields, boolean appendIndexFilter,
-            int frameLimit) throws HyracksDataException {
+            int frameLimit, long searchLimit) throws HyracksDataException {
         super(ctx, inputRecDesc, partition, minFilterFieldIndexes, maxFilterFieldIndexes, indexHelperFactory,
-                retainInput, retainMissing, missingWriterFactory, searchCallbackFactory, appendIndexFilter);
+                retainInput, retainMissing, missingWriterFactory, searchCallbackFactory, appendIndexFilter,
+                searchLimit);
         this.searchModifier = searchModifier;
         this.binaryTokenizerFactory = binaryTokenizerFactory;
         this.queryFieldIndex = queryFieldIndex;
         this.isFullTextSearchQuery = isFullTextSearchQuery;
         // If retainInput is true, the frameTuple is created in IndexSearchOperatorNodePushable.open().
         if (!retainInput) {
-            this.frameTuple = new FrameTupleReference();
+            frameTuple = new FrameTupleReference();
         }
         this.numOfFields = numOfFields;
         // Intermediate and final search result will use this buffer manager to get frames.
-        this.framePool = new DeallocatableFramePool(ctx, frameLimit * ctx.getInitialFrameSize());
-        this.bufferManagerForSearch = new FramePoolBackedFrameBufferManager(framePool);
+        framePool = new DeallocatableFramePool(ctx, frameLimit * ctx.getInitialFrameSize());
+        bufferManagerForSearch = new FramePoolBackedFrameBufferManager(framePool);
         // Keep the buffer manager in the hyracks context so that the search process can get it via the context.
         TaskUtil.put(HyracksConstants.INVERTED_INDEX_SEARCH_FRAME_MANAGER, bufferManagerForSearch, ctx);
         // true: limit text search using the parameter.  fasle: no limit
@@ -86,25 +87,26 @@ public class LSMInvertedIndexSearchOperatorNodePushable extends IndexSearchOpera
             IMissingWriterFactory missingWriterFactory, ISearchOperationCallbackFactory searchCallbackFactory,
             IInvertedIndexSearchModifier searchModifier, IBinaryTokenizerFactory binaryTokenizerFactory,
             int queryFieldIndex, boolean isFullTextSearchQuery, int numOfFields, boolean appendIndexFilter,
-            int frameLimit, boolean limitTextSearchMemory) throws HyracksDataException {
+            int frameLimit, boolean limitTextSearchMemory, long searchLimit) throws HyracksDataException {
         super(ctx, inputRecDesc, partition, minFilterFieldIndexes, maxFilterFieldIndexes, indexHelperFactory,
-                retainInput, retainMissing, missingWriterFactory, searchCallbackFactory, appendIndexFilter);
+                retainInput, retainMissing, missingWriterFactory, searchCallbackFactory, appendIndexFilter,
+                searchLimit);
         this.searchModifier = searchModifier;
         this.binaryTokenizerFactory = binaryTokenizerFactory;
         this.queryFieldIndex = queryFieldIndex;
         this.isFullTextSearchQuery = isFullTextSearchQuery;
         // If retainInput is true, the frameTuple is created in IndexSearchOperatorNodePushable.open().
         if (!retainInput) {
-            this.frameTuple = new FrameTupleReference();
+            frameTuple = new FrameTupleReference();
         }
         this.numOfFields = numOfFields;
         // Intermediate and final search result will use this buffer manager to get frames.
         // Temp : allocates 50 GB as the buffer frame pool so that an OOM can happen for the experiment purpose.
         int frameLimitUnlimited = 1048576 / ctx.getInitialFrameSize() * 1024 * 50;
-        this.framePool = limitTextSearchMemory ? new DeallocatableFramePool(ctx, frameLimit * ctx.getInitialFrameSize())
+        framePool = limitTextSearchMemory ? new DeallocatableFramePool(ctx, frameLimit * ctx.getInitialFrameSize())
                 : new DeallocatableFramePool(ctx, frameLimitUnlimited * ctx.getInitialFrameSize());
         //
-        this.bufferManagerForSearch = new FramePoolBackedFrameBufferManager(framePool);
+        bufferManagerForSearch = new FramePoolBackedFrameBufferManager(framePool);
         // Keep the buffer manager in the hyracks context so that the search process can get it via the context.
         TaskUtil.put(HyracksConstants.INVERTED_INDEX_SEARCH_FRAME_MANAGER, bufferManagerForSearch, ctx);
         // true: limit text search using the parameter.  fasle: no limit

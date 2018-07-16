@@ -39,18 +39,20 @@ public class RTreeJobGenParams extends AccessMethodJobGenParams {
 
     public RTreeJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
             boolean retainInput, boolean requiresBroadcast) {
-        super(indexName, indexType, dataverseName, datasetName, retainInput, requiresBroadcast);
+        super(indexName, indexType, dataverseName, datasetName, retainInput, requiresBroadcast, -1);
     }
 
+    @Override
     public void writeToFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         super.writeToFuncArgs(funcArgs);
         writeVarList(keyVarList, funcArgs);
     }
 
+    @Override
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         super.readFromFuncArgs(funcArgs);
         int index = super.getNumParams();
-        keyVarList = new ArrayList<LogicalVariable>();
+        keyVarList = new ArrayList<>();
         readVarList(funcArgs, index, keyVarList);
     }
 

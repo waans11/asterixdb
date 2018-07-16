@@ -116,6 +116,9 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         // Temp :
         boolean limitTextSearchMemory = OptimizationConfUtil.getPhysicalOptimizationConfig().getLimitTextSearchMemory();
         //
+        // Temp : limit
+        long limitNumberOfResult = jobGenParams.getSearchLimit();
+        //
 
         // Build runtime.
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(
@@ -123,7 +126,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 retainNull, jobGenParams.getDatasetName(), dataset, jobGenParams.getIndexName(),
                 jobGenParams.getSearchKeyType(), keyIndexes, jobGenParams.getSearchModifierType(),
                 jobGenParams.getSimilarityThreshold(), minFilterFieldIndexes, maxFilterFieldIndexes,
-                jobGenParams.getIsFullTextSearch(), frameLimit, limitTextSearchMemory);
+                jobGenParams.getIsFullTextSearch(), frameLimit, limitTextSearchMemory, limitNumberOfResult);
 
         // Contribute operator in hyracks job.
         builder.contributeHyracksOperator(unnestMapOp, invIndexSearch.first);
@@ -138,7 +141,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             String datasetName, Dataset dataset, String indexName, ATypeTag searchKeyType, int[] keyFields,
             SearchModifierType searchModifierType, IAlgebricksConstantValue similarityThreshold,
             int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, boolean isFullTextSearchQuery, int frameLimit,
-            boolean limitTextSearchMemory) throws AlgebricksException {
+            boolean limitTextSearchMemory, long limitNumberOfResult) throws AlgebricksException {
         boolean propagateIndexFilter = unnestMap.propagateIndexFilter();
         IAObject simThresh = ((AsterixConstantValue) similarityThreshold).getObject();
         int numPrimaryKeys = dataset.getPrimaryKeys().size();
@@ -167,7 +170,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 dataset.getSearchCallbackFactory(metadataProvider.getStorageComponentProvider(), secondaryIndex,
                         IndexOperation.SEARCH, null),
                 minFilterFieldIndexes, maxFilterFieldIndexes, isFullTextSearchQuery, numPrimaryKeys,
-                propagateIndexFilter, frameLimit, limitTextSearchMemory);
+                propagateIndexFilter, frameLimit, limitTextSearchMemory, limitNumberOfResult);
         return new Pair<>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 }
