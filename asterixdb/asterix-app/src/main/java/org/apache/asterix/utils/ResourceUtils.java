@@ -24,6 +24,7 @@ import java.util.List;
 import org.apache.asterix.app.resource.OperatorResourcesComputer;
 import org.apache.asterix.app.resource.PlanStage;
 import org.apache.asterix.app.resource.PlanStagesGenerator;
+import org.apache.asterix.app.resource.RequiredCapacityVisitor;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -31,8 +32,15 @@ import org.apache.hyracks.algebricks.core.algebra.base.ILogicalPlan;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import org.apache.hyracks.api.job.resource.ClusterCapacity;
 import org.apache.hyracks.api.job.resource.IClusterCapacity;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ResourceUtils {
+
+    // Temp :
+    private static final Logger LOGGER = LogManager.getLogger();
+    //
 
     private ResourceUtils() {
     }
@@ -60,8 +68,32 @@ public class ResourceUtils {
         final int joinFrameLimit = physicalOptimizationConfig.getMaxFramesForJoin();
         final int textSearchFrameLimit = physicalOptimizationConfig.getMaxFramesForTextSearch();
         final List<PlanStage> planStages = getStages(plan);
-        return getStageBasedRequiredCapacity(planStages, computationLocations.getLocations().length, sortFrameLimit,
-                groupFrameLimit, joinFrameLimit, textSearchFrameLimit, frameSize);
+
+        // Temp :
+        IClusterCapacity conservativeRequiredCapacity =
+                getConservativeRequiredCapacity(plan, computationLocations, physicalOptimizationConfig);
+        IClusterCapacity stageBasedRequiredCapacity =
+                getStageBasedRequiredCapacity(planStages, computationLocations.getLocations().length, sortFrameLimit,
+                        groupFrameLimit, joinFrameLimit, textSearchFrameLimit, frameSize);
+
+        StringBuilder planStagesStr = new StringBuilder();
+        for (int i = 0; i < planStages.size(); i++) {
+            planStagesStr.append(planStages.get(i).toString() + "\n");
+        }
+
+        LOGGER.log(Level.INFO,
+                "\t" + "ResourceUtils.getRequiredCapacity" + "\tlimitQueryExecution:\t"
+                        + physicalOptimizationConfig.getLimitQueryExecution() + "\tconservativeLimitQueryExecution:\t"
+                        + physicalOptimizationConfig.getConservativeLimitQueryExecution() + "\t"
+                        + "\tstageBasedRequiredCapacity:\t" + stageBasedRequiredCapacity.toString()
+                        + "\tconservativeRequiredCapacity:\t" + conservativeRequiredCapacity.toString() + "\t#Stages:\t"
+                        + planStages.size() + "\tstages:\n" + planStagesStr.toString());
+
+        boolean conductConservativeCapacityCalculation =
+                physicalOptimizationConfig.getConservativeLimitQueryExecution();
+        // Conduct a naive capacity calculation?
+        return conductConservativeCapacityCalculation ? conservativeRequiredCapacity : stageBasedRequiredCapacity;
+        //
     }
 
     public static List<PlanStage> getStages(ILogicalPlan plan) throws AlgebricksException {
@@ -85,4 +117,27 @@ public class ResourceUtils {
         clusterCapacity.setAggregatedCores(maxRequireCores);
         return clusterCapacity;
     }
+
+    // Temp : copied and modified from the previous codebase: assumes that all operators are executed in parallel.
+    public static IClusterCapacity getConservativeRequiredCapacity(ILogicalPlan plan,
+            AlgebricksAbsolutePartitionConstraint computationLocations,
+            PhysicalOptimizationConfig physicalOptimizationConfig) throws AlgebricksException {
+        final int frameSize = physicalOptimizationConfig.getFrameSize();
+        final int sortFrameLimit = physicalOptimizationConfig.getMaxFramesExternalSort();
+        final int groupFrameLimit = physicalOptimizationConfig.getMaxFramesForGroupBy();
+        final int joinFrameLimit = physicalOptimizationConfig.getMaxFramesForJoin();
+        final int textSearchFrameLimit = physicalOptimizationConfig.getMaxFramesForTextSearch();
+
+        // Creates a cluster capacity visitor.
+        IClusterCapacity clusterCapacity = new ClusterCapacity();
+        RequiredCapacityVisitor visitor = new RequiredCapacityVisitor(computationLocations.getLocations().length,
+                sortFrameLimit, groupFrameLimit, joinFrameLimit, textSearchFrameLimit, frameSize, clusterCapacity);
+
+        // There could be only one root operator for a top-level query plan.
+        ILogicalOperator rootOp = plan.getRoots().get(0).getValue();
+        rootOp.accept(visitor, null);
+        return clusterCapacity;
+    }
+    //
+
 }

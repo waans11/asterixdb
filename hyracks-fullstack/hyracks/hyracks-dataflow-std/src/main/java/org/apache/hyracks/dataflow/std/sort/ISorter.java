@@ -34,4 +34,8 @@ public interface ISorter {
 
     int flush(IFrameWriter writer) throws HyracksDataException;
 
+    // Temp : prints out the memory usage.
+    void printCurrentStatus() throws HyracksDataException;
+    //
+
 }

@@ -271,7 +271,10 @@ public class FeedOperations {
             JobSpecification intakeJob, List<JobSpecification> jobsList, List<FeedConnection> feedConnections,
             String[] intakeLocations) throws AlgebricksException, HyracksDataException {
         JobSpecification jobSpec = new JobSpecification(intakeJob.getFrameSize());
-
+        // Temp :
+        jobSpec.setLimitQueryExecution(intakeJob.getLimitQueryExecution());
+        jobSpec.setPrintIndexEntryDuringBulkLoad(intakeJob.getPrintIndexEntryDuringBulkLoad());
+        //
         // copy ingestor
         FeedIntakeOperatorDescriptor firstOp =
                 (FeedIntakeOperatorDescriptor) intakeJob.getOperatorMap().get(new OperatorDescriptorId(0));
@@ -452,8 +455,10 @@ public class FeedOperations {
             SessionOutput sessionOutput) {
         List<Statement> stmts = new ArrayList<>();
         DefaultStatementExecutorFactory qtFactory = new DefaultStatementExecutorFactory();
+        // Temp :
         IStatementExecutor translator = qtFactory.create(metadataProvider.getApplicationContext(), stmts, sessionOutput,
-                new SqlppCompilationProvider(), new StorageComponentProvider());
+                new SqlppCompilationProvider(), new StorageComponentProvider(), null);
+        //
         return translator;
     }
 

@@ -48,6 +48,15 @@ public class HybridTopKSortRunGenerator extends HeapSortRunGenerator {
         super(ctx, frameLimit, topK, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor);
     }
 
+    // Temp :
+    public HybridTopKSortRunGenerator(IHyracksTaskContext ctx, int frameLimit, int topK, int[] sortFields,
+            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDescriptor, boolean limitMemory) {
+        super(ctx, frameLimit, topK, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor,
+                limitMemory);
+    }
+    //
+
     @Override
     public ISorter getSorter() throws HyracksDataException {
         if (tupleSorter != null) {
@@ -102,7 +111,7 @@ public class HybridTopKSortRunGenerator extends HeapSortRunGenerator {
                         FrameFreeSlotPolicyFactory.createFreeSlotPolicy(EnumFreeSlotPolicy.BIGGEST_FIT,
                                 frameLimit - 1));
                 frameSorter = new FrameSorterMergeSort(ctx, bufferManager, frameLimit - 1, sortFields, nmkFactories,
-                        comparatorFactories, recordDescriptor, topK);
+                        comparatorFactories, recordDescriptor, topK, limitMemory);
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("create frameSorter");
                 }

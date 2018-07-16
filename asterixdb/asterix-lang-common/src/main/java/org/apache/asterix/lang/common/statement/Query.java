@@ -35,10 +35,20 @@ public class Query implements IReturningStatement {
     private Expression body;
     private List<VarIdentifier> externalVars;
     private int varCounter;
+    // Temp :
+    private String originalQuery;
+    //
 
     public Query(boolean explain) {
         this.explain = explain;
     }
+
+    // Temp :
+    public Query(boolean explain, String orginalQuery) {
+        this.explain = explain;
+        originalQuery = orginalQuery;
+    }
+    //
 
     public Query(boolean explain, boolean topLevel, Expression body, int varCounter) {
         this(explain, topLevel, body, varCounter, null);
@@ -137,4 +147,15 @@ public class Query implements IReturningStatement {
     public String toString() {
         return body.toString();
     }
+
+    @Override
+    public String getOriginalQuery() {
+        return originalQuery;
+    }
+
+    @Override
+    public void setOriginalQuery(String value) {
+        originalQuery = value;
+    }
+
 }

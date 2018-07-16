@@ -48,6 +48,8 @@ public class StableSortPOperator extends AbstractStableSortPOperator {
 
     private int maxNumberOfFrames;
     private int topK;
+    // Temp : limit memory - pointer arrays size is not accounted for if set to false.
+    private boolean limitMemory;
 
     public StableSortPOperator(int maxNumberOfFrames) {
         this(maxNumberOfFrames, -1);
@@ -57,6 +59,14 @@ public class StableSortPOperator extends AbstractStableSortPOperator {
         super();
         this.maxNumberOfFrames = maxNumberOfFrames;
         this.topK = topK;
+        this.limitMemory = true;
+    }
+
+    public StableSortPOperator(int maxNumberOfFrames, int topK, boolean limitMemory) {
+        super();
+        this.maxNumberOfFrames = maxNumberOfFrames;
+        this.topK = topK;
+        this.limitMemory = limitMemory;
     }
 
     @Override
@@ -100,8 +110,8 @@ public class StableSortPOperator extends AbstractStableSortPOperator {
 
         // topK == -1 means that a topK value is not provided.
         if (topK == -1) {
-            ExternalSortOperatorDescriptor sortOpDesc =
-                    new ExternalSortOperatorDescriptor(spec, maxNumberOfFrames, sortFields, nkcf, comps, recDescriptor);
+            ExternalSortOperatorDescriptor sortOpDesc = new ExternalSortOperatorDescriptor(spec, maxNumberOfFrames,
+                    sortFields, nkcf, comps, recDescriptor, limitMemory);
             contributeOpDesc(builder, (AbstractLogicalOperator) op, sortOpDesc);
             ILogicalOperator src = op.getInputs().get(0).getValue();
             builder.contributeGraphEdge(src, 0, op, 0);
@@ -109,7 +119,7 @@ public class StableSortPOperator extends AbstractStableSortPOperator {
             // Since topK value is provided, topK optimization is possible.
             // We call topKSorter instead of calling ExternalSortOperator.
             TopKSorterOperatorDescriptor sortOpDesc = new TopKSorterOperatorDescriptor(spec, maxNumberOfFrames, topK,
-                    sortFields, nkcf, comps, recDescriptor);
+                    sortFields, nkcf, comps, recDescriptor, limitMemory);
             contributeOpDesc(builder, (AbstractLogicalOperator) op, sortOpDesc);
             ILogicalOperator src = op.getInputs().get(0).getValue();
             builder.contributeGraphEdge(src, 0, op, 0);

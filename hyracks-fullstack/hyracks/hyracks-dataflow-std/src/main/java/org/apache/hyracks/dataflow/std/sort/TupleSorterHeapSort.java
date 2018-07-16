@@ -133,11 +133,11 @@ public class TupleSorterHeapSort implements ITupleSorter {
             int[] sortFields, INormalizedKeyComputerFactory[] keyNormalizerFactories,
             IBinaryComparatorFactory[] comparatorFactories) throws HyracksDataException {
         this.bufferManager = bufferManager;
-        this.bufferAccessor1 = bufferManager.createTuplePointerAccessor();
-        this.bufferAccessor2 = bufferManager.createTuplePointerAccessor();
+        bufferAccessor1 = bufferManager.createTuplePointerAccessor();
+        bufferAccessor2 = bufferManager.createTuplePointerAccessor();
         this.topK = topK;
-        this.outputFrame = new VSizeFrame(ctx);
-        this.outputAppender = new FrameTupleAppender();
+        outputFrame = new VSizeFrame(ctx);
+        outputAppender = new FrameTupleAppender();
         this.sortFields = sortFields;
 
         int runningNormalizedKeyTotalLength = 0;
@@ -149,32 +149,32 @@ public class TupleSorterHeapSort implements ITupleSorter {
             // computing unncessary normalized keys
             int normalizedKeys = decisivePrefixLength < keyNormalizerFactories.length ? decisivePrefixLength + 1
                     : decisivePrefixLength;
-            this.nkcs = new INormalizedKeyComputer[normalizedKeys];
-            this.normalizedKeyLength = new int[normalizedKeys];
+            nkcs = new INormalizedKeyComputer[normalizedKeys];
+            normalizedKeyLength = new int[normalizedKeys];
 
             for (int i = 0; i < normalizedKeys; i++) {
-                this.nkcs[i] = keyNormalizerFactories[i].createNormalizedKeyComputer();
-                this.normalizedKeyLength[i] =
+                nkcs[i] = keyNormalizerFactories[i].createNormalizedKeyComputer();
+                normalizedKeyLength[i] =
                         keyNormalizerFactories[i].getNormalizedKeyProperties().getNormalizedKeyLength();
-                runningNormalizedKeyTotalLength += this.normalizedKeyLength[i];
+                runningNormalizedKeyTotalLength += normalizedKeyLength[i];
             }
-            this.normalizedKeyDecisive = decisivePrefixLength == comparatorFactories.length;
+            normalizedKeyDecisive = decisivePrefixLength == comparatorFactories.length;
         } else {
-            this.nkcs = null;
-            this.normalizedKeyLength = null;
-            this.normalizedKeyDecisive = false;
+            nkcs = null;
+            normalizedKeyLength = null;
+            normalizedKeyDecisive = false;
         }
-        this.normalizedKeyTotalLength = runningNormalizedKeyTotalLength;
-        this.comparators = new IBinaryComparator[comparatorFactories.length];
+        normalizedKeyTotalLength = runningNormalizedKeyTotalLength;
+        comparators = new IBinaryComparator[comparatorFactories.length];
         for (int i = 0; i < comparatorFactories.length; ++i) {
             comparators[i] = comparatorFactories[i].createBinaryComparator();
         }
 
-        this.heap = new MaxHeap(new HeapEntryFactory(), topK);
-        this.maxEntry = new HeapEntry();
-        this.newEntry = new HeapEntry();
-        this.isSorted = false;
-        this.nmk = new int[runningNormalizedKeyTotalLength];
+        heap = new MaxHeap(new HeapEntryFactory(), topK);
+        maxEntry = new HeapEntry();
+        newEntry = new HeapEntry();
+        isSorted = false;
+        nmk = new int[runningNormalizedKeyTotalLength];
     }
 
     @Override
@@ -310,6 +310,12 @@ public class TupleSorterHeapSort implements ITupleSorter {
             LOGGER.info("Flushed records:" + numEntries + "; Flushed through " + (io + 1) + " frames");
         }
         return maxFrameSize;
+    }
+
+    // Temp : do nothing for this method
+    @Override
+    public void printCurrentStatus() throws HyracksDataException {
+        // Do nothing
     }
 
 }

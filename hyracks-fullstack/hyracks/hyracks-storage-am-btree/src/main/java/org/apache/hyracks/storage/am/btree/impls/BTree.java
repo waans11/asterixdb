@@ -996,6 +996,12 @@ public class BTree extends AbstractTreeIndex {
         return new BTreeBulkLoader(fillFactor, verifyInput);
     }
 
+    @Override
+    public IIndexBulkLoader createBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
+        return new BTreeBulkLoader(fillFactor, verifyInput);
+    }
+
     public class BTreeBulkLoader extends AbstractTreeIndex.AbstractTreeIndexBulkLoader {
         protected final ISplitKey splitKey;
         protected final boolean verifyInput;

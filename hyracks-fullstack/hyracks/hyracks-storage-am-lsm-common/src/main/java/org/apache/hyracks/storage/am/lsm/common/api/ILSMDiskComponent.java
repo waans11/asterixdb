@@ -139,6 +139,11 @@ public interface ILSMDiskComponent extends ILSMComponent {
     IChainedComponentBulkLoader createIndexBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
             boolean checkIfEmptyIndex) throws HyracksDataException;
 
+    // Temp :
+    IChainedComponentBulkLoader createIndexBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException;
+    //
+
     /**
      * Creates a bulkloader pipeline which includes all chained operations, bulkloading individual elements of the
      * component: indexes, LSM filters, Bloom filters, buddy indexes, etc.
@@ -156,4 +161,11 @@ public interface ILSMDiskComponent extends ILSMComponent {
     ChainedLSMDiskComponentBulkLoader createBulkLoader(ILSMIOOperation operation, float fillFactor, boolean verifyInput,
             long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter, boolean cleanupEmptyComponent)
             throws HyracksDataException;
+
+    // Temp :
+    ChainedLSMDiskComponentBulkLoader createBulkLoader(ILSMIOOperation operation, float fillFactor, boolean verifyInput,
+            long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter, boolean cleanupEmptyComponent,
+            boolean printIndexEntryDuringBulkLoad) throws HyracksDataException;
+    //
+
 }

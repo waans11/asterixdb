@@ -46,6 +46,7 @@ public class ExternalSortGroupByRunGenerator extends AbstractExternalSortRunGene
     private final RecordDescriptor inRecordDesc;
     private final RecordDescriptor outRecordDesc;
 
+    // Temp : analysis - Used in SortGroupbyTest only
     public ExternalSortGroupByRunGenerator(IHyracksTaskContext ctx, int[] sortFields, RecordDescriptor inputRecordDesc,
             int framesLimit, int[] groupFields, INormalizedKeyComputerFactory firstKeyNormalizerFactory,
             IBinaryComparatorFactory[] comparatorFactories, IAggregatorDescriptorFactory aggregatorFactory,
@@ -64,6 +65,16 @@ public class ExternalSortGroupByRunGenerator extends AbstractExternalSortRunGene
                 aggregatorFactory, outRecordDesc, alg, EnumFreeSlotPolicy.LAST_FIT);
     }
 
+    // Temp :
+    public ExternalSortGroupByRunGenerator(IHyracksTaskContext ctx, int[] sortFields, RecordDescriptor inputRecordDesc,
+            int framesLimit, int[] groupFields, INormalizedKeyComputerFactory[] keyNormalizerFactories,
+            IBinaryComparatorFactory[] comparatorFactories, IAggregatorDescriptorFactory aggregatorFactory,
+            RecordDescriptor outRecordDesc, Algorithm alg, boolean limitMemory) throws HyracksDataException {
+        this(ctx, sortFields, inputRecordDesc, framesLimit, groupFields, keyNormalizerFactories, comparatorFactories,
+                aggregatorFactory, outRecordDesc, alg, EnumFreeSlotPolicy.LAST_FIT, limitMemory);
+    }
+    //
+
     public ExternalSortGroupByRunGenerator(IHyracksTaskContext ctx, int[] sortFields, RecordDescriptor inputRecordDesc,
             int framesLimit, int[] groupFields, INormalizedKeyComputerFactory[] keyNormalizerFactories,
             IBinaryComparatorFactory[] comparatorFactories, IAggregatorDescriptorFactory aggregatorFactory,
@@ -76,6 +87,23 @@ public class ExternalSortGroupByRunGenerator extends AbstractExternalSortRunGene
         this.inRecordDesc = inputRecordDesc;
         this.outRecordDesc = outRecordDesc;
     }
+
+    // Temp :
+    public ExternalSortGroupByRunGenerator(IHyracksTaskContext ctx, int[] sortFields, RecordDescriptor inputRecordDesc,
+            int framesLimit, int[] groupFields, INormalizedKeyComputerFactory[] keyNormalizerFactories,
+            IBinaryComparatorFactory[] comparatorFactories, IAggregatorDescriptorFactory aggregatorFactory,
+            RecordDescriptor outRecordDesc, Algorithm alg, EnumFreeSlotPolicy policy, boolean limitMemory)
+            throws HyracksDataException {
+        super(ctx, sortFields, keyNormalizerFactories, comparatorFactories, inputRecordDesc, alg, policy, framesLimit,
+                limitMemory);
+
+        this.groupFields = groupFields;
+        this.comparatorFactories = comparatorFactories;
+        this.aggregatorFactory = aggregatorFactory;
+        this.inRecordDesc = inputRecordDesc;
+        this.outRecordDesc = outRecordDesc;
+    }
+    //
 
     @Override
     protected RunFileWriter getRunFileWriter() throws HyracksDataException {

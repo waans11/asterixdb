@@ -158,8 +158,10 @@ public class ApiServlet extends AbstractServlet {
                     isSet(printLogicalPlanParam), isSet(printOptimizedLogicalPlanParam), isSet(printJob));
             SessionOutput sessionOutput = new SessionOutput(sessionConfig, out);
             MetadataManager.INSTANCE.init();
+            // Temp :
             IStatementExecutor translator = statementExectorFactory.create(appCtx, aqlStatements, sessionOutput,
-                    compilationProvider, componentProvider);
+                    compilationProvider, componentProvider, query);
+            //
             double duration;
             long startTime = System.currentTimeMillis();
             final IRequestParameters requestParameters =

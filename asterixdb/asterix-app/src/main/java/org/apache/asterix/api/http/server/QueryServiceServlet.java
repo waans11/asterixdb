@@ -496,6 +496,10 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
 
     private void handleRequest(IServletRequest request, IServletResponse response) throws IOException {
         RequestParameters param = getRequestParameters(request);
+        // Temp :
+        System.out.println("\n\n\n");
+        LOGGER.info("New query:\n" + param.statement);
+        //
         LOGGER.info("handleRequest: {}", param);
         long elapsedStart = System.nanoTime();
         final PrintWriter httpWriter = response.writer();
@@ -572,7 +576,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         List<Statement> statements = parser.parse();
         MetadataManager.INSTANCE.init();
         IStatementExecutor translator = statementExecutorFactory.create((ICcApplicationContext) appCtx, statements,
-                sessionOutput, compilationProvider, componentProvider);
+                sessionOutput, compilationProvider, componentProvider, statementsText);
         execution.start();
         final IRequestParameters requestParameters = new org.apache.asterix.app.translator.RequestParameters(
                 getHyracksDataset(), resultProperties, stats, null, param.clientContextID, optionalParameters);

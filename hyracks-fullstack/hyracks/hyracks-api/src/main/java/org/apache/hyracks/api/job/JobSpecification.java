@@ -91,6 +91,19 @@ public class JobSpecification implements Serializable, IOperatorDescriptorRegist
 
     private transient List<IOperatorDescriptor> metaOps;
 
+    // Temp :
+    private boolean limitQueryExecution;
+
+    private boolean printIndexEntryDuringBulkLoad;
+
+    private String originalQuery;
+
+    private boolean printedOriginalQuery;
+
+    // capacity was exceeded when executing this job?
+    private boolean capacityExceeded;
+    //
+
     // This constructor uses the default frame size. It is for test purposes only.
     // For other use cases, use the one which sets the frame size.
     public JobSpecification() {
@@ -113,6 +126,11 @@ public class JobSpecification implements Serializable, IOperatorDescriptorRegist
         useConnectorPolicyForScheduling = false;
         requiredClusterCapacity = new ClusterCapacity();
         setFrameSize(frameSize);
+        limitQueryExecution = true;
+        printIndexEntryDuringBulkLoad = false;
+        capacityExceeded = false;
+        originalQuery = "";
+        printedOriginalQuery = false;
     }
 
     @Override
@@ -303,7 +321,7 @@ public class JobSpecification implements Serializable, IOperatorDescriptorRegist
     }
 
     public void setRequiredClusterCapacity(IClusterCapacity capacity) {
-        this.requiredClusterCapacity = capacity;
+        requiredClusterCapacity = capacity;
     }
 
     public IClusterCapacity getRequiredClusterCapacity() {
@@ -419,4 +437,43 @@ public class JobSpecification implements Serializable, IOperatorDescriptorRegist
             return constraint.getRValue().toString();
         }
     }
+
+    public void setLimitQueryExecution(boolean value) {
+        limitQueryExecution = value;
+    }
+
+    public boolean getLimitQueryExecution() {
+        return limitQueryExecution;
+    }
+
+    public void setPrintIndexEntryDuringBulkLoad(boolean value) {
+        printIndexEntryDuringBulkLoad = value;
+    }
+
+    public boolean getPrintIndexEntryDuringBulkLoad() {
+        return printIndexEntryDuringBulkLoad;
+    }
+
+    public void setCapacityExceeded(boolean value) {
+        capacityExceeded = value;
+    }
+
+    public boolean getCapacityExceeded() {
+        return capacityExceeded;
+    }
+
+    public void setOriginalQuery(String originalQuery) {
+        this.originalQuery = originalQuery;
+    }
+
+    public String getOriginalQuery(boolean forcePrintQuery) {
+        if (!forcePrintQuery && printedOriginalQuery) {
+            return null;
+        }
+        if (!forcePrintQuery) {
+            printedOriginalQuery = true;
+        }
+        return originalQuery;
+    }
+
 }

@@ -897,6 +897,15 @@ public class RTree extends AbstractTreeIndex {
         return new RTreeBulkLoader(fillFactor);
     }
 
+    // Temp :
+    @Override
+    public IIndexBulkLoader createBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
+        // TODO: verifyInput currently does nothing.
+        return new RTreeBulkLoader(fillFactor);
+    }
+    //
+
     public class RTreeBulkLoader extends AbstractTreeIndex.AbstractTreeIndexBulkLoader {
         ITreeIndexFrame lowerFrame, prevInteriorFrame;
         RTreeTypeAwareTupleWriter interiorFrameTupleWriter =

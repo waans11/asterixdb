@@ -62,6 +62,9 @@ import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 import org.apache.hyracks.storage.common.buffercache.IFIFOPageQueue;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
+import org.apache.hyracks.util.string.UTF8StringUtil;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * An inverted index consists of two files: 1. a file storing (paginated)
@@ -76,6 +79,10 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
     protected final int invListEndPageIdField;
     protected final int invListStartOffField;
     protected final int invListNumElementsField;
+
+    // Temp :
+    private static final Logger LOGGER = LogManager.getLogger();
+    //
 
     // Type traits to be appended to the token type trait which finally form the BTree field type traits.
     protected static final ITypeTraits[] btreeValueTypeTraits = new ITypeTraits[4];
@@ -250,6 +257,11 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
 
         protected final IFIFOPageQueue queue;
 
+        // Temp :
+        protected final boolean printIndexEntryDuringBulkLoad;
+        StringBuilder strBuilder;
+        //
+
         public AbstractOnDiskInvertedIndexBulkLoader(float btreeFillFactor, boolean verifyInput, long numElementsHint,
                 boolean checkIfEmptyIndex, int startPageId) throws HyracksDataException {
             this.verifyInput = verifyInput;
@@ -269,7 +281,39 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
             currentPage = bufferCache.confiscatePage(BufferedFileHandle.getDiskPageId(fileId, currentPageId));
             invListBuilder.setTargetBuffer(currentPage.getBuffer().array(), 0);
             queue = bufferCache.createFIFOQueue();
+            // Temp :
+            this.printIndexEntryDuringBulkLoad = false;
+            this.strBuilder = new StringBuilder();
+            //
         }
+
+        // Temp :
+        public AbstractOnDiskInvertedIndexBulkLoader(float btreeFillFactor, boolean verifyInput, long numElementsHint,
+                boolean checkIfEmptyIndex, int startPageId, boolean printIndexEntryDuringBulkLoad)
+                throws HyracksDataException {
+            this.verifyInput = verifyInput;
+            this.invListCmp = MultiComparator.create(invListCmpFactories);
+            if (verifyInput) {
+                allCmp = MultiComparator.create(btree.getComparatorFactories(), invListCmpFactories);
+            } else {
+                allCmp = null;
+            }
+            this.btreeTupleBuilder = new ArrayTupleBuilder(btree.getFieldCount());
+            this.btreeTupleReference = new ArrayTupleReference();
+            this.lastTupleBuilder = new ArrayTupleBuilder(numTokenFields + numInvListKeys);
+            this.lastTuple = new ArrayTupleReference();
+            this.btreeBulkloader =
+                    btree.createBulkLoader(btreeFillFactor, verifyInput, numElementsHint, checkIfEmptyIndex);
+            currentPageId = startPageId;
+            currentPage = bufferCache.confiscatePage(BufferedFileHandle.getDiskPageId(fileId, currentPageId));
+            invListBuilder.setTargetBuffer(currentPage.getBuffer().array(), 0);
+            queue = bufferCache.createFIFOQueue();
+            // Temp :
+            this.printIndexEntryDuringBulkLoad = printIndexEntryDuringBulkLoad;
+            this.strBuilder = new StringBuilder();
+            //
+        }
+        //
 
         protected void pinNextPage() throws HyracksDataException {
             queue.put(currentPage);
@@ -296,6 +340,21 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
             // Reset tuple reference and add it into the BTree load.
             btreeTupleReference.reset(btreeTupleBuilder.getFieldEndOffsets(), btreeTupleBuilder.getByteArray());
             btreeBulkloader.add(btreeTupleReference);
+
+            // Temp :
+            if (printIndexEntryDuringBulkLoad) {
+                try {
+                    // Adds +1 for the type tag
+                    UTF8StringUtil.toString(strBuilder, btreeTupleReference.getFieldData(0),
+                            btreeTupleReference.getFieldStart(0) + 1);
+                    System.out
+                            .println("tkn\t" + strBuilder + "\t" + invListBuilder.getListSize() + "\t" + currentPageId);
+                    strBuilder.delete(0, strBuilder.length());
+                } catch (Exception e) {
+                    System.out.println("tkn\terror\t" + invListBuilder.getListSize() + "\t" + currentPageId);
+                }
+            }
+            //
             btreeTupleBuilder.reset();
         }
 
@@ -400,6 +459,19 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
                 boolean checkIfEmptyIndex, int startPageId) throws HyracksDataException {
             super(btreeFillFactor, verifyInput, numElementsHint, checkIfEmptyIndex, startPageId);
         }
+
+        // Temp :
+        public OnDiskInvertedIndexBulkLoader(float btreeFillFactor, boolean verifyInput, long numElementsHint,
+                boolean checkIfEmptyIndex, int startPageId, boolean printIndexEntryDuringBulkLoad)
+                throws HyracksDataException {
+            super(btreeFillFactor, verifyInput, numElementsHint, checkIfEmptyIndex, startPageId,
+                    printIndexEntryDuringBulkLoad);
+            if (printIndexEntryDuringBulkLoad) {
+                System.out.println(
+                        ">>> OnDiskInvertedIndexBulkLoader constructor: during add(), each token, the count of the token, and the current page id will be printed.");
+            }
+        }
+        //
 
         @Override
         public void add(ITupleReference tuple) throws HyracksDataException {
@@ -557,6 +629,15 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
         return new OnDiskInvertedIndexBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex,
                 rootPageId);
     }
+
+    // Temp :
+    @Override
+    public IIndexBulkLoader createBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
+        return new OnDiskInvertedIndexBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex,
+                rootPageId, printIndexEntryDuringBulkLoad);
+    }
+    //
 
     public IIndexBulkLoader createMergeBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
             boolean checkIfEmptyIndex) throws HyracksDataException {

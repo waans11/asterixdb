@@ -208,6 +208,12 @@ public class InMemoryInvertedIndex implements IInPlaceInvertedIndex {
     }
 
     @Override
+    public IIndexBulkLoader createBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
+        throw new UnsupportedOperationException("Bulk load not supported by in-memory inverted index.");
+    }
+
+    @Override
     public ITypeTraits[] getTokenTypeTraits() {
         return tokenTypeTraits;
     }

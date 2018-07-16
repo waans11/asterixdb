@@ -100,4 +100,11 @@ public class ExternalHashGroupBy {
     public int[] getSpilledNumTuples() {
         return spilledNumTuples;
     }
+
+    // Temp :
+    public String printInfo() {
+
+        return table.printInfo();
+    }
+    //
 }

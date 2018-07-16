@@ -25,6 +25,8 @@ public class HyracksConstants {
     public static final String INVERTED_INDEX_SEARCH_FRAME_MANAGER = "INVERTED_INDEX_SEARCH_FRAME_MANAGER";
     // Hyracks task context
     public static final String HYRACKS_TASK_CONTEXT = "HYRACKS_TASK_CONTEXT";
+    // limt text search memory
+    public static final String LIMIT_TEXTSEARCHMEMORY = "LIMIT_TEXTSEARCHMEMORY";
 
     private HyracksConstants() {
     }

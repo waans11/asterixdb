@@ -68,6 +68,11 @@ public class HybridHashJoinPOperator extends AbstractHashJoinPOperator {
     private final int aveRecordsPerFrame;
     private final double fudgeFactor;
 
+    // Temp :
+    private final boolean limitMemory;
+    private final boolean hashTableGarbageCollection;
+    //
+
     private static final Logger LOGGER = LogManager.getLogger();
 
     public HybridHashJoinPOperator(JoinKind kind, JoinPartitioningType partitioningType,
@@ -78,6 +83,30 @@ public class HybridHashJoinPOperator extends AbstractHashJoinPOperator {
         this.maxInputBuildSizeInFrames = maxInputSizeInFrames;
         this.aveRecordsPerFrame = aveRecordsPerFrame;
         this.fudgeFactor = fudgeFactor;
+        // Temp :
+        this.limitMemory = true;
+        this.hashTableGarbageCollection = true;
+        //
+
+        LOGGER.debug("HybridHashJoinPOperator constructed with: JoinKind=" + kind + ", JoinPartitioningType="
+                + partitioningType + ", List<LogicalVariable>=" + sideLeftOfEqualities + ", List<LogicalVariable>="
+                + sideRightOfEqualities + ", int memSizeInFrames=" + memSizeInFrames + ", int maxInputSize0InFrames="
+                + maxInputSizeInFrames + ", int aveRecordsPerFrame=" + aveRecordsPerFrame + ", double fudgeFactor="
+                + fudgeFactor + ".");
+    }
+
+    public HybridHashJoinPOperator(JoinKind kind, JoinPartitioningType partitioningType,
+            List<LogicalVariable> sideLeftOfEqualities, List<LogicalVariable> sideRightOfEqualities,
+            int memSizeInFrames, int maxInputSizeInFrames, int aveRecordsPerFrame, double fudgeFactor,
+            boolean limitMemory, boolean hashTableGarbageCollection) {
+        super(kind, partitioningType, sideLeftOfEqualities, sideRightOfEqualities);
+        this.memSizeInFrames = memSizeInFrames;
+        this.maxInputBuildSizeInFrames = maxInputSizeInFrames;
+        this.aveRecordsPerFrame = aveRecordsPerFrame;
+        this.fudgeFactor = fudgeFactor;
+        // Temp :
+        this.limitMemory = limitMemory;
+        this.hashTableGarbageCollection = hashTableGarbageCollection;
 
         LOGGER.debug("HybridHashJoinPOperator constructed with: JoinKind=" + kind + ", JoinPartitioningType="
                 + partitioningType + ", List<LogicalVariable>=" + sideLeftOfEqualities + ", List<LogicalVariable>="
@@ -204,7 +233,7 @@ public class HybridHashJoinPOperator extends AbstractHashJoinPOperator {
                             comparatorFactories, recDescriptor,
                             new JoinMultiComparatorFactory(comparatorFactories, keysLeft, keysRight),
                             new JoinMultiComparatorFactory(comparatorFactories, keysRight, keysLeft),
-                            predEvaluatorFactory);
+                            predEvaluatorFactory, limitMemory, hashTableGarbageCollection);
                     break;
                 case LEFT_OUTER:
                     IMissingWriterFactory[] nonMatchWriterFactories =
@@ -217,7 +246,8 @@ public class HybridHashJoinPOperator extends AbstractHashJoinPOperator {
                             comparatorFactories, recDescriptor,
                             new JoinMultiComparatorFactory(comparatorFactories, keysLeft, keysRight),
                             new JoinMultiComparatorFactory(comparatorFactories, keysRight, keysLeft),
-                            predEvaluatorFactory, true, nonMatchWriterFactories);
+                            predEvaluatorFactory, true, nonMatchWriterFactories, limitMemory,
+                            hashTableGarbageCollection);
                     break;
                 default:
                     throw new NotImplementedException();

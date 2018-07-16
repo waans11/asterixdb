@@ -503,6 +503,9 @@ public class JobExecutor {
         final Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies =
                 new HashMap<>(jobRun.getConnectorPolicyMap());
         INodeManager nodeManager = ccs.getNodeManager();
+        //        // Temp :
+        LOGGER.info("startTasks - jobId:\t" + jobId);
+        //        //
         try {
             byte[] acgBytes = isDeployed() ? null : JavaSerializationUtils.serialize(acg);
             for (Map.Entry<String, List<TaskAttemptDescriptor>> entry : taskAttemptMap.entrySet()) {
@@ -519,7 +522,8 @@ public class JobExecutor {
                     node.getNodeController().startTasks(deploymentId, jobId, jagBytes, taskDescriptors,
                             connectorPolicies, jobRun.getFlags(),
                             ccs.createOrGetJobParameterByteStore(jobId).getParameterMap(), deployedJobSpecId,
-                            jobRun.getStartTime());
+                            jobRun.getStartTime(), jobRun.getJobSpecification().getOriginalQuery(false));
+
                 }
             }
         } catch (Exception e) {

@@ -42,11 +42,18 @@ public class ScopeChecker {
 
     protected String defaultDataverse;
 
+    // Temp :
+    protected String originalQuery;
+    //
+
     public ScopeChecker() {
         scopeStack.push(RootScopeFactory.createRootScope(this));
     }
 
     protected void setInput(String s) {
+        // Temp :
+        originalQuery = s;
+        //
         inputLines = s.split("\n|\r\n?");
     }
 
@@ -321,4 +328,10 @@ public class ScopeChecker {
         extract.append(inputLines[endLine - 1].substring(0, endColumn - 1));
         return extract.toString().trim();
     }
+
+    // Temp :
+    protected String getInput() {
+        return originalQuery;
+    }
+    //
 }

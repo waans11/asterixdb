@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.dataflow.std.sort;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.LinkedList;
@@ -55,8 +56,11 @@ public abstract class AbstractExternalSortRunMerger {
     private List<GroupVSizeFrame> inFrames;
     private VSizeFrame outputFrame;
     private ISorter sorter;
-
+    // Temp:
+    private final boolean limitMemory;
     private static final Logger LOGGER = LogManager.getLogger();
+    private static final DecimalFormat decFormat = new DecimalFormat("#.######");
+    //
 
     public AbstractExternalSortRunMerger(IHyracksTaskContext ctx, ISorter sorter, List<GeneratedRunFileReader> runs,
             IBinaryComparator[] comparators, INormalizedKeyComputer nmkComputer, RecordDescriptor recordDesc,
@@ -64,25 +68,55 @@ public abstract class AbstractExternalSortRunMerger {
         this(ctx, sorter, runs, comparators, nmkComputer, recordDesc, framesLimit, Integer.MAX_VALUE, writer);
     }
 
+    // Temp :
+    public AbstractExternalSortRunMerger(IHyracksTaskContext ctx, ISorter sorter, List<GeneratedRunFileReader> runs,
+            IBinaryComparator[] comparators, INormalizedKeyComputer nmkComputer, RecordDescriptor recordDesc,
+            int framesLimit, IFrameWriter writer, boolean limitMemory) {
+        this(ctx, sorter, runs, comparators, nmkComputer, recordDesc, framesLimit, Integer.MAX_VALUE, writer,
+                limitMemory);
+    }
+    //
+
     public AbstractExternalSortRunMerger(IHyracksTaskContext ctx, ISorter sorter, List<GeneratedRunFileReader> runs,
             IBinaryComparator[] comparators, INormalizedKeyComputer nmkComputer, RecordDescriptor recordDesc,
             int framesLimit, int topK, IFrameWriter writer) {
         this.ctx = ctx;
         this.sorter = sorter;
         this.runs = new LinkedList<>(runs);
-        this.currentGenerationRunAvailable = new BitSet(runs.size());
+        currentGenerationRunAvailable = new BitSet(runs.size());
         this.comparators = comparators;
         this.nmkComputer = nmkComputer;
         this.recordDesc = recordDesc;
         this.framesLimit = framesLimit;
         this.writer = writer;
         this.topK = topK;
+        limitMemory = true;
+    }
+
+    // Temp :
+    public AbstractExternalSortRunMerger(IHyracksTaskContext ctx, ISorter sorter, List<GeneratedRunFileReader> runs,
+            IBinaryComparator[] comparators, INormalizedKeyComputer nmkComputer, RecordDescriptor recordDesc,
+            int framesLimit, int topK, IFrameWriter writer, boolean limitMemory) {
+        this.ctx = ctx;
+        this.sorter = sorter;
+        this.runs = new LinkedList<>(runs);
+        currentGenerationRunAvailable = new BitSet(runs.size());
+        this.comparators = comparators;
+        this.nmkComputer = nmkComputer;
+        this.recordDesc = recordDesc;
+        this.framesLimit = framesLimit;
+        this.writer = writer;
+        this.topK = topK;
+        this.limitMemory = limitMemory;
     }
 
     public void process() throws HyracksDataException {
         IFrameWriter finalWriter = null;
         try {
             if (runs.isEmpty()) {
+                // Temp :
+                LOGGER.log(Level.INFO, this.hashCode() + "\t" + "process" + "\tin-memory sort done.");
+                //
                 finalWriter = prepareSkipMergingFinalResultWriter(writer);
                 finalWriter.open();
                 if (sorter != null) {
@@ -95,6 +129,23 @@ public abstract class AbstractExternalSortRunMerger {
                     }
                 }
             } else {
+                // Temp :
+                //                long[] sizes = new long[runs.size()];
+                //                long totalSize = 0;
+                //                String sizeStr = "";
+                //                for (int i = 0; i < sizes.length; i++) {
+                //                    sizes[i] = runs.get(i).getFileSize();
+                //                    totalSize += sizes[i];
+                //                    sizeStr += i + ":" + decFormat.format((double) sizes[i] / 1048576) + "\t";
+                //                }
+                //                LOGGER.log(Level.INFO,
+                //                        this.hashCode() + "\t" + "process" + "\tmerge begins.\t" + "#runs:\t" + runs.size()
+                //                                + "\tsize(MB):\t" + sizeStr + "\ttotal_size(MB):\t"
+                //                                + decFormat.format((double) totalSize / 1048576));
+                LOGGER.log(Level.INFO,
+                        this.hashCode() + "\t" + "process" + "\tmerge begins.\t" + "#runs:\t" + runs.size());
+                //
+
                 /** recycle sort buffer */
                 if (sorter != null) {
                     sorter.close();
@@ -158,6 +209,23 @@ public abstract class AbstractExternalSortRunMerger {
                         }
                     } else {
                         LOGGER.debug("final runs: {}", stop);
+                        // Temp :
+                        //                        long[] sizes1 = new long[partialRuns.size()];
+                        //                        long totalSize1 = 0;
+                        //                        String sizeStr1 = "";
+                        //                        for (int i = 0; i < sizes1.length; i++) {
+                        //                            sizes1[i] = partialRuns.get(i).getFileSize();
+                        //                            totalSize1 += sizes1[i];
+                        //                            sizeStr1 += i + ":" + decFormat.format((double) sizes1[i] / 1048576) + "\t";
+                        //                        }
+                        //                        LOGGER.log(Level.INFO,
+                        //                                this.hashCode() + "\t" + "process" + "\tbefore final merge - #runs:\t" + stop + "\t"
+                        //                                        + partialRuns.size() + "\tsize(MB):\t" + sizeStr1 + "\ttotal_size(MB):\t"
+                        //                                        + decFormat.format((double) totalSize1 / 1048576));
+                        //
+                        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "process" + "\tbefore final merge - #runs:\t"
+                                + stop + "\t" + partialRuns.size());
+                        //
                         merge(finalWriter, partialRuns);
                         break;
                     }
@@ -206,16 +274,22 @@ public abstract class AbstractExternalSortRunMerger {
         return budget;
     }
 
+    // Allocates more frames to each run if there is extra memory
     private void prepareFrames(int extraFreeMem, List<GroupVSizeFrame> inFrames,
             List<GeneratedRunFileReader> partialRuns) throws HyracksDataException {
         if (extraFreeMem > 0 && partialRuns.size() > 1) {
+            // current extra memory
             int extraFrames = extraFreeMem / ctx.getInitialFrameSize();
+            // applied for all partial runs
             int avg = (extraFrames / partialRuns.size()) * ctx.getInitialFrameSize();
+            // applied for just small number of runs
             int residue = extraFrames % partialRuns.size();
+            // residue parts
             for (int i = 0; i < residue; i++) {
                 partialRuns.get(i).updateSize(Math.min(FrameConstants.MAX_FRAMESIZE,
                         partialRuns.get(i).getMaxFrameSize() + avg + ctx.getInitialFrameSize()));
             }
+            // other parts
             for (int i = residue; i < partialRuns.size() && avg > 0; i++) {
                 partialRuns.get(i)
                         .updateSize(Math.min(FrameConstants.MAX_FRAMESIZE, partialRuns.get(i).getMaxFrameSize() + avg));
@@ -250,10 +324,15 @@ public abstract class AbstractExternalSortRunMerger {
         RunMergingFrameReader merger = new RunMergingFrameReader(ctx, partialRuns, inFrames, getSortFields(),
                 comparators, nmkComputer, recordDesc, topK);
         int io = 0;
+        // Temp :
+        int bytes = 0;
+        //
         merger.open();
         try {
             while (merger.nextFrame(outputFrame)) {
                 FrameUtils.flushFrame(outputFrame.getBuffer(), writer);
+                // Temp :
+                bytes += outputFrame.getBuffer().capacity();
                 io++;
             }
         } finally {
@@ -261,6 +340,25 @@ public abstract class AbstractExternalSortRunMerger {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Output " + io + " frames");
             }
+            // Temp :
+            //            long[] sizes1 = new long[partialRuns.size()];
+            //            long totalSize1 = 0;
+            //            String sizeStr1 = "";
+            //            for (int i = 0; i < sizes1.length; i++) {
+            //                sizes1[i] = partialRuns.get(i).getFileSize();
+            //                totalSize1 += sizes1[i];
+            //                sizeStr1 += i + ":" + decFormat.format((double) sizes1[i] / 1048576) + "\t";
+            //            }
+            //            LOGGER.log(Level.INFO,
+            //                    this.hashCode() + "\t" + "merge" + "\tmerged runs count:\t" + partialRuns.size() + "\tsize(MB):\t"
+            //                            + sizeStr1 + "\ttotal_size(MB):\t" + decFormat.format((double) totalSize1 / 1048576)
+            //                            + "\t#frames:\t" + io + "\tmerged_size(MB):\t"
+            //                            + new DecimalFormat("#.######").format((double) bytes / 1048576));
+            LOGGER.log(Level.INFO,
+                    this.hashCode() + "\t" + "merge" + "\tmerged runs count:\t" + partialRuns.size() + "\t#frames:\t"
+                            + io + "\tmerged_size(MB):\t"
+                            + new DecimalFormat("#.######").format((double) bytes / 1048576));
+            //
         }
     }
 

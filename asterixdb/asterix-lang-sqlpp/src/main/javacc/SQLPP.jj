@@ -1764,7 +1764,7 @@ Query ExplainStatement() throws ParseException:
 
 Query Query(boolean explain) throws ParseException:
 {
-  Query query = new Query(explain);
+  Query query = new Query(explain, originalQuery);
   Expression expr;
 }
 {

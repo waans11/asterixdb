@@ -19,6 +19,8 @@
 
 package org.apache.hyracks.storage.am.btree.impls;
 
+import java.text.DecimalFormat;
+
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleReference;
@@ -38,6 +40,9 @@ import org.apache.hyracks.storage.common.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class BTreeRangeSearchCursor extends EnforcedIndexCursor implements ITreeIndexCursor {
 
@@ -73,12 +78,35 @@ public class BTreeRangeSearchCursor extends EnforcedIndexCursor implements ITree
     protected ITupleReference lowKey;
     protected ITupleReference highKey;
 
+    // Temp :
+    protected long usedSpaceByteSize;
+    protected long freeSpaceByteSize;
+    protected long frameCount;
+    protected long frameByteSize;
+    protected long largeFrameCount;
+    protected long normalFrameCount;
+    protected long largeFrameByteSize;
+    protected long normalFrameByteSize;
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final DecimalFormat decFormat = new DecimalFormat("#.######");
+    //
+
     public BTreeRangeSearchCursor(IBTreeLeafFrame frame, boolean exclusiveLatchNodes) {
         this.frame = frame;
-        this.frameTuple = frame.createTupleReference();
+        frameTuple = frame.createTupleReference();
         this.exclusiveLatchNodes = exclusiveLatchNodes;
-        this.reusablePredicate = new RangePredicate();
-        this.reconciliationTuple = new ArrayTupleReference();
+        reusablePredicate = new RangePredicate();
+        reconciliationTuple = new ArrayTupleReference();
+        // Temp :
+        usedSpaceByteSize = 0;
+        freeSpaceByteSize = 0;
+        largeFrameCount = 0;
+        normalFrameCount = 0;
+        frameByteSize = 0;
+        frameCount = 0;
+        largeFrameByteSize = 0;
+        normalFrameByteSize = 0;
+        //
     }
 
     @Override
@@ -108,6 +136,19 @@ public class BTreeRangeSearchCursor extends EnforcedIndexCursor implements ITree
             frame.setPage(page);
             pageId = nextLeafPage;
             nextLeafPage = frame.getNextLeaf();
+            // Temp :
+            int thisFrameByteSize = frame.getPage().getPageSize();
+            freeSpaceByteSize += frame.getTotalFreeSpace();
+            frameByteSize += thisFrameByteSize;
+            frameCount++;
+            if (frame.getPage().isLargePage()) {
+                largeFrameCount++;
+                largeFrameByteSize += thisFrameByteSize;
+            } else {
+                normalFrameCount++;
+                normalFrameByteSize += thisFrameByteSize;
+            }
+            //
         } while (frame.getTupleCount() == 0 && nextLeafPage > 0);
     }
 
@@ -251,6 +292,30 @@ public class BTreeRangeSearchCursor extends EnforcedIndexCursor implements ITree
 
         tupleIndex = getLowKeyIndex();
         stopTupleIndex = getHighKeyIndex();
+
+        // Temp :
+        usedSpaceByteSize = 0;
+        freeSpaceByteSize = 0;
+        largeFrameCount = 0;
+        normalFrameCount = 0;
+        frameByteSize = 0;
+        frameCount = 0;
+        largeFrameByteSize = 0;
+        normalFrameByteSize = 0;
+
+        // Temp :
+        int thisFrameByteSize = frame.getPage().getPageSize();
+        freeSpaceByteSize += frame.getTotalFreeSpace();
+        frameByteSize += thisFrameByteSize;
+        frameCount++;
+        if (frame.getPage().isLargePage()) {
+            largeFrameCount++;
+            largeFrameByteSize += thisFrameByteSize;
+        } else {
+            normalFrameCount++;
+            normalFrameByteSize += thisFrameByteSize;
+        }
+        //
     }
 
     protected void resetBeforeOpen() throws HyracksDataException {
@@ -259,6 +324,29 @@ public class BTreeRangeSearchCursor extends EnforcedIndexCursor implements ITree
 
     @Override
     public void doClose() throws HyracksDataException {
+        // Temp :
+        String usedByteRatio = "N/A";
+        String freeByteRatio = "N/A";
+        usedSpaceByteSize = frameByteSize - freeSpaceByteSize;
+        if (frameCount > 0) {
+            usedByteRatio = decFormat.format((double) usedSpaceByteSize / frameByteSize);
+            freeByteRatio = decFormat.format((double) freeSpaceByteSize / frameByteSize);
+        }
+
+        if (Thread.currentThread().getName().contains("Executor") && frameCount > 0 && frameByteSize > 0) {
+            LOGGER.log(Level.INFO, this.hashCode() + "\t" + "doClose" + "\t(A)usedSpaceSize(MB):\t"
+                    + decFormat.format((double) usedSpaceByteSize / 1048576) + "\t(B)freeSpaceSize(MB):\t"
+                    + decFormat.format((double) freeSpaceByteSize / 1048576) + "\tratio(A/(A+B)):\t" + usedByteRatio
+                    + "\tratio(B/(A+B)):\t" + freeByteRatio + "\t#frames:\t" + frameCount + "\tsize(MB):\t"
+                    + decFormat.format(((double) frameByteSize / 1048576)) + "\t#normal_frames:\t" + normalFrameCount
+                    + "\tsize(MB):\t" + decFormat.format((double) normalFrameByteSize / 1048576) + "\t#large_frames:\t"
+                    + largeFrameCount + "\tsize(MB):\t" + decFormat.format((double) largeFrameByteSize / 1048576)
+                    + "\tratio_of_large_frames:\t" + decFormat.format((double) largeFrameByteSize / frameByteSize)
+                    + "\t#physical_frames:\t" + (int) Math.ceil((double) frameByteSize / bufferCache.getPageSize())
+                    + "\tdefault_frame_size(KB):\t" + decFormat.format((double) bufferCache.getPageSize() / 1024));
+        }
+
+        //
         if (page != null) {
             releasePage();
         }

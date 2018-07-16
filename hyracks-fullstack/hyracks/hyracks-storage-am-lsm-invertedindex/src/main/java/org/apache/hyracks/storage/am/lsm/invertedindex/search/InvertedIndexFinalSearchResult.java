@@ -27,12 +27,19 @@ import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * This is an in-memory based storage for final results of inverted-index searches.
  * Only one frame is used at a time. The same frame will be used multiple times.
  */
 public class InvertedIndexFinalSearchResult extends InvertedIndexSearchResult {
+
+    // Temp :
+    private static final Logger LOGGER = LogManager.getLogger();
+    //
 
     public InvertedIndexFinalSearchResult(ITypeTraits[] invListFields, IHyracksTaskContext ctx,
             ISimpleFrameBufferManager bufferManager) throws HyracksDataException {
@@ -65,6 +72,9 @@ public class InvertedIndexFinalSearchResult extends InvertedIndexSearchResult {
         isFileOpened = false;
         resetAppenderLocation(IO_BUFFER_IDX);
         isWriteFinished = false;
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tprepareWrite\t" + "(always) In-memory I/O mode -  initiated.");
+        //
     }
 
     /**
@@ -99,6 +109,9 @@ public class InvertedIndexFinalSearchResult extends InvertedIndexSearchResult {
             return;
         }
         isWriteFinished = true;
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tfinalizeWrite\t" + "(always) In-memory I/O mode - write finished.");
+        //
     }
 
     /**
@@ -111,6 +124,10 @@ public class InvertedIndexFinalSearchResult extends InvertedIndexSearchResult {
         }
         currentReaderBufIdx = 0;
         isInReadMode = true;
+        // Temp :
+        LOGGER.log(Level.INFO,
+                this.hashCode() + "\tprepareResultRead\t" + "(always) In-memory I/O mode - read initiated.");
+        //
     }
 
     /**
@@ -126,6 +143,10 @@ public class InvertedIndexFinalSearchResult extends InvertedIndexSearchResult {
      */
     @Override
     public void closeResultRead(boolean deallocateIOBufferNeeded) throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO,
+                this.hashCode() + "\tcloseResultRead\t" + "(always) In-memory I/O mode - read finished.");
+        //
         // Deallocates I/O buffer if requested.
         if (deallocateIOBufferNeeded) {
             deallocateIOBuffer();
@@ -142,6 +163,9 @@ public class InvertedIndexFinalSearchResult extends InvertedIndexSearchResult {
 
     @Override
     public void reset() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\treset");
+        //
         // Resets the I/O buffer.
         clearBuffer(ioBuffer);
 
@@ -162,6 +186,9 @@ public class InvertedIndexFinalSearchResult extends InvertedIndexSearchResult {
     @Override
     protected void deallocateIOBuffer() throws HyracksDataException {
         if (ioBufferFrame != null) {
+            // Temp :
+            LOGGER.log(Level.INFO, this.hashCode() + "\tdeallocateIOBuffer\t" + "Deallocate I/O buffer");
+            //
             bufferManager.releaseFrame(ioBuffer);
             buffers.clear();
             ioBufferFrame = null;

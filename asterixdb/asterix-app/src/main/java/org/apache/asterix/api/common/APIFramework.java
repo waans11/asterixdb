@@ -21,6 +21,7 @@ package org.apache.asterix.api.common;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -106,6 +107,9 @@ import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.resource.IClusterCapacity;
 import org.apache.hyracks.control.common.config.OptionTypes;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -117,6 +121,11 @@ import com.google.common.collect.ImmutableSet;
  */
 public class APIFramework {
 
+    // Temp :
+    static final Logger LOGGER = LogManager.getLogger();
+    private static final DecimalFormat DECFORMAT = new DecimalFormat("#.######");
+    //
+
     private static final int MIN_FRAME_LIMIT_FOR_SORT = 3;
     private static final int MIN_FRAME_LIMIT_FOR_GROUP_BY = 4;
     private static final int MIN_FRAME_LIMIT_FOR_JOIN = 5;
@@ -125,14 +134,19 @@ public class APIFramework {
     private static final ObjectWriter OBJECT_WRITER = new ObjectMapper().writerWithDefaultPrettyPrinter();
 
     // A white list of supported configurable parameters.
-    private static final Set<String> CONFIGURABLE_PARAMETER_NAMES =
-            ImmutableSet.of(CompilerProperties.COMPILER_JOINMEMORY_KEY, CompilerProperties.COMPILER_GROUPMEMORY_KEY,
-                    CompilerProperties.COMPILER_SORTMEMORY_KEY, CompilerProperties.COMPILER_TEXTSEARCHMEMORY_KEY,
-                    CompilerProperties.COMPILER_PARALLELISM_KEY, FunctionUtil.IMPORT_PRIVATE_FUNCTIONS,
-                    FuzzyUtils.SIM_FUNCTION_PROP_NAME, FuzzyUtils.SIM_THRESHOLD_PROP_NAME,
-                    StartFeedStatement.WAIT_FOR_COMPLETION, FeedActivityDetails.FEED_POLICY_NAME,
-                    FeedActivityDetails.COLLECT_LOCATIONS, "inline_with", "hash_merge", "output-record-type",
-                    AbstractIntroduceAccessMethodRule.NO_INDEX_ONLY_PLAN_OPTION);
+    private static final Set<String> CONFIGURABLE_PARAMETER_NAMES = ImmutableSet.of(
+            CompilerProperties.COMPILER_JOINMEMORY_KEY, CompilerProperties.COMPILER_GROUPMEMORY_KEY,
+            CompilerProperties.COMPILER_SORTMEMORY_KEY, CompilerProperties.COMPILER_TEXTSEARCHMEMORY_KEY,
+            CompilerProperties.COMPILER_PARALLELISM_KEY, CompilerProperties.COMPILER_LIMITHASHGROUPMEMORY_KEY,
+            CompilerProperties.COMPILER_LIMITHASHJOINMEMORY_KEY, CompilerProperties.COMPILER_LIMITSORTMEMORY_KEY,
+            CompilerProperties.COMPILER_LIMITTEXTSEARCHMEMORY_KEY, CompilerProperties.COMPILER_LIMITQUERYEXECUTION_KEY,
+            CompilerProperties.COMPILER_HASHTABLEGARBAGECOLLECTION_KEY,
+            CompilerProperties.COMPILER_CONSERVATIVELIMITQUERYEXECUTION_KEY,
+            CompilerProperties.COMPILER_PRINTINDEXENTRYDURINGBULKLOAD_KEY, FunctionUtil.IMPORT_PRIVATE_FUNCTIONS,
+            FuzzyUtils.SIM_FUNCTION_PROP_NAME, FuzzyUtils.SIM_THRESHOLD_PROP_NAME,
+            StartFeedStatement.WAIT_FOR_COMPLETION, FeedActivityDetails.FEED_POLICY_NAME,
+            FeedActivityDetails.COLLECT_LOCATIONS, "inline_with", "hash_merge", "output-record-type",
+            AbstractIntroduceAccessMethodRule.NO_INDEX_ONLY_PLAN_OPTION);
 
     private final IRewriterFactory rewriterFactory;
     private final IAstPrintVisitorFactory astPrintVisitorFactory;
@@ -141,10 +155,10 @@ public class APIFramework {
     private final ExecutionPlans executionPlans;
 
     public APIFramework(ILangCompilationProvider compilationProvider) {
-        this.rewriterFactory = compilationProvider.getRewriterFactory();
-        this.astPrintVisitorFactory = compilationProvider.getAstPrintVisitorFactory();
-        this.translatorFactory = compilationProvider.getExpressionToPlanTranslatorFactory();
-        this.ruleSetFactory = compilationProvider.getRuleSetFactory();
+        rewriterFactory = compilationProvider.getRewriterFactory();
+        astPrintVisitorFactory = compilationProvider.getAstPrintVisitorFactory();
+        translatorFactory = compilationProvider.getExpressionToPlanTranslatorFactory();
+        ruleSetFactory = compilationProvider.getRuleSetFactory();
         executionPlans = new ExecutionPlans();
     }
 
@@ -283,6 +297,10 @@ public class APIFramework {
         JobSpecification spec = compiler.createJob(metadataProvider.getApplicationContext(), jobEventListenerFactory);
 
         if (isQuery) {
+            // Temp :
+            spec.setOriginalQuery(query.getOriginalQuery());
+            //
+
             // Sets a required capacity, only for read-only queries.
             // DDLs and DMLs are considered not that frequent.
             // limit the computation locations to the locations that will be used in the query
@@ -296,6 +314,7 @@ public class APIFramework {
         if (isQuery && conf.is(SessionConfig.OOB_HYRACKS_JOB)) {
             generateJob(spec);
         }
+
         return spec;
     }
 
@@ -314,13 +333,61 @@ public class APIFramework {
         int textSearchFrameLimit = getFrameLimit(CompilerProperties.COMPILER_TEXTSEARCHMEMORY_KEY,
                 querySpecificConfig.get(CompilerProperties.COMPILER_TEXTSEARCHMEMORY_KEY),
                 compilerProperties.getTextSearchMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_TEXTSEARCH);
+        // Temp :
+        boolean limitSortMemory = getBooleanOption(CompilerProperties.COMPILER_LIMITSORTMEMORY_KEY,
+                querySpecificConfig.get(CompilerProperties.COMPILER_LIMITSORTMEMORY_KEY),
+                compilerProperties.getLimitSortMemory());
+        boolean limitHashGroupMemory = getBooleanOption(CompilerProperties.COMPILER_LIMITHASHGROUPMEMORY_KEY,
+                querySpecificConfig.get(CompilerProperties.COMPILER_LIMITHASHGROUPMEMORY_KEY),
+                compilerProperties.getLimitHashGroupMemory());
+        boolean limitHashJoinMemory = getBooleanOption(CompilerProperties.COMPILER_LIMITHASHJOINMEMORY_KEY,
+                querySpecificConfig.get(CompilerProperties.COMPILER_LIMITHASHJOINMEMORY_KEY),
+                compilerProperties.getLimitHashJoinMemory());
+        boolean hashTableGarbageCollection =
+                getBooleanOption(CompilerProperties.COMPILER_HASHTABLEGARBAGECOLLECTION_KEY,
+                        querySpecificConfig.get(CompilerProperties.COMPILER_HASHTABLEGARBAGECOLLECTION_KEY),
+                        compilerProperties.getHashTableGarbageCollection());
+        boolean limitTextSearchMemory = getBooleanOption(CompilerProperties.COMPILER_LIMITTEXTSEARCHMEMORY_KEY,
+                querySpecificConfig.get(CompilerProperties.COMPILER_LIMITTEXTSEARCHMEMORY_KEY),
+                compilerProperties.getLimitTextSearchMemory());
+        boolean limitQueryExecution = getBooleanOption(CompilerProperties.COMPILER_LIMITQUERYEXECUTION_KEY,
+                querySpecificConfig.get(CompilerProperties.COMPILER_LIMITQUERYEXECUTION_KEY),
+                compilerProperties.getLimitQueryExecution());
+        boolean conservativeLimitQueryExecution =
+                getBooleanOption(CompilerProperties.COMPILER_CONSERVATIVELIMITQUERYEXECUTION_KEY,
+                        querySpecificConfig.get(CompilerProperties.COMPILER_CONSERVATIVELIMITQUERYEXECUTION_KEY),
+                        compilerProperties.getConservativeLimitQueryExecution());
+        boolean printIndexEntryDuringBulkLoad =
+                getBooleanOption(CompilerProperties.COMPILER_PRINTINDEXENTRYDURINGBULKLOAD_KEY,
+                        querySpecificConfig.get(CompilerProperties.COMPILER_PRINTINDEXENTRYDURINGBULKLOAD_KEY),
+                        compilerProperties.getPrintIndexEntryDuringBulkLoad());
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "getPhysicalOptimizationConfig" + "\nsortmemory (MB):\t"
+                + DECFORMAT.format((double) sortFrameLimit * frameSize / 1048576) + "\ngroupmemory (MB):\t"
+                + DECFORMAT.format((double) groupFrameLimit * frameSize / 1048576) + "\njoinmemory (MB):\t"
+                + DECFORMAT.format((double) joinFrameLimit * frameSize / 1048576) + "\ntextsearchmemory (MB):\t"
+                + DECFORMAT.format((double) textSearchFrameLimit * frameSize / 1048576) + "\nlimitSortMemory:\t"
+                + limitSortMemory + "\nlimitHashGroupMemory:\t" + limitHashGroupMemory + "\nlimitHashJoinMemory:\t"
+                + limitHashJoinMemory + "\nhashTableGarbageCollection:\t" + hashTableGarbageCollection
+                + "\nlimitTextSearchMemory:\t" + limitTextSearchMemory + "\nlimitQueryExecution:\t"
+                + limitQueryExecution + "\nconservativeLimitQueryExecution:\t" + conservativeLimitQueryExecution
+                + "\nprintIndexEntryDuringBulkLoad:\t" + printIndexEntryDuringBulkLoad);
+        //
+
         final PhysicalOptimizationConfig physOptConf = OptimizationConfUtil.getPhysicalOptimizationConfig();
         physOptConf.setFrameSize(frameSize);
         physOptConf.setMaxFramesExternalSort(sortFrameLimit);
         physOptConf.setMaxFramesExternalGroupBy(groupFrameLimit);
         physOptConf.setMaxFramesForJoin(joinFrameLimit);
         physOptConf.setMaxFramesForTextSearch(textSearchFrameLimit);
-
+        // Temp :
+        physOptConf.setLimitSortMemory(limitSortMemory);
+        physOptConf.setLimitHashGroupMemory(limitHashGroupMemory);
+        physOptConf.setLimitHashJoinMemory(limitHashJoinMemory);
+        physOptConf.setHashTableGarbageCollection(hashTableGarbageCollection);
+        physOptConf.setLimitTextSearchMemory(limitTextSearchMemory);
+        physOptConf.setLimitQueryExecution(limitQueryExecution);
+        physOptConf.setConservativeLimitQueryExecution(conservativeLimitQueryExecution);
+        physOptConf.setPrintIndexEntryDuringBulkLoad(printIndexEntryDuringBulkLoad);
         return physOptConf;
     }
 
@@ -462,6 +529,18 @@ public class APIFramework {
         return Math.max(frameLimit, minFrameLimit);
     }
 
+    //    CompilerProperties.COMPILER_TEXTSEARCHMEMORY_KEY,
+    //    querySpecificConfig.get(CompilerProperties.COMPILER_TEXTSEARCHMEMORY_KEY),
+    //    compilerProperties.getTextSearchMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_TEXTSEARCH
+
+    // Temp : Gets the optional parameter value.
+    public static boolean getBooleanOption(String parameterName, String parameter, boolean defaultValue)
+            throws AlgebricksException {
+        IOptionType<Boolean> booleanPropertyInterpreter = OptionTypes.BOOLEAN;
+        return parameter == null ? defaultValue : booleanPropertyInterpreter.parse(parameter);
+    }
+    //
+
     // Gets the parallelism parameter.
     private static int getParallelism(String parameter, int parallelismInConfiguration) {
         IOptionType<Integer> integerIPropertyInterpreter = OptionTypes.INTEGER;
@@ -469,7 +548,7 @@ public class APIFramework {
     }
 
     // Validates if the query contains unsupported query parameters.
-    private static Map<String, String> validateConfig(Map<String, String> config) throws AlgebricksException {
+    public static Map<String, String> validateConfig(Map<String, String> config) throws AlgebricksException {
         for (String parameterName : config.keySet()) {
             if (!CONFIGURABLE_PARAMETER_NAMES.contains(parameterName)) {
                 throw AsterixException.create(ErrorCode.COMPILATION_UNSUPPORTED_QUERY_PARAMETER, parameterName);

@@ -43,6 +43,10 @@ public class LSMIndexBulkLoadOperatorDescriptor extends TreeIndexBulkLoadOperato
 
     protected final int datasetId;
 
+    // Temp :
+    protected final boolean printIndexEntryDuringBulkLoad;
+    //
+
     public LSMIndexBulkLoadOperatorDescriptor(IOperatorDescriptorRegistry spec, RecordDescriptor outRecDesc,
             int[] fieldPermutation, float fillFactor, boolean verifyInput, long numElementsHint,
             boolean checkIfEmptyIndex, IIndexDataflowHelperFactory indexHelperFactory,
@@ -52,13 +56,32 @@ public class LSMIndexBulkLoadOperatorDescriptor extends TreeIndexBulkLoadOperato
         this.primaryIndexHelperFactory = primaryIndexHelperFactory;
         this.usage = usage;
         this.datasetId = datasetId;
+        // Temp :
+        this.printIndexEntryDuringBulkLoad = false;
+        //
     }
+
+    // Temp :
+    public LSMIndexBulkLoadOperatorDescriptor(IOperatorDescriptorRegistry spec, RecordDescriptor outRecDesc,
+            int[] fieldPermutation, float fillFactor, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, IIndexDataflowHelperFactory indexHelperFactory,
+            IIndexDataflowHelperFactory primaryIndexHelperFactory, BulkLoadUsage usage, int datasetId,
+            boolean printIndexEntryDuringBulkLoad) {
+        super(spec, outRecDesc, fieldPermutation, fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex,
+                indexHelperFactory);
+        this.primaryIndexHelperFactory = primaryIndexHelperFactory;
+        this.usage = usage;
+        this.datasetId = datasetId;
+        this.printIndexEntryDuringBulkLoad = printIndexEntryDuringBulkLoad;
+    }
+    //
 
     @Override
     public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
             IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions) throws HyracksDataException {
         return new LSMIndexBulkLoadOperatorNodePushable(indexHelperFactory, primaryIndexHelperFactory, ctx, partition,
                 fieldPermutation, fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex,
-                recordDescProvider.getInputRecordDescriptor(this.getActivityId(), 0), usage, datasetId);
+                recordDescProvider.getInputRecordDescriptor(this.getActivityId(), 0), usage, datasetId,
+                printIndexEntryDuringBulkLoad);
     }
 }

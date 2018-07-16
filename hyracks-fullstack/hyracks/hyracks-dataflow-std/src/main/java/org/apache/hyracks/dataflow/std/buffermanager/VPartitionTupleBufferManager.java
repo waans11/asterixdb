@@ -48,6 +48,12 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     private IDeallocatableFramePool framePool;
     private IFrameBufferManager[] partitionArray;
     private int[] numTuples;
+    // Temp :
+    private int[] spilledNumTuples;
+    private int[] spilledByteSizes;
+    private int[] doneNumTuples;
+    private int[] doneByteSizes;
+    //
     private final FixedSizeFrame appendFrame;
     private final FixedSizeFrameTupleAppender appender;
     private BufferInfo tempInfo;
@@ -58,22 +64,34 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
             IDeallocatableFramePool framePool) throws HyracksDataException {
         this.constrain = constrain;
         this.framePool = framePool;
-        this.partitionArray = new IFrameBufferManager[partitions];
-        this.numTuples = new int[partitions];
-        this.appendFrame = new FixedSizeFrame();
-        this.appender = new FixedSizeFrameTupleAppender();
-        this.tempInfo = new BufferInfo(null, -1, -1);
+        partitionArray = new IFrameBufferManager[partitions];
+        numTuples = new int[partitions];
+        // Temp :
+        spilledNumTuples = new int[partitions];
+        spilledByteSizes = new int[partitions];
+        doneNumTuples = new int[partitions];
+        doneByteSizes = new int[partitions];
+        //
+        appendFrame = new FixedSizeFrame();
+        appender = new FixedSizeFrameTupleAppender();
+        tempInfo = new BufferInfo(null, -1, -1);
     }
 
     public VPartitionTupleBufferManager(IHyracksFrameMgrContext ctx, IPartitionedMemoryConstrain constrain,
             int partitions, int frameLimitInBytes) throws HyracksDataException {
         this.constrain = constrain;
-        this.framePool = new DeallocatableFramePool(ctx, frameLimitInBytes);
-        this.partitionArray = new IFrameBufferManager[partitions];
-        this.numTuples = new int[partitions];
-        this.appendFrame = new FixedSizeFrame();
-        this.appender = new FixedSizeFrameTupleAppender();
-        this.tempInfo = new BufferInfo(null, -1, -1);
+        framePool = new DeallocatableFramePool(ctx, frameLimitInBytes);
+        partitionArray = new IFrameBufferManager[partitions];
+        numTuples = new int[partitions];
+        // Temp :
+        spilledNumTuples = new int[partitions];
+        spilledByteSizes = new int[partitions];
+        doneNumTuples = new int[partitions];
+        doneByteSizes = new int[partitions];
+        //
+        appendFrame = new FixedSizeFrame();
+        appender = new FixedSizeFrameTupleAppender();
+        tempInfo = new BufferInfo(null, -1, -1);
     }
 
     @Override
@@ -87,6 +105,10 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
             }
         }
         Arrays.fill(numTuples, 0);
+        Arrays.fill(spilledNumTuples, 0);
+        Arrays.fill(spilledByteSizes, 0);
+        Arrays.fill(doneNumTuples, 0);
+        Arrays.fill(doneByteSizes, 0);
         appendFrame.reset(null);
     }
 
@@ -99,6 +121,62 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
     public int getNumTuples(int partition) {
         return numTuples[partition];
     }
+
+    // Temp :
+    @Override
+    public int getSpilledNumTuples(int partition) {
+        return spilledNumTuples[partition];
+    }
+    //
+
+    // Temp :
+    @Override
+    public int getSpilledPhysicalSizes(int partition) {
+        return spilledByteSizes[partition];
+    }
+    //
+
+    // Temp :
+    @Override
+    public int getDoneNumTuples(int partition) {
+        return doneNumTuples[partition];
+    }
+    //
+
+    // Temp :
+    @Override
+    public int getDonePhysicalSizes(int partition) {
+        return doneByteSizes[partition];
+    }
+    //
+
+    // Temp :
+    @Override
+    public void addSpilledNumTuples(int partition, int numTuple) {
+        spilledNumTuples[partition] = spilledNumTuples[partition] + numTuple;
+    }
+    //
+
+    // Temp :
+    @Override
+    public void addSpilledPhysicalSizes(int partition, int byteSize) {
+        spilledByteSizes[partition] = spilledByteSizes[partition] + byteSize;
+    }
+    //
+
+    // Temp :
+    @Override
+    public void addDoneNumTuples(int partition, int numTuple) {
+        doneNumTuples[partition] = doneNumTuples[partition] + numTuple;
+    }
+    //
+
+    // Temp :
+    @Override
+    public void addDonePhysicalSizes(int partition, int byteSize) {
+        doneByteSizes[partition] = doneByteSizes[partition] + byteSize;
+    }
+    //
 
     @Override
     public int getPhysicalSize(int partitionId) {
@@ -284,6 +362,10 @@ public class VPartitionTupleBufferManager implements IPartitionedTupleBufferMana
                 tempInfo.getBuffer().limit(tempInfo.getStartOffset() + tempInfo.getLength());
                 writer.nextFrame(tempInfo.getBuffer());
             }
+            // Temp :
+            spilledNumTuples[pid] += getNumTuples(pid);
+            spilledByteSizes[pid] += getPhysicalSize(pid);
+            //
         }
 
     }

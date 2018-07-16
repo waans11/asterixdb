@@ -41,6 +41,7 @@ import org.apache.hyracks.dataflow.std.buffermanager.TupleInFrameListAccessor;
 import org.apache.hyracks.dataflow.std.structures.ISerializableTable;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 import org.apache.hyracks.dataflow.std.util.FrameTuplePairComparator;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -63,9 +64,13 @@ public class InMemoryHashJoin {
     // To release frames
     ISimpleFrameBufferManager bufferManager;
     private final boolean isTableCapacityNotZero;
+    // Temp :
+    private final boolean limitMemory;
+    private final boolean hashTableGarbageCollection;
 
     private static final Logger LOGGER = LogManager.getLogger();
 
+    // Original const
     public InMemoryHashJoin(IHyracksTaskContext ctx, FrameTupleAccessor accessorProbe, ITuplePartitionComputer tpcProbe,
             FrameTupleAccessor accessorBuild, RecordDescriptor rDBuild, ITuplePartitionComputer tpcBuild,
             FrameTuplePairComparator comparator, boolean isLeftOuter, IMissingWriter[] missingWritersBuild,
@@ -75,6 +80,7 @@ public class InMemoryHashJoin {
                 missingWritersBuild, table, predEval, false, bufferManager);
     }
 
+    // Original const
     public InMemoryHashJoin(IHyracksTaskContext ctx, FrameTupleAccessor accessorProbe, ITuplePartitionComputer tpcProbe,
             FrameTupleAccessor accessorBuild, RecordDescriptor rDBuild, ITuplePartitionComputer tpcBuild,
             FrameTuplePairComparator comparator, boolean isLeftOuter, IMissingWriter[] missingWritersBuild,
@@ -103,7 +109,7 @@ public class InMemoryHashJoin {
             missingTupleBuild = null;
         }
         reverseOutputOrder = reverse;
-        this.tupleAccessor = new TupleInFrameListAccessor(rDBuild, buffers);
+        tupleAccessor = new TupleInFrameListAccessor(rDBuild, buffers);
         this.bufferManager = bufferManager;
         if (table.getTableSize() != 0) {
             isTableCapacityNotZero = true;
@@ -112,6 +118,54 @@ public class InMemoryHashJoin {
         }
         LOGGER.debug("InMemoryHashJoin has been created for a table size of " + table.getTableSize() + " for Thread ID "
                 + Thread.currentThread().getId() + ".");
+        // Temp :
+        limitMemory = true;
+        hashTableGarbageCollection = true;
+    }
+
+    // Temp :
+    public InMemoryHashJoin(IHyracksTaskContext ctx, FrameTupleAccessor accessorProbe, ITuplePartitionComputer tpcProbe,
+            FrameTupleAccessor accessorBuild, RecordDescriptor rDBuild, ITuplePartitionComputer tpcBuild,
+            FrameTuplePairComparator comparator, boolean isLeftOuter, IMissingWriter[] missingWritersBuild,
+            ISerializableTable table, IPredicateEvaluator predEval, boolean reverse,
+            ISimpleFrameBufferManager bufferManager, boolean limitMemory, boolean hashTableGarbageCollection)
+            throws HyracksDataException {
+        this.table = table;
+        storedTuplePointer = new TuplePointer();
+        buffers = new ArrayList<>();
+        this.accessorBuild = accessorBuild;
+        this.tpcBuild = tpcBuild;
+        this.accessorProbe = accessorProbe;
+        this.tpcProbe = tpcProbe;
+        appender = new FrameTupleAppender(new VSizeFrame(ctx));
+        tpComparator = comparator;
+        predEvaluator = predEval;
+        this.isLeftOuter = isLeftOuter;
+        if (isLeftOuter) {
+            int fieldCountOuter = accessorBuild.getFieldCount();
+            missingTupleBuild = new ArrayTupleBuilder(fieldCountOuter);
+            DataOutput out = missingTupleBuild.getDataOutput();
+            for (int i = 0; i < fieldCountOuter; i++) {
+                missingWritersBuild[i].writeMissing(out);
+                missingTupleBuild.addFieldEndOffset();
+            }
+        } else {
+            missingTupleBuild = null;
+        }
+        reverseOutputOrder = reverse;
+        tupleAccessor = new TupleInFrameListAccessor(rDBuild, buffers);
+        this.bufferManager = bufferManager;
+        if (table.getTableSize() != 0) {
+            isTableCapacityNotZero = true;
+        } else {
+            isTableCapacityNotZero = false;
+        }
+        LOGGER.debug("InMemoryHashJoin has been created for a table size of " + table.getTableSize() + " for Thread ID "
+                + Thread.currentThread().getId() + ".");
+        // Temp :
+        this.limitMemory = limitMemory;
+        this.hashTableGarbageCollection = hashTableGarbageCollection;
+        //
     }
 
     public void build(ByteBuffer buffer) throws HyracksDataException {
@@ -193,6 +247,10 @@ public class InMemoryHashJoin {
     }
 
     public void completeJoin(IFrameWriter writer) throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "completeJoin");
+        //        printTableInfo();
+        //
         appender.write(writer, true);
     }
 
@@ -229,5 +287,13 @@ public class InMemoryHashJoin {
         } else {
             FrameUtils.appendConcatToWriter(writer, appender, accessorProbe, probeSidetIx, accessorBuild, buildSidetIx);
         }
+    }
+
+    // Temp : debug
+    public void printTableInfo() {
+        String result = table.printInfo();
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "printTableInfo" + "\n" + result);
+        //
     }
 }

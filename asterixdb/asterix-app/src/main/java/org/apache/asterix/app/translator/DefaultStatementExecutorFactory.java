@@ -47,9 +47,12 @@ public class DefaultStatementExecutorFactory implements IStatementExecutorFactor
         this.executorService = executorService;
     }
 
+    // Temp : originalQuery field added
     @Override
     public IStatementExecutor create(ICcApplicationContext appCtx, List<Statement> statements, SessionOutput output,
-            ILangCompilationProvider compilationProvider, IStorageComponentProvider storageComponentProvider) {
-        return new QueryTranslator(appCtx, statements, output, compilationProvider, executorService);
+            ILangCompilationProvider compilationProvider, IStorageComponentProvider storageComponentProvider,
+            String originalQuery) {
+        return new QueryTranslator(appCtx, statements, output, compilationProvider, executorService, originalQuery);
     }
+    //
 }

@@ -219,6 +219,16 @@ public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent impl
                 getIndex().createBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex));
     }
 
+    // Temp :
+    @Override
+    public IChainedComponentBulkLoader createIndexBulkLoader(float fillFactor, boolean verifyInput,
+            long numElementsHint, boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad)
+            throws HyracksDataException {
+        return new LSMIndexBulkLoader(getIndex().createBulkLoader(fillFactor, verifyInput, numElementsHint,
+                checkIfEmptyIndex, printIndexEntryDuringBulkLoad));
+    }
+
+    //
     /**
      * Allows sub-class extend this method to use specialized bulkloader for merge
      */
@@ -243,6 +253,25 @@ public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent impl
         return chainedBulkLoader;
     }
 
+    // Temp :
+    @Override
+    public ChainedLSMDiskComponentBulkLoader createBulkLoader(ILSMIOOperation operation, float fillFactor,
+            boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter,
+            boolean cleanupEmptyComponent, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
+        ChainedLSMDiskComponentBulkLoader chainedBulkLoader =
+                new ChainedLSMDiskComponentBulkLoader(operation, this, cleanupEmptyComponent);
+        if (withFilter && getLsmIndex().getFilterFields() != null) {
+            chainedBulkLoader.addBulkLoader(createFilterBulkLoader());
+        }
+        IChainedComponentBulkLoader indexBulkloader = operation.getIOOpertionType() == LSMIOOperationType.MERGE
+                ? createMergeIndexBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex)
+                : createIndexBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex,
+                        printIndexEntryDuringBulkLoad);
+        chainedBulkLoader.addBulkLoader(indexBulkloader);
+        return chainedBulkLoader;
+    }
+
+    //
     @Override
     public String toString() {
         return "{\"class\":" + getClass().getSimpleName() + "\", \"index\":" + getIndex().toString() + "}";

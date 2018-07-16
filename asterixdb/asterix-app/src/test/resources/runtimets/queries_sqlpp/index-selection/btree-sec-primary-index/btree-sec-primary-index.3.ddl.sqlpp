@@ -26,4 +26,4 @@
 use test;
 
 
-create primary index sec_primary_idx on employee ;
+;create primary index sec_primary_idx on employee ;

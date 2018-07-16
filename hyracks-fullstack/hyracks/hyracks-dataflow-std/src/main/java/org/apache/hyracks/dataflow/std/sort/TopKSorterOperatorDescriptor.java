@@ -38,6 +38,7 @@ public class TopKSorterOperatorDescriptor extends AbstractSorterOperatorDescript
     private static final long serialVersionUID = 1L;
     private final int topK;
 
+    // Temp : analysis - called from examples and tests
     public TopKSorterOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int topK, int[] sortFields,
             INormalizedKeyComputerFactory firstKeyNormalizerFactory, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor) {
@@ -47,12 +48,33 @@ public class TopKSorterOperatorDescriptor extends AbstractSorterOperatorDescript
                 comparatorFactories, recordDescriptor);
     }
 
+    // Temp : called from StableSortPOperator.
+    public TopKSorterOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int topK, int[] sortFields,
+            INormalizedKeyComputerFactory firstKeyNormalizerFactory, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDescriptor, boolean limitMemory) {
+        this(spec, framesLimit, topK,
+                sortFields, firstKeyNormalizerFactory != null
+                        ? new INormalizedKeyComputerFactory[] { firstKeyNormalizerFactory } : null,
+                comparatorFactories, recordDescriptor, limitMemory);
+    }
+    //
+
     public TopKSorterOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int topK, int[] sortFields,
             INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor) {
-        super(spec, framesLimit, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor);
+        super(spec, framesLimit, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor, true);
         this.topK = topK;
     }
+
+    // Temp :
+    public TopKSorterOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int topK, int[] sortFields,
+            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDescriptor, boolean limitMemory) {
+        super(spec, framesLimit, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor,
+                limitMemory);
+        this.topK = topK;
+    }
+    //
 
     @Override
     public SortActivity getSortActivity(ActivityId id) {
@@ -63,7 +85,7 @@ public class TopKSorterOperatorDescriptor extends AbstractSorterOperatorDescript
             protected AbstractSortRunGenerator getRunGenerator(IHyracksTaskContext ctx,
                     IRecordDescriptorProvider recordDescProvider) {
                 return new HybridTopKSortRunGenerator(ctx, framesLimit, topK, sortFields, keyNormalizerFactories,
-                        comparatorFactories, outRecDescs[0]);
+                        comparatorFactories, outRecDescs[0], limitMemory);
 
             }
         };
@@ -80,7 +102,7 @@ public class TopKSorterOperatorDescriptor extends AbstractSorterOperatorDescript
                     List<GeneratedRunFileReader> runs, IBinaryComparator[] comparators,
                     INormalizedKeyComputer nmkComputer, int necessaryFrames) {
                 return new ExternalSortRunMerger(ctx, sorter, runs, sortFields, comparators, nmkComputer,
-                        outRecDescs[0], necessaryFrames, topK, writer);
+                        outRecDescs[0], necessaryFrames, topK, writer, limitMemory);
             }
         };
     }

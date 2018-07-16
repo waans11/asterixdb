@@ -97,10 +97,15 @@ public class StartTasksWork extends AbstractWork {
 
     private final long jobStartTime;
 
+    // Temp :
+    private final String originalQuery;
+    //
+
     public StartTasksWork(NodeControllerService ncs, DeploymentId deploymentId, JobId jobId, byte[] acgBytes,
             List<TaskAttemptDescriptor> taskDescriptors,
             Map<ConnectorDescriptorId, IConnectorPolicy> connectorPoliciesMap, Set<JobFlag> flags,
-            Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId, long jobStartTime) {
+            Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId, long jobStartTime,
+            String originalQuery) {
         this.ncs = ncs;
         this.deploymentId = deploymentId;
         this.jobId = jobId;
@@ -111,6 +116,9 @@ public class StartTasksWork extends AbstractWork {
         this.flags = flags;
         this.jobParameters = jobParameters;
         this.jobStartTime = jobStartTime;
+        // Temp :
+        this.originalQuery = originalQuery;
+        //
     }
 
     @Override
@@ -118,6 +126,11 @@ public class StartTasksWork extends AbstractWork {
         Task task = null;
         int taskIndex = 0;
         try {
+            // Temp :
+            if (originalQuery != null && originalQuery.length() > 0) {
+                LOGGER.info("jobId:" + jobId + " Query:\n" + originalQuery);
+            }
+            //
             ncs.updateMaxJobId(jobId);
             NCServiceContext serviceCtx = ncs.getContext();
             Joblet joblet = getOrCreateLocalJoblet(deploymentId, serviceCtx, acgBytes);

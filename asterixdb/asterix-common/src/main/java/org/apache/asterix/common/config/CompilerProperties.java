@@ -18,7 +18,10 @@
  */
 package org.apache.asterix.common.config;
 
-import static org.apache.hyracks.control.common.config.OptionTypes.*;
+import static org.apache.hyracks.control.common.config.OptionTypes.BOOLEAN;
+import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER;
+import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER_BYTE_UNIT;
+import static org.apache.hyracks.control.common.config.OptionTypes.LONG_BYTE_UNIT;
 import static org.apache.hyracks.util.StorageUtil.StorageUnit.KILOBYTE;
 import static org.apache.hyracks.util.StorageUtil.StorageUnit.MEGABYTE;
 
@@ -58,6 +61,48 @@ public class CompilerProperties extends AbstractProperties {
                         + "other integer values dictate the number of query execution parallel partitions. The system will "
                         + "fall back to use the number of all available CPU cores in the cluster as the degree of parallelism "
                         + "if the number set by a user is too large or too small"),
+        COMPILER_LIMITSORTMEMORY(
+                BOOLEAN,
+                true,
+                "For the experiment purpose only: if set to false, the pointer array size will not be "
+                        + "included in the sort memory limit."),
+        COMPILER_LIMITHASHJOINMEMORY(
+                BOOLEAN,
+                true,
+                "For the experiment purpose only: if set to false, the hash table size for each hash join "
+                        + "will not be included in the hash join memory limit."),
+        COMPILER_HASHTABLEGARBAGECOLLECTION(
+                BOOLEAN,
+                true,
+                "Sets whether conducting the garbage collection for a hash table. "
+                        + "If LimitHashJoinMemory or LimitHashGroupMemory is set, this should be set to false."),
+        COMPILER_LIMITHASHGROUPMEMORY(
+                BOOLEAN,
+                true,
+                "For the experiment purpose only: if set to false, the hash table size for each hash join "
+                        + "will not be included in the sort memory limit."),
+        COMPILER_LIMITTEXTSEARCHMEMORY(
+                BOOLEAN,
+                true,
+                "For the experiment purpose only: if set to false, the memory size for an inverted-index search "
+                        + "will not be bounded."),
+        COMPILER_LIMITQUERYEXECUTION(
+                BOOLEAN,
+                true,
+                "For the experiment purpose only: if set to false, the query will be executed without any "
+                        + "budget consideration. If set to true, the required capacity will be calculated based on "
+                        + "an assumption: per stage calculation."),
+        COMPILER_CONSERVATIVELIMITQUERYEXECUTION(
+                BOOLEAN,
+                false,
+                "For the experiment purpose only: if set to true, the query will be executed based on "
+                        + "a budget consideration. However, the required capacity will be calculated based on "
+                        + "an assumption: all operators will be executed at the same time."
+                        + "If both limit query execution and this value is set, then this should be set to false."),
+        COMPILER_PRINTINDEXENTRYDURINGBULKLOAD(
+                BOOLEAN,
+                false,
+                "For the experiment purpose only: if set to true, print the index entry during the index-bulkload."),
         COMPILER_STRINGOFFSET(INTEGER, 0, "Position of a first character in a String/Binary (0 or 1)");
 
         private final IOptionType type;
@@ -106,6 +151,25 @@ public class CompilerProperties extends AbstractProperties {
 
     public static final String COMPILER_PARALLELISM_KEY = Option.COMPILER_PARALLELISM.ini();
 
+    public static final String COMPILER_LIMITSORTMEMORY_KEY = Option.COMPILER_LIMITSORTMEMORY.ini();
+
+    public static final String COMPILER_LIMITHASHJOINMEMORY_KEY = Option.COMPILER_LIMITHASHJOINMEMORY.ini();
+
+    public static final String COMPILER_HASHTABLEGARBAGECOLLECTION_KEY =
+            Option.COMPILER_HASHTABLEGARBAGECOLLECTION.ini();
+
+    public static final String COMPILER_LIMITHASHGROUPMEMORY_KEY = Option.COMPILER_LIMITHASHGROUPMEMORY.ini();
+
+    public static final String COMPILER_LIMITTEXTSEARCHMEMORY_KEY = Option.COMPILER_LIMITTEXTSEARCHMEMORY.ini();
+
+    public static final String COMPILER_LIMITQUERYEXECUTION_KEY = Option.COMPILER_LIMITQUERYEXECUTION.ini();
+
+    public static final String COMPILER_CONSERVATIVELIMITQUERYEXECUTION_KEY =
+            Option.COMPILER_CONSERVATIVELIMITQUERYEXECUTION.ini();
+
+    public static final String COMPILER_PRINTINDEXENTRYDURINGBULKLOAD_KEY =
+            Option.COMPILER_PRINTINDEXENTRYDURINGBULKLOAD.ini();
+
     public static final int COMPILER_PARALLELISM_AS_STORAGE = 0;
 
     public CompilerProperties(PropertiesAccessor accessor) {
@@ -134,6 +198,38 @@ public class CompilerProperties extends AbstractProperties {
 
     public int getParallelism() {
         return accessor.getInt(Option.COMPILER_PARALLELISM);
+    }
+
+    public boolean getLimitSortMemory() {
+        return accessor.getBoolean(Option.COMPILER_LIMITSORTMEMORY);
+    }
+
+    public boolean getLimitHashGroupMemory() {
+        return accessor.getBoolean(Option.COMPILER_LIMITHASHGROUPMEMORY);
+    }
+
+    public boolean getLimitHashJoinMemory() {
+        return accessor.getBoolean(Option.COMPILER_LIMITHASHJOINMEMORY);
+    }
+
+    public boolean getLimitTextSearchMemory() {
+        return accessor.getBoolean(Option.COMPILER_LIMITTEXTSEARCHMEMORY);
+    }
+
+    public boolean getLimitQueryExecution() {
+        return accessor.getBoolean(Option.COMPILER_LIMITQUERYEXECUTION);
+    }
+
+    public boolean getConservativeLimitQueryExecution() {
+        return accessor.getBoolean(Option.COMPILER_CONSERVATIVELIMITQUERYEXECUTION);
+    }
+
+    public boolean getHashTableGarbageCollection() {
+        return accessor.getBoolean(Option.COMPILER_HASHTABLEGARBAGECOLLECTION);
+    }
+
+    public boolean getPrintIndexEntryDuringBulkLoad() {
+        return accessor.getBoolean(Option.COMPILER_PRINTINDEXENTRYDURINGBULKLOAD);
     }
 
     public int getStringOffset() {

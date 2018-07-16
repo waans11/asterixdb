@@ -61,6 +61,22 @@ public class HeapSortRunGenerator extends AbstractSortRunGenerator {
         this.recordDescriptor = recordDescriptor;
     }
 
+    // Temp :
+    public HeapSortRunGenerator(IHyracksTaskContext ctx, int frameLimit, int topK, int[] sortFields,
+            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDescriptor, boolean limitMemory) {
+        super(limitMemory);
+        this.ctx = ctx;
+        this.frameLimit = frameLimit;
+        this.topK = topK;
+        this.sortFields = sortFields;
+        this.nmkFactories = keyNormalizerFactories;
+        this.comparatorFactories = comparatorFactories;
+        this.inAccessor = new FrameTupleAccessor(recordDescriptor);
+        this.recordDescriptor = recordDescriptor;
+    }
+    //
+
     @Override
     public void open() throws HyracksDataException {
         IFramePool framePool = new VariableFramePool(ctx, (frameLimit - 1) * ctx.getInitialFrameSize());

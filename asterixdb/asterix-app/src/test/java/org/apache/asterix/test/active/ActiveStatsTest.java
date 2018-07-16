@@ -94,10 +94,13 @@ public class ActiveStatsTest {
 
         // Mock MetadataProvider
         CCExtensionManager extensionManager = (CCExtensionManager) appCtx.getExtensionManager();
+        // Temp :
         IStatementExecutor statementExecutor = extensionManager
                 .getStatementExecutorFactory(appCtx.getServiceContext().getControllerService().getExecutor())
                 .create(appCtx, Collections.emptyList(), Mockito.mock(SessionOutput.class),
-                        extensionManager.getCompilationProvider(Language.SQLPP), appCtx.getStorageComponentProvider());
+                        extensionManager.getCompilationProvider(Language.SQLPP), appCtx.getStorageComponentProvider(),
+                        null);
+        //
         MetadataProvider mdProvider = new MetadataProvider(appCtx, null);
         // Add event listener
         ActiveEntityEventsListener eventsListener = new DummyFeedEventsListener(statementExecutor, appCtx, null,

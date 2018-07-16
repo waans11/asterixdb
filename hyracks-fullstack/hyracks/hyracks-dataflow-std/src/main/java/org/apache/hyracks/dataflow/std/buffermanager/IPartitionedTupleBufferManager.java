@@ -33,6 +33,25 @@ public interface IPartitionedTupleBufferManager {
 
     int getPhysicalSize(int partition);
 
+    // Temp :
+    int getSpilledNumTuples(int partition);
+
+    void addSpilledNumTuples(int partition, int numTuple);
+
+    int getSpilledPhysicalSizes(int partition);
+
+    void addSpilledPhysicalSizes(int partition, int byteSize);
+
+    int getDoneNumTuples(int partition);
+
+    void addDoneNumTuples(int partition, int numTuple);
+
+    int getDonePhysicalSizes(int partition);
+
+    void addDonePhysicalSizes(int partition, int byteSize);
+
+    //
+
     /**
      * Insert tuple from (byte[] byteArray,int[] fieldEndOffsets, int start, int size) into
      * specified partition. The handle is written into the tuplepointer.

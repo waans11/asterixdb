@@ -64,6 +64,16 @@ public class ExternalSortOperatorDescriptor extends AbstractSorterOperatorDescri
                 comparatorFactories, recordDescriptor, Algorithm.MERGE_SORT, EnumFreeSlotPolicy.LAST_FIT);
     }
 
+    // Temp :
+    public ExternalSortOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int[] sortFields,
+            INormalizedKeyComputerFactory firstKeyNormalizerFactory, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDescriptor, boolean limitMemory) {
+        this(spec, framesLimit, sortFields,
+                firstKeyNormalizerFactory != null ? new INormalizedKeyComputerFactory[] { firstKeyNormalizerFactory }
+                        : null,
+                comparatorFactories, recordDescriptor, Algorithm.MERGE_SORT, EnumFreeSlotPolicy.LAST_FIT, limitMemory);
+    }
+
     public ExternalSortOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int[] sortFields,
             INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor) {
@@ -80,7 +90,7 @@ public class ExternalSortOperatorDescriptor extends AbstractSorterOperatorDescri
             protected AbstractSortRunGenerator getRunGenerator(IHyracksTaskContext ctx,
                     IRecordDescriptorProvider recordDescProvider) throws HyracksDataException {
                 return new ExternalSortRunGenerator(ctx, sortFields, keyNormalizerFactories, comparatorFactories,
-                        outRecDescs[0], alg, policy, framesLimit, outputLimit);
+                        outRecDescs[0], alg, policy, framesLimit, outputLimit, limitMemory);
             }
         };
     }
@@ -96,7 +106,7 @@ public class ExternalSortOperatorDescriptor extends AbstractSorterOperatorDescri
                     List<GeneratedRunFileReader> runs, IBinaryComparator[] comparators,
                     INormalizedKeyComputer nmkComputer, int necessaryFrames) {
                 return new ExternalSortRunMerger(ctx, sorter, runs, sortFields, comparators, nmkComputer,
-                        outRecDescs[0], necessaryFrames, outputLimit, writer);
+                        outRecDescs[0], necessaryFrames, outputLimit, writer, limitMemory);
             }
         };
     }
@@ -105,13 +115,22 @@ public class ExternalSortOperatorDescriptor extends AbstractSorterOperatorDescri
             INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor, Algorithm alg, EnumFreeSlotPolicy policy) {
         this(spec, framesLimit, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor, alg, policy,
-                Integer.MAX_VALUE);
+                Integer.MAX_VALUE, true);
     }
+
+    // Temp :
+    public ExternalSortOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int[] sortFields,
+            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDescriptor, Algorithm alg, EnumFreeSlotPolicy policy, boolean limitMemory) {
+        this(spec, framesLimit, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor, alg, policy,
+                Integer.MAX_VALUE, limitMemory);
+    }
+    //
 
     public ExternalSortOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int[] sortFields,
             INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDescriptor, Algorithm alg, EnumFreeSlotPolicy policy, int outputLimit) {
-        super(spec, framesLimit, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor);
+        super(spec, framesLimit, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor, true);
         if (framesLimit <= 1) {
             throw new IllegalStateException();// minimum of 2 fames (1 in,1 out)
         }
@@ -119,5 +138,21 @@ public class ExternalSortOperatorDescriptor extends AbstractSorterOperatorDescri
         this.policy = policy;
         this.outputLimit = outputLimit;
     }
+
+    // Temp :
+    public ExternalSortOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int[] sortFields,
+            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDescriptor, Algorithm alg, EnumFreeSlotPolicy policy, int outputLimit,
+            boolean limitMemory) {
+        super(spec, framesLimit, sortFields, keyNormalizerFactories, comparatorFactories, recordDescriptor,
+                limitMemory);
+        if (framesLimit <= 1) {
+            throw new IllegalStateException();// minimum of 2 fames (1 in,1 out)
+        }
+        this.alg = alg;
+        this.policy = policy;
+        this.outputLimit = outputLimit;
+    }
+    //
 
 }

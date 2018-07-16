@@ -29,7 +29,6 @@ import org.apache.asterix.algebra.base.ILangExtension;
 import org.apache.asterix.api.http.server.ResultUtil;
 import org.apache.asterix.app.cc.CCExtensionManager;
 import org.apache.asterix.app.translator.RequestParameters;
-import org.apache.asterix.common.api.Duration;
 import org.apache.asterix.common.api.IClusterManagementWork;
 import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.config.GlobalConfig;
@@ -122,8 +121,10 @@ public final class ExecuteStatementRequestMessage implements ICcAddressedMessage
                     appendHandle, appendStatus);
             IStatementExecutor.ResultMetadata outMetadata = new IStatementExecutor.ResultMetadata();
             MetadataManager.INSTANCE.init();
+            // Temp :
             IStatementExecutor translator = statementExecutorFactory.create(ccAppCtx, statements, sessionOutput,
-                    compilationProvider, storageComponentProvider);
+                    compilationProvider, storageComponentProvider, statementsText);
+            //
             final IStatementExecutor.Stats stats = new IStatementExecutor.Stats();
             final IRequestParameters requestParameters = new RequestParameters(null, resultProperties, stats,
                     outMetadata, clientContextID, optionalParameters);

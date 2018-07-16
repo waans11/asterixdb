@@ -117,8 +117,10 @@ public class AsterixJavaClient {
         }
         SessionOutput output = new SessionOutput(conf, writer);
 
+        // Temp :
         IStatementExecutor translator = statementExecutorFactory.create(appCtx, statements, output, compilationProvider,
-                storageComponentProvider);
+                storageComponentProvider, builder.toString());
+        //
         final IRequestParameters requestParameters =
                 new RequestParameters(null, new ResultProperties(IStatementExecutor.ResultDelivery.IMMEDIATE),
                         new IStatementExecutor.Stats(), null, null, null);

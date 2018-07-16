@@ -37,6 +37,7 @@ import org.apache.hyracks.dataflow.std.group.AggregateType;
 import org.apache.hyracks.dataflow.std.group.IAggregatorDescriptorFactory;
 import org.apache.hyracks.dataflow.std.group.ISpillableTable;
 import org.apache.hyracks.dataflow.std.group.ISpillableTableFactory;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -55,6 +56,11 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
     private final INormalizedKeyComputer nmkComputer;
     private final ArrayList<RunFileWriter> generatedRuns = new ArrayList<>();
 
+    // Temp :
+    private final boolean limitMemory;
+    private final boolean hashTableGarbageCollection;
+
+    // Original const - confirmed that it is only called from a test
     public ExternalGroupWriteOperatorNodePushable(IHyracksTaskContext ctx, Object stateId,
             ISpillableTableFactory spillableTableFactory, RecordDescriptor partialAggRecordDesc,
             RecordDescriptor outRecordDesc, int framesLimit, int[] groupFields,
@@ -63,13 +69,13 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
         this.ctx = ctx;
         this.stateId = stateId;
         this.spillableTableFactory = spillableTableFactory;
-        this.frameLimit = framesLimit;
-        this.nmkComputer = nmkFactory == null ? null : nmkFactory.createNormalizedKeyComputer();
+        frameLimit = framesLimit;
+        nmkComputer = nmkFactory == null ? null : nmkFactory.createNormalizedKeyComputer();
 
         this.partialAggRecordDesc = partialAggRecordDesc;
         this.outRecordDesc = outRecordDesc;
 
-        this.mergeAggregatorFactory = aggregatorFactory;
+        mergeAggregatorFactory = aggregatorFactory;
 
         //create merge group fields
         int numGroupFields = groupFields.length;
@@ -83,6 +89,43 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
         for (int i = 0; i < groupByComparators.length; i++) {
             groupByComparators[i] = comparatorFactories[i].createBinaryComparator();
         }
+        // Temp :
+        limitMemory = true;
+        hashTableGarbageCollection = true;
+    }
+
+    // Temp :
+    public ExternalGroupWriteOperatorNodePushable(IHyracksTaskContext ctx, Object stateId,
+            ISpillableTableFactory spillableTableFactory, RecordDescriptor partialAggRecordDesc,
+            RecordDescriptor outRecordDesc, int framesLimit, int[] groupFields,
+            INormalizedKeyComputerFactory nmkFactory, IBinaryComparatorFactory[] comparatorFactories,
+            IAggregatorDescriptorFactory aggregatorFactory, boolean limitMemory, boolean hashTableGarbageCollection) {
+        this.ctx = ctx;
+        this.stateId = stateId;
+        this.spillableTableFactory = spillableTableFactory;
+        frameLimit = framesLimit;
+        nmkComputer = nmkFactory == null ? null : nmkFactory.createNormalizedKeyComputer();
+
+        this.partialAggRecordDesc = partialAggRecordDesc;
+        this.outRecordDesc = outRecordDesc;
+
+        mergeAggregatorFactory = aggregatorFactory;
+
+        //create merge group fields
+        int numGroupFields = groupFields.length;
+        mergeGroupFields = new int[numGroupFields];
+        for (int i = 0; i < numGroupFields; i++) {
+            mergeGroupFields[i] = i;
+        }
+
+        //setup comparators for grouping
+        groupByComparators = new IBinaryComparator[Math.min(mergeGroupFields.length, comparatorFactories.length)];
+        for (int i = 0; i < groupByComparators.length; i++) {
+            groupByComparators[i] = comparatorFactories[i].createBinaryComparator();
+        }
+        // Temp :
+        this.limitMemory = limitMemory;
+        this.hashTableGarbageCollection = hashTableGarbageCollection;
     }
 
     @Override
@@ -92,8 +135,14 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
         RunFileWriter[] partitionRuns = aggState.getRuns();
         int[] numberOfTuples = aggState.getSpilledNumTuples();
         try {
+            // Temp :
+            LOGGER.log(Level.INFO, this.hashCode() + "\t" + "initialize" + "\tSTART");
+            //
             writer.open();
             doPass(table, partitionRuns, numberOfTuples, writer, 1); // level 0 use used at build stage.
+            // Temp :
+            LOGGER.log(Level.INFO, this.hashCode() + "\t" + "initialize" + "\tFINISH");
+            //
         } catch (Exception e) {
             try {
                 for (RunFileWriter run : generatedRuns) {
@@ -111,11 +160,24 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
     private void doPass(ISpillableTable table, RunFileWriter[] runs, int[] numOfTuples, IFrameWriter writer, int level)
             throws HyracksDataException {
         assert table.getNumPartitions() == runs.length;
+        // Temp :
+        int inMemoryPartitionCount = 0;
+        //
         for (int i = 0; i < runs.length; i++) {
             if (runs[i] == null) {
                 table.flushFrames(i, writer, AggregateType.FINAL);
+                // Temp :
+                inMemoryPartitionCount++;
+                //
             }
         }
+        // Temp :
+        String result = table.printInfo();
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "doPass" + "\tlevel:\t" + level + "\truns_size:\t" + runs.length
+                + "\tprocessed_in-memory_part#:\t" + inMemoryPartitionCount + "\tremaining:\t"
+                + (runs.length - inMemoryPartitionCount) + "\tall_in_memory:\t"
+                + ((runs.length - inMemoryPartitionCount) == 0) + "\twriter:\t" + writer.toString() + "\n" + result);
+        //
         table.close();
 
         for (int i = 0; i < runs.length; i++) {
@@ -125,13 +187,14 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
                 int groupByColumnsCount = mergeGroupFields.length;
                 int hashTableCardinality = ExternalGroupOperatorDescriptor.calculateGroupByTableCardinality(
                         memoryBudgetInBytes, groupByColumnsCount, ctx.getInitialFrameSize());
-                hashTableCardinality = (int) Math.min(hashTableCardinality, numOfTuples[i]);
+                hashTableCardinality = Math.min(hashTableCardinality, numOfTuples[i]);
                 ISpillableTable partitionTable = spillableTableFactory.buildSpillableTable(ctx, hashTableCardinality,
                         runs[i].getFileSize(), mergeGroupFields, groupByComparators, nmkComputer,
-                        mergeAggregatorFactory, partialAggRecordDesc, outRecordDesc, frameLimit, level);
+                        mergeAggregatorFactory, partialAggRecordDesc, outRecordDesc, frameLimit, level, limitMemory,
+                        hashTableGarbageCollection);
                 RunFileWriter[] runFileWriters = new RunFileWriter[partitionTable.getNumPartitions()];
                 int[] sizeInTuplesNextLevel =
-                        buildGroup(runs[i].createDeleteOnCloseReader(), partitionTable, runFileWriters);
+                        buildGroup(runs[i].createDeleteOnCloseReader(), partitionTable, runFileWriters, i, level);
                 for (int idFile = 0; idFile < runFileWriters.length; idFile++) {
                     if (runFileWriters[idFile] != null) {
                         generatedRuns.add(runFileWriters[idFile]);
@@ -151,10 +214,13 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
                 doPass(partitionTable, runFileWriters, sizeInTuplesNextLevel, writer, level + 1);
             }
         }
+
+        // Temp :
+
     }
 
-    private int[] buildGroup(RunFileReader reader, ISpillableTable table, RunFileWriter[] runFileWriters)
-            throws HyracksDataException {
+    private int[] buildGroup(RunFileReader reader, ISpillableTable table, RunFileWriter[] runFileWriters, int partition,
+            int level) throws HyracksDataException {
         ExternalHashGroupBy groupBy = new ExternalHashGroupBy(this, table, runFileWriters, partialAggRecordDesc);
         reader.open();
         try {
@@ -166,6 +232,17 @@ public class ExternalGroupWriteOperatorNodePushable extends AbstractUnaryOutputS
         } finally {
             reader.close();
         }
+        // Temp :
+        String result = groupBy.printInfo();
+        int totalSpilledTupleNum = 0;
+        for (int i = 0; i < groupBy.getSpilledNumTuples().length; i++) {
+            if (groupBy.getSpilledNumTuples()[i] > 0) {
+                totalSpilledTupleNum += groupBy.getSpilledNumTuples()[i];
+            }
+        }
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "buildGroup" + "\tlevel:\t" + level + "\tpartition:\t"
+                + partition + "\t#spilled tuples:\t" + totalSpilledTupleNum + "\n" + result);
+        //
         return groupBy.getSpilledNumTuples();
     }
 

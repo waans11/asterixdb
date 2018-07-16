@@ -20,6 +20,7 @@
 package org.apache.hyracks.dataflow.std.sort;
 
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 import java.util.List;
 
 import org.apache.hyracks.api.comm.IFrameWriter;
@@ -43,6 +44,7 @@ import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNodePushable;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -59,6 +61,10 @@ public abstract class AbstractSorterOperatorDescriptor extends AbstractOperatorD
     protected final INormalizedKeyComputerFactory[] keyNormalizerFactories;
     protected final IBinaryComparatorFactory[] comparatorFactories;
     protected final int framesLimit;
+    // Temp : limit memory - pointer arrays size is not accounted for if set to false.
+    protected final boolean limitMemory;
+    private static final DecimalFormat decFormat = new DecimalFormat("#.######");
+    //
 
     public AbstractSorterOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int[] sortFields,
             INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
@@ -69,7 +75,22 @@ public abstract class AbstractSorterOperatorDescriptor extends AbstractOperatorD
         this.keyNormalizerFactories = keyNormalizerFactories;
         this.comparatorFactories = comparatorFactories;
         outRecDescs[0] = recordDescriptor;
+        limitMemory = true;
     }
+
+    // Temp :
+    public AbstractSorterOperatorDescriptor(IOperatorDescriptorRegistry spec, int framesLimit, int[] sortFields,
+            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDescriptor, boolean limitMemory) {
+        super(spec, 1, 1);
+        this.framesLimit = framesLimit;
+        this.sortFields = sortFields;
+        this.keyNormalizerFactories = keyNormalizerFactories;
+        this.comparatorFactories = comparatorFactories;
+        outRecDescs[0] = recordDescriptor;
+        this.limitMemory = limitMemory;
+    }
+    //
 
     public abstract SortActivity getSortActivity(ActivityId id);
 
@@ -118,6 +139,9 @@ public abstract class AbstractSorterOperatorDescriptor extends AbstractOperatorD
                 public void open() throws HyracksDataException {
                     runGen = getRunGenerator(ctx, recordDescProvider);
                     runGen.open();
+                    // Temp :
+                    LOGGER.log(Level.INFO, this.hashCode() + "\t" + "SortActivity::open");
+                    //
                 }
 
                 @Override
@@ -133,7 +157,28 @@ public abstract class AbstractSorterOperatorDescriptor extends AbstractOperatorD
                     state.generatedRunFileReaders = runGen.getRuns();
                     state.sorter = runGen.getSorter();
                     if (LOGGER.isInfoEnabled()) {
-                        LOGGER.info("InitialNumberOfRuns:" + runGen.getRuns().size());
+                        // Temp :
+                        long[] sizes = new long[runGen.getRuns().size()];
+                        long totalSize = 0;
+                        String sizeStr = "";
+                        for (int i = 0; i < sizes.length; i++) {
+                            sizes[i] = runGen.getRuns().get(i).getFileSize();
+                            totalSize += sizes[i];
+                            sizeStr += i + ":" + decFormat.format((double) sizes[i] / 1048576) + "\t";
+                        }
+                        LOGGER.log(Level.INFO,
+                                this.hashCode() + "\t" + "SortActivity::close" + "\tInitialNumberOfRuns:"
+                                        + runGen.getRuns().size() + "\tsize(MB):\t" + sizeStr + "\ttotal_size(MB):\t"
+                                        + decFormat.format((double) totalSize / 1048576));
+                        // Temp :
+                        if (sizes.length == 0) {
+                            state.sorter.printCurrentStatus();
+                        }
+                        //
+
+                        //
+
+                        //                        LOGGER.info("InitialNumberOfRuns:" + runGen.getRuns().size());
                     }
                     ctx.setStateObject(state);
                 }
@@ -169,6 +214,23 @@ public abstract class AbstractSorterOperatorDescriptor extends AbstractOperatorD
                     SortTaskState state = (SortTaskState) ctx
                             .getStateObject(new TaskId(new ActivityId(getOperatorId(), SORT_ACTIVITY_ID), partition));
                     List<GeneratedRunFileReader> runs = state.generatedRunFileReaders;
+                    // Temp :
+                    //                    long[] sizes = new long[runs.size()];
+                    //                    long totalSize = 0;
+                    //                    String sizeStr = "";
+                    //                    for (int i = 0; i < sizes.length; i++) {
+                    //                        sizes[i] = runs.get(i).getFileSize();
+                    //                        totalSize += sizes[i];
+                    //                        sizeStr += i + ":" + decFormat.format((double) sizes[i] / 1048576) + "\t";
+                    //                    }
+                    //                    LOGGER.log(Level.INFO,
+                    //                            this.hashCode() + "\t" + "MergeActivity::initialize" + "\tInitialNumberOfRuns:"
+                    //                                    + runs.size() + "\tsize(MB):\t" + sizeStr + "\ttotal_size(MB):\t"
+                    //                                    + decFormat.format((double) totalSize / 1048576));
+                    LOGGER.log(Level.INFO, this.hashCode() + "\t" + "MergeActivity::initialize"
+                            + "\tInitialNumberOfRuns:" + runs.size());
+
+                    //
                     ISorter sorter = state.sorter;
                     IBinaryComparator[] comparators = new IBinaryComparator[comparatorFactories.length];
                     for (int i = 0; i < comparatorFactories.length; ++i) {

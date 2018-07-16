@@ -20,6 +20,7 @@
 package org.apache.hyracks.dataflow.std.sort;
 
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameTupleAppender;
@@ -75,16 +76,22 @@ public abstract class AbstractFrameSorter implements IFrameSorter {
     protected final int[] tmpPointer;
     protected int tupleCount;
 
-    private final FrameTupleAccessor fta2;
-    private final BufferInfo info = new BufferInfo(null, -1, -1);
+    protected final FrameTupleAccessor fta2;
+    protected final BufferInfo info = new BufferInfo(null, -1, -1);
 
-    public AbstractFrameSorter(IHyracksTaskContext ctx, IFrameBufferManager bufferManager, int maxSortFrames,
-            int[] sortFields, INormalizedKeyComputerFactory[] keyNormalizerFactories,
-            IBinaryComparatorFactory[] comparatorFactories, RecordDescriptor recordDescriptor)
-            throws HyracksDataException {
-        this(ctx, bufferManager, maxSortFrames, sortFields, keyNormalizerFactories, comparatorFactories,
-                recordDescriptor, Integer.MAX_VALUE);
-    }
+    // Temp :
+    protected final boolean limitMemory;
+    protected final int defaultFrameSize;
+    protected final DecimalFormat decFormat = new DecimalFormat("#.######");
+    //
+
+    //    public AbstractFrameSorter(IHyracksTaskContext ctx, IFrameBufferManager bufferManager, int maxSortFrames,
+    //            int[] sortFields, INormalizedKeyComputerFactory[] keyNormalizerFactories,
+    //            IBinaryComparatorFactory[] comparatorFactories, RecordDescriptor recordDescriptor)
+    //            throws HyracksDataException {
+    //        this(ctx, bufferManager, maxSortFrames, sortFields, keyNormalizerFactories, comparatorFactories,
+    //                recordDescriptor, Integer.MAX_VALUE);
+    //    }
 
     public AbstractFrameSorter(IHyracksTaskContext ctx, IFrameBufferManager bufferManager, int maxSortFrames,
             int[] sortFields, INormalizedKeyComputerFactory[] normalizedKeyComputerFactories,
@@ -92,9 +99,9 @@ public abstract class AbstractFrameSorter implements IFrameSorter {
             throws HyracksDataException {
         this.bufferManager = bufferManager;
         if (maxSortFrames == VariableFramePool.UNLIMITED_MEMORY) {
-            this.maxSortMemory = Long.MAX_VALUE;
+            maxSortMemory = Long.MAX_VALUE;
         } else {
-            this.maxSortMemory = (long) ctx.getInitialFrameSize() * maxSortFrames;
+            maxSortMemory = (long) ctx.getInitialFrameSize() * maxSortFrames;
         }
         this.sortFields = sortFields;
 
@@ -108,40 +115,113 @@ public abstract class AbstractFrameSorter implements IFrameSorter {
             // computing unncessary normalized keys
             int normalizedKeys = decisivePrefixLength < normalizedKeyComputerFactories.length ? decisivePrefixLength + 1
                     : decisivePrefixLength;
-            this.nkcs = new INormalizedKeyComputer[normalizedKeys];
-            this.normalizedKeyLength = new int[normalizedKeys];
+            nkcs = new INormalizedKeyComputer[normalizedKeys];
+            normalizedKeyLength = new int[normalizedKeys];
 
             for (int i = 0; i < normalizedKeys; i++) {
-                this.nkcs[i] = normalizedKeyComputerFactories[i].createNormalizedKeyComputer();
-                this.normalizedKeyLength[i] =
+                nkcs[i] = normalizedKeyComputerFactories[i].createNormalizedKeyComputer();
+                normalizedKeyLength[i] =
                         normalizedKeyComputerFactories[i].getNormalizedKeyProperties().getNormalizedKeyLength();
-                runningNormalizedKeyTotalLength += this.normalizedKeyLength[i];
+                runningNormalizedKeyTotalLength += normalizedKeyLength[i];
             }
-            this.normalizedKeysDecisive = decisivePrefixLength == comparatorFactories.length;
+            normalizedKeysDecisive = decisivePrefixLength == comparatorFactories.length;
         } else {
-            this.nkcs = null;
-            this.normalizedKeyLength = null;
-            this.normalizedKeysDecisive = false;
+            nkcs = null;
+            normalizedKeyLength = null;
+            normalizedKeysDecisive = false;
         }
-        this.normalizedKeyTotalLength = runningNormalizedKeyTotalLength;
-        this.ptrSize = ID_NORMALIZED_KEY + normalizedKeyTotalLength;
-        this.comparators = new IBinaryComparator[comparatorFactories.length];
+        normalizedKeyTotalLength = runningNormalizedKeyTotalLength;
+        ptrSize = ID_NORMALIZED_KEY + normalizedKeyTotalLength;
+        comparators = new IBinaryComparator[comparatorFactories.length];
         for (int i = 0; i < comparatorFactories.length; ++i) {
             comparators[i] = comparatorFactories[i].createBinaryComparator();
         }
-        this.inputTupleAccessor = new FrameTupleAccessor(recordDescriptor);
-        this.outputAppender = new FrameTupleAppender();
-        this.outputFrame = new VSizeFrame(ctx);
+        inputTupleAccessor = new FrameTupleAccessor(recordDescriptor);
+        outputAppender = new FrameTupleAppender();
+        outputFrame = new VSizeFrame(ctx);
         this.outputLimit = outputLimit;
-        this.fta2 = new FrameTupleAccessor(recordDescriptor);
-        this.tmpPointer = new int[ptrSize];
+        fta2 = new FrameTupleAccessor(recordDescriptor);
+        tmpPointer = new int[ptrSize];
+        // Temp :
+        limitMemory = true;
+        defaultFrameSize = ctx.getInitialFrameSize();
+        //
     }
+
+    // Temp :
+    public AbstractFrameSorter(IHyracksTaskContext ctx, IFrameBufferManager bufferManager, int maxSortFrames,
+            int[] sortFields, INormalizedKeyComputerFactory[] normalizedKeyComputerFactories,
+            IBinaryComparatorFactory[] comparatorFactories, RecordDescriptor recordDescriptor, int outputLimit,
+            boolean limitMemory) throws HyracksDataException {
+        this.bufferManager = bufferManager;
+        if (maxSortFrames == VariableFramePool.UNLIMITED_MEMORY) {
+            maxSortMemory = Long.MAX_VALUE;
+        } else {
+            maxSortMemory = (long) ctx.getInitialFrameSize() * maxSortFrames;
+        }
+        this.sortFields = sortFields;
+
+        int runningNormalizedKeyTotalLength = 0;
+
+        if (normalizedKeyComputerFactories != null) {
+            int decisivePrefixLength = NormalizedKeyUtils.getDecisivePrefixLength(normalizedKeyComputerFactories);
+
+            // we only take a prefix of the decisive normalized keys, plus at most indecisive normalized keys
+            // ideally, the caller should prepare normalizers in this way, but we just guard here to avoid
+            // computing unncessary normalized keys
+            int normalizedKeys = decisivePrefixLength < normalizedKeyComputerFactories.length ? decisivePrefixLength + 1
+                    : decisivePrefixLength;
+            nkcs = new INormalizedKeyComputer[normalizedKeys];
+            normalizedKeyLength = new int[normalizedKeys];
+
+            for (int i = 0; i < normalizedKeys; i++) {
+                nkcs[i] = normalizedKeyComputerFactories[i].createNormalizedKeyComputer();
+                normalizedKeyLength[i] =
+                        normalizedKeyComputerFactories[i].getNormalizedKeyProperties().getNormalizedKeyLength();
+                runningNormalizedKeyTotalLength += normalizedKeyLength[i];
+            }
+            normalizedKeysDecisive = decisivePrefixLength == comparatorFactories.length;
+        } else {
+            nkcs = null;
+            normalizedKeyLength = null;
+            normalizedKeysDecisive = false;
+        }
+        normalizedKeyTotalLength = runningNormalizedKeyTotalLength;
+        ptrSize = ID_NORMALIZED_KEY + normalizedKeyTotalLength;
+        comparators = new IBinaryComparator[comparatorFactories.length];
+        for (int i = 0; i < comparatorFactories.length; ++i) {
+            comparators[i] = comparatorFactories[i].createBinaryComparator();
+        }
+        inputTupleAccessor = new FrameTupleAccessor(recordDescriptor);
+        outputAppender = new FrameTupleAppender();
+        outputFrame = new VSizeFrame(ctx);
+        this.outputLimit = outputLimit;
+        fta2 = new FrameTupleAccessor(recordDescriptor);
+        tmpPointer = new int[ptrSize];
+
+        // Temp :
+        this.limitMemory = limitMemory;
+        defaultFrameSize = ctx.getInitialFrameSize();
+        //
+    }
+    //
 
     @Override
     public void reset() throws HyracksDataException {
-        this.tupleCount = 0;
-        this.totalMemoryUsed = 0;
-        this.bufferManager.reset();
+        // Temp :
+        //        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "reset" + "\ttotal_tuple_count:\t" + tupleCount
+        //                + "\tpointer_array_size(MB):\t"
+        //                + decFormat.format(((double) (ptrSize * tupleCount * Integer.BYTES) / 1048576)) + "\tframe_count:\t"
+        //                + bufferManager.getNumFrames() + "\tsize(MB):\t"
+        //                + decFormat.format(((double) getCurrentSize(bufferManager, info) / 1048576)) + "\ttotal_size(MB)\t"
+        //                + decFormat.format(
+        //                        ((double) (ptrSize * tupleCount * Integer.BYTES) + (double) getCurrentSize(bufferManager, info))
+        //                                / 1048576));
+        //
+
+        tupleCount = 0;
+        totalMemoryUsed = 0;
+        bufferManager.reset();
     }
 
     @Override
@@ -158,11 +238,26 @@ public abstract class AbstractFrameSorter implements IFrameSorter {
             throw new HyracksDataException(
                     "The input frame is too big for the sorting buffer, please allocate bigger buffer size");
         }
+        // Temp :
+        //        LOGGER.log(Level.INFO,
+        //                this.hashCode() + "\t" + "insertFrame" + "\tFAIL\tmax_sort_memory(MB):\t"
+        //                        + decFormat.format((double) maxSortMemory / 1048576) + "\ttotal_memory_used(MB):\t"
+        //                        + decFormat.format((double) totalMemoryUsed / 1048576) + "\trequiredMemory(MB)\t:"
+        //                        + decFormat.format((double) requiredMemory / 1048576) + "\tnum_frames:\t" + getFrameCount()
+        //                        + "\tnum_tuple_so_far:\t" + tupleCount + "\tincoming_num_tuple:\t"
+        //                        + inputTupleAccessor.getTupleCount());
+        //        printCurrentStatus();
+        //
         return false;
     }
 
     protected long getRequiredMemory(FrameTupleAccessor frameAccessor) {
-        return (long) frameAccessor.getBuffer().capacity() + ptrSize * frameAccessor.getTupleCount() * Integer.BYTES;
+        // Temp : the pointer size is not considered if limitMemory is set to false.
+        return limitMemory
+                ? (long) (frameAccessor.getBuffer().capacity()
+                        + ptrSize * frameAccessor.getTupleCount() * Integer.BYTES)
+                : (long) (frameAccessor.getBuffer().capacity());
+        //
     }
 
     @Override
@@ -221,6 +316,9 @@ public abstract class AbstractFrameSorter implements IFrameSorter {
         int maxFrameSize = outputFrame.getFrameSize();
         int limit = Math.min(tupleCount, outputLimit);
         int io = 0;
+        // Temp :
+        int totalFlushedBytes = 0;
+        //
         for (int ptr = 0; ptr < limit; ++ptr) {
             int i = tPointers[ptr * ptrSize + ID_FRAME_ID];
             int tStart = tPointers[ptr * ptrSize + ID_TUPLE_START];
@@ -231,10 +329,22 @@ public abstract class AbstractFrameSorter implements IFrameSorter {
             if (flushed > 0) {
                 maxFrameSize = Math.max(maxFrameSize, flushed);
                 io++;
+                // Temp :
+                totalFlushedBytes += flushed;
+                //
             }
         }
         maxFrameSize = Math.max(maxFrameSize, outputFrame.getFrameSize());
         outputAppender.write(writer, true);
+        // Temp :
+        //        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "flush" + "\twriter:\t" + writer.toString()
+        //                + "\t#flushed_records:\t" + limit + "\t/\t" + tupleCount + "\tpointer_array_size(MB):\t"
+        //                + decFormat.format(((double) (ptrSize * tupleCount * Integer.BYTES) / 1048576)) + "\t#flushed_frames:\t"
+        //                + (io + 1) + "\tflushed_record_byte_sizes:\t" + totalFlushedBytes + "\tflushed_record_size(MB):\t"
+        //                + decFormat.format((double) totalFlushedBytes / 1048576) + "\tlimitMemory:\t" + limitMemory
+        //                + "\tmaxFrameSize:\t" + decFormat.format((double) maxFrameSize / 1048576));
+        //
+
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
                     "Flushed records:" + limit + " out of " + tupleCount + "; Flushed through " + (io + 1) + " frames");
@@ -302,8 +412,45 @@ public abstract class AbstractFrameSorter implements IFrameSorter {
 
     @Override
     public void close() {
+        // Temp :
+        //        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "close" + "\ttotal_tuple_count:\t" + tupleCount
+        //                + "\tpointer_array_size(MB):\t"
+        //                + decFormat.format(((double) (ptrSize * tupleCount * Integer.BYTES) / 1048576)) + "\tframe_count:\t"
+        //                + bufferManager.getNumFrames() + "\tsize(MB):\t"
+        //                + decFormat.format(((double) getCurrentSize(bufferManager, info) / 1048576)) + "\ttotal_size(MB)\t"
+        //                + decFormat.format(
+        //                        ((double) (ptrSize * tupleCount * Integer.BYTES) + (double) getCurrentSize(bufferManager, info))
+        //                                / 1048576));
+        //
         tupleCount = 0;
         bufferManager.close();
         tPointers = null;
     }
+
+    // Calcuates the size of frames in the buffer manager.
+    protected static int getCurrentSize(IFrameBufferManager bufferManager, BufferInfo info) {
+        int currentSize = 0;
+        for (int i = 0; i < bufferManager.getNumFrames(); i++) {
+            bufferManager.getFrame(i, info);
+            if (info.getBuffer() != null) {
+                currentSize += info.getLength();
+            }
+        }
+        return currentSize;
+    }
+
+    @Override
+    public void printCurrentStatus() {
+        // Temp :
+        //        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "printCurrentStatus" + "\ttotal_tuple_count:\t" + tupleCount
+        //                + "\tpointer_array_size(MB):\t"
+        //                + decFormat.format(((double) (ptrSize * tupleCount * Integer.BYTES) / 1048576)) + "\tframe_count:\t"
+        //                + bufferManager.getNumFrames() + "\tsize(MB):\t"
+        //                + decFormat.format(((double) getCurrentSize(bufferManager, info) / 1048576)) + "\ttotal_size(MB)\t"
+        //                + decFormat.format(
+        //                        ((double) (ptrSize * tupleCount * Integer.BYTES) + (double) getCurrentSize(bufferManager, info))
+        //                                / 1048576));
+        //
+    }
+
 }

@@ -34,7 +34,9 @@ public class PlanStage {
 
     @Override
     public String toString() {
-        return "Stage{" + "stageId=" + stageId + ", operators(" + operators.size() + ")" + "=" + operators + '}';
+        // Temp :
+        return "Stage{" + "stageId=" + stageId + ", #operators(" + operators.size() + ")" + "=" + operators + '}';
+        //
     }
 
     public Set<ILogicalOperator> getOperators() {

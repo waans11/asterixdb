@@ -41,6 +41,15 @@ public class ExternalSortRunMerger extends AbstractExternalSortRunMerger {
         this.sortFields = sortFields;
     }
 
+    // Temp :
+    public ExternalSortRunMerger(IHyracksTaskContext ctx, ISorter sorter, List<GeneratedRunFileReader> runs,
+            int[] sortFields, IBinaryComparator[] comparators, INormalizedKeyComputer nmkComputer,
+            RecordDescriptor recordDesc, int framesLimit, int topK, IFrameWriter writer, boolean limitMemory) {
+        super(ctx, sorter, runs, comparators, nmkComputer, recordDesc, framesLimit, topK, writer, limitMemory);
+        this.sortFields = sortFields;
+    }
+    //
+
     @Override
     protected IFrameWriter prepareSkipMergingFinalResultWriter(IFrameWriter nextWriter) throws HyracksDataException {
         return nextWriter;

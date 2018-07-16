@@ -540,14 +540,15 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         if (isMicroOp) {
             oo.setPhysicalOperator(new InMemoryStableSortPOperator());
         } else {
-            oo.setPhysicalOperator(new StableSortPOperator(physicalOptimizationConfig.getMaxFramesExternalSort()));
+            oo.setPhysicalOperator(new StableSortPOperator(physicalOptimizationConfig.getMaxFramesExternalSort(), -1,
+                    physicalOptimizationConfig.getLimitSortMemory()));
         }
         oo.getInputs().add(topOp);
         context.computeAndSetTypeEnvironmentForOperator(oo);
         if (AlgebricksConfig.DEBUG && AlgebricksConfig.ALGEBRICKS_LOGGER.isTraceEnabled()) {
             AlgebricksConfig.ALGEBRICKS_LOGGER.trace(">>>> Added sort enforcer " + oo.getPhysicalOperator() + ".\n");
         }
-        return new MutableObject<ILogicalOperator>(oo);
+        return new MutableObject<>(oo);
     }
 
     private void addPartitioningEnforcers(ILogicalOperator op, int i, IPartitioningProperty pp,
@@ -674,7 +675,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
             throws AlgebricksException {
         ILogicalOperator oldOp = opRef.getValue();
         opRef.setValue(newOp);
-        newOp.getInputs().add(new MutableObject<ILogicalOperator>(oldOp));
+        newOp.getInputs().add(new MutableObject<>(oldOp));
         newOp.recomputeSchema();
         newOp.computeDeliveredPhysicalProperties(context);
         context.computeAndSetTypeEnvironmentForOperator(newOp);

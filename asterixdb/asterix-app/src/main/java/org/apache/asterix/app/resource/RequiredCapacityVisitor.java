@@ -28,6 +28,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IPhysicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
@@ -75,18 +76,20 @@ public class RequiredCapacityVisitor implements ILogicalOperatorVisitor<Void, Vo
     private final long groupByMemorySize;
     private final long joinMemorySize;
     private final long sortMemorySize;
+    private final long textSearchMemorySize;
     private final long frameSize;
     private final IClusterCapacity clusterCapacity;
     private final Set<ILogicalOperator> visitedOperators = new HashSet<>();
     private long stageMemorySoFar = 0L;
 
     public RequiredCapacityVisitor(int numComputationPartitions, int sortFrameLimit, int groupFrameLimit,
-            int joinFrameLimit, int frameSize, IClusterCapacity clusterCapacity) {
+            int joinFrameLimit, int textSearchFrameLimit, int frameSize, IClusterCapacity clusterCapacity) {
         this.numComputationPartitions = numComputationPartitions;
         this.frameSize = frameSize;
         this.groupByMemorySize = groupFrameLimit * (long) frameSize;
         this.joinMemorySize = joinFrameLimit * (long) frameSize;
         this.sortMemorySize = sortFrameLimit * (long) frameSize;
+        this.textSearchMemorySize = textSearchFrameLimit * (long) frameSize;
         this.clusterCapacity = clusterCapacity;
         this.clusterCapacity.setAggregatedCores(1); // At least one core is needed.
     }
@@ -239,12 +242,24 @@ public class RequiredCapacityVisitor implements ILogicalOperatorVisitor<Void, Vo
 
     @Override
     public Void visitUnnestMapOperator(UnnestMapOperator op, Void arg) throws AlgebricksException {
+        // Since an inverted-index search requires certain amount of memory, needs to calculate
+        // the memory size differently if the given index-search is an inverted-index search.
+        if (isInvertedIndexSearch((AbstractUnnestMapOperator) op)) {
+            calculateMemoryUsageForBlockingOperators(op, textSearchMemorySize);
+            return null;
+        }
         visitInternal(op, true);
         return null;
     }
 
     @Override
     public Void visitLeftOuterUnnestMapOperator(LeftOuterUnnestMapOperator op, Void arg) throws AlgebricksException {
+        // Since an inverted-index search requires certain amount of memory, needs to calculate
+        // the memory size differently if the given index-search is an inverted-index search.
+        if (isInvertedIndexSearch((AbstractUnnestMapOperator) op)) {
+            calculateMemoryUsageForBlockingOperators(op, textSearchMemorySize);
+            return null;
+        }
         visitInternal(op, true);
         return null;
     }
@@ -331,6 +346,18 @@ public class RequiredCapacityVisitor implements ILogicalOperatorVisitor<Void, Vo
         }
         clusterCapacity.setAggregatedMemoryByteSize(stageMemorySoFar);
     }
+
+    // Temp :
+    private boolean isInvertedIndexSearch(AbstractUnnestMapOperator op) {
+        IPhysicalOperator physicalOperator = op.getPhysicalOperator();
+        final PhysicalOperatorTag physicalOperatorTag = physicalOperator.getOperatorTag();
+        if (physicalOperatorTag == PhysicalOperatorTag.LENGTH_PARTITIONED_INVERTED_INDEX_SEARCH
+                || physicalOperatorTag == PhysicalOperatorTag.SINGLE_PARTITION_INVERTED_INDEX_SEARCH) {
+            return true;
+        }
+        return false;
+    }
+    //
 
     // Recursively visits input operators of an operator and sets the CPU core usage.
     private void visitInternal(ILogicalOperator op, boolean toAddOuputBuffer) throws AlgebricksException {

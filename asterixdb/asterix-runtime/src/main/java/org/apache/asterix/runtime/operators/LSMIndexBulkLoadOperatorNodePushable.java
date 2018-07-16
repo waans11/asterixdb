@@ -46,13 +46,17 @@ public class LSMIndexBulkLoadOperatorNodePushable extends IndexBulkLoadOperatorN
 
     protected ILSMIndex primaryIndex;
 
+    // Temp :
+    protected final boolean printIndexEntryDuringBulkLoad;
+    //
+
     public LSMIndexBulkLoadOperatorNodePushable(IIndexDataflowHelperFactory indexDataflowHelperFactory,
             IIndexDataflowHelperFactory priamryIndexDataflowHelperFactory, IHyracksTaskContext ctx, int partition,
             int[] fieldPermutation, float fillFactor, boolean verifyInput, long numElementsHint,
-            boolean checkIfEmptyIndex, RecordDescriptor recDesc, BulkLoadUsage usage, int datasetId)
-            throws HyracksDataException {
+            boolean checkIfEmptyIndex, RecordDescriptor recDesc, BulkLoadUsage usage, int datasetId,
+            boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
         super(indexDataflowHelperFactory, ctx, partition, fieldPermutation, fillFactor, verifyInput, numElementsHint,
-                checkIfEmptyIndex, recDesc);
+                checkIfEmptyIndex, recDesc, printIndexEntryDuringBulkLoad);
 
         if (priamryIndexDataflowHelperFactory != null) {
             this.primaryIndexHelper =
@@ -66,6 +70,9 @@ public class LSMIndexBulkLoadOperatorNodePushable extends IndexBulkLoadOperatorN
         INcApplicationContext ncCtx =
                 (INcApplicationContext) ctx.getJobletContext().getServiceContext().getApplicationContext();
         datasetManager = ncCtx.getDatasetLifecycleManager();
+        // Temp :
+        this.printIndexEntryDuringBulkLoad = printIndexEntryDuringBulkLoad;
+        //
     }
 
     @Override
@@ -84,7 +91,8 @@ public class LSMIndexBulkLoadOperatorNodePushable extends IndexBulkLoadOperatorN
             primaryIndexHelper.open();
             primaryIndex = (ILSMIndex) primaryIndexHelper.getIndexInstance();
             List<ILSMDiskComponent> primaryComponents = primaryIndex.getDiskComponents();
-            bulkLoader = targetIndex.createBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex);
+            bulkLoader = targetIndex.createBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex,
+                    printIndexEntryDuringBulkLoad);
             if (!primaryComponents.isEmpty()) {
                 // TODO move this piece of code to io operation callback
                 // Ideally, this should be done in io operation callback when a bulk load operation is finished

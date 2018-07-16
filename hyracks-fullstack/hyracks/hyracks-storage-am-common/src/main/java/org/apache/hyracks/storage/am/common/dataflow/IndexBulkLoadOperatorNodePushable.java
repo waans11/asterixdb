@@ -44,9 +44,14 @@ public class IndexBulkLoadOperatorNodePushable extends AbstractUnaryInputUnaryOu
     protected IIndex index;
     protected IIndexBulkLoader bulkLoader;
 
+    // Temp :
+    protected final boolean printIndexEntryDuringBulkLoad;
+    //
+
     public IndexBulkLoadOperatorNodePushable(IIndexDataflowHelperFactory indexDataflowHelperFactory,
             IHyracksTaskContext ctx, int partition, int[] fieldPermutation, float fillFactor, boolean verifyInput,
-            long numElementsHint, boolean checkIfEmptyIndex, RecordDescriptor recDesc) throws HyracksDataException {
+            long numElementsHint, boolean checkIfEmptyIndex, RecordDescriptor recDesc,
+            boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
         this.ctx = ctx;
         this.indexHelper = indexDataflowHelperFactory.create(ctx.getJobletContext().getServiceContext(), partition);
         this.fillFactor = fillFactor;
@@ -54,6 +59,9 @@ public class IndexBulkLoadOperatorNodePushable extends AbstractUnaryInputUnaryOu
         this.numElementsHint = numElementsHint;
         this.checkIfEmptyIndex = checkIfEmptyIndex;
         this.recDesc = recDesc;
+        // Temp :
+        this.printIndexEntryDuringBulkLoad = printIndexEntryDuringBulkLoad;
+        //
         tuple.setFieldPermutation(fieldPermutation);
 
     }

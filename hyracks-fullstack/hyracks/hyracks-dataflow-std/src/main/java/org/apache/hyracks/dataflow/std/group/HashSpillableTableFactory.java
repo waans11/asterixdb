@@ -19,6 +19,7 @@
 
 package org.apache.hyracks.dataflow.std.group;
 
+import java.text.DecimalFormat;
 import java.util.BitSet;
 
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
@@ -60,6 +61,10 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
     private static final int OUTPUT_FRAME_LIMT = 1;
     private static final int MIN_FRAME_LIMT = MIN_DATA_TABLE_FRAME_LIMT + MIN_HASH_TABLE_FRAME_LIMT + OUTPUT_FRAME_LIMT;
 
+    // Temp :
+    private static final DecimalFormat decFormat = new DecimalFormat("#.######");
+    //
+
     public HashSpillableTableFactory(IBinaryHashFunctionFamily[] hashFunctionFamilies) {
         this.hashFunctionFamilies = hashFunctionFamilies;
     }
@@ -69,7 +74,7 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             long inputDataBytesSize, final int[] keyFields, final IBinaryComparator[] comparators,
             final INormalizedKeyComputer firstKeyNormalizerFactory, IAggregatorDescriptorFactory aggregateFactory,
             RecordDescriptor inRecordDescriptor, RecordDescriptor outRecordDescriptor, final int framesLimit,
-            final int seed) throws HyracksDataException {
+            final int seed, boolean limitMemory, boolean hashTableGarbageCollection) throws HyracksDataException {
         final int tableSize = suggestTableSize;
 
         // For HashTable, we need to have at least two frames (one for header and one for content).
@@ -121,6 +126,9 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
 
             private final TuplePointer pointer = new TuplePointer();
             private final BitSet spilledSet = new BitSet(numPartitions);
+            // Temp :
+            private final BitSet doneSet = new BitSet(numPartitions);
+            //
             // This frame pool will be shared by both data table and hash table.
             private final IDeallocatableFramePool framePool =
                     new DeallocatableFramePool(ctx, framesLimit * ctx.getInitialFrameSize());
@@ -128,8 +136,8 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
             private final ISimpleFrameBufferManager bufferManagerForHashTable =
                     new FramePoolBackedFrameBufferManager(framePool);
 
-            private final ISerializableTable hashTableForTuplePointer =
-                    new SerializableHashTable(tableSize, ctx, bufferManagerForHashTable);
+            private final ISerializableTable hashTableForTuplePointer = new SerializableHashTable(tableSize, ctx,
+                    bufferManagerForHashTable, limitMemory, hashTableGarbageCollection);
 
             // buffer manager for data table
             final IPartitionedTupleBufferManager bufferManager = new VPartitionTupleBufferManager(
@@ -276,6 +284,18 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 }
                 outputAppender.write(writer, true);
                 spilledSet.set(partition);
+
+                // Temp :
+                if (type == AggregateType.FINAL) {
+                    doneSet.set(partition);
+                    bufferManager.addDoneNumTuples(partition, count);
+                    bufferManager.addDonePhysicalSizes(partition, bufferManager.getPhysicalSize(partition));
+                } else if (type == AggregateType.PARTIAL) {
+                    // Temp : keep only spilled count
+                    bufferManager.addSpilledNumTuples(partition, count);
+                    bufferManager.addSpilledPhysicalSizes(partition, bufferManager.getPhysicalSize(partition));
+                }
+                //
                 return count;
             }
 
@@ -289,6 +309,133 @@ public class HashSpillableTableFactory implements ISpillableTableFactory {
                 int entryInHashTable = tpc.partition(accessor, tIndex, tableSize);
                 int partition = getPartition(entryInHashTable);
                 return spillPolicy.selectVictimPartition(partition);
+            }
+
+            // Temp : debug method
+            @Override
+            public String printInfo() {
+                StringBuilder buf = new StringBuilder();
+                buf.append(">>> " + this + " " + Thread.currentThread().getId() + " printInfo" + "\n");
+                // total
+                long totalPartNum = bufferManager.getNumPartitions();
+                long totalTupleNum = 0;
+                long totalByteSize = 0;
+                // Avg
+                double avgTupleNum = 0.0;
+                double avgByteSize = 0.0;
+
+                // spilled
+                long spilledPartNum = 0;
+                long spilledTupleNum = 0;
+                long spilledByteSize = 0;
+                // Avg
+                double avgSpilledTupleNum = 0.0;
+                double avgSpilledByteSize = 0.0;
+
+                // Done (passed to the next operator)
+                long donePartNum = 0;
+                long doneTupleNum = 0;
+                long doneByteSize = 0;
+                // Avg
+                double avgDoneTupleNum = 0.0;
+                double avgDoneByteSize = 0.0;
+
+                // in-memory resident
+                long inMemoryPartNum = 0;
+                long inMemoryTupleNum = 0;
+                long inMemoryByteSize = 0;
+                // Avg
+                double avgInMemoryTupleNum = 0.0;
+                double avgInMemoryByteSize = 0.0;
+
+                for (int i = 0; i < totalPartNum; i++) {
+                    if (doneSet.get(i)) {
+                        donePartNum++;
+                        doneTupleNum = doneTupleNum + bufferManager.getDoneNumTuples(i);
+                        doneByteSize = doneByteSize + bufferManager.getDonePhysicalSizes(i);
+                        totalTupleNum = totalTupleNum + bufferManager.getDoneNumTuples(i);
+                        totalByteSize = totalByteSize + bufferManager.getDonePhysicalSizes(i);
+                    } else if (spilledSet.get(i)) {
+                        spilledPartNum++;
+                        spilledTupleNum = spilledTupleNum + bufferManager.getSpilledNumTuples(i);
+                        spilledByteSize = totalByteSize + bufferManager.getSpilledPhysicalSizes(i);
+                        totalTupleNum = totalTupleNum + bufferManager.getSpilledNumTuples(i);
+                        totalByteSize = totalByteSize + bufferManager.getSpilledPhysicalSizes(i);
+                    } else {
+                        inMemoryPartNum++;
+                        inMemoryTupleNum = inMemoryTupleNum + bufferManager.getNumTuples(i);
+                        inMemoryByteSize = inMemoryByteSize + bufferManager.getPhysicalSize(i);
+                    }
+                }
+
+                avgTupleNum = totalPartNum == 0 ? -1 : (double) totalTupleNum / totalPartNum;
+                avgByteSize = totalPartNum == 0 ? -1 : (double) totalByteSize / totalPartNum;
+
+                avgSpilledTupleNum = spilledPartNum == 0 ? -1 : (double) spilledTupleNum / spilledPartNum;
+                avgSpilledByteSize = spilledPartNum == 0 ? -1 : (double) spilledByteSize / spilledPartNum;
+
+                avgDoneTupleNum = donePartNum == 0 ? -1 : (double) doneTupleNum / donePartNum;
+                avgDoneByteSize = donePartNum == 0 ? -1 : (double) doneByteSize / donePartNum;
+
+                avgInMemoryTupleNum = inMemoryPartNum == 0 ? -1 : (double) inMemoryTupleNum / inMemoryPartNum;
+                avgInMemoryByteSize = inMemoryPartNum == 0 ? -1 : (double) inMemoryByteSize / inMemoryPartNum;
+
+                buf.append("# total partitions:\t" + totalPartNum + "\t");
+                buf.append("# total tuples:\t" + totalTupleNum + "\t");
+                buf.append("# total byte sizes (MB):\t" + decFormat.format(((double) totalByteSize / 1048576)) + "\n");
+                buf.append("# total partitions:\t" + totalPartNum + "\t");
+                buf.append("# average tuples:\t" + avgTupleNum + "\t");
+                buf.append("# average byte sizes (MB):\t" + decFormat.format((avgByteSize / 1048576)) + "\n\n");
+
+                buf.append("Done (passed to the next operator) partitions:" + "\n");
+                for (int i = 0; i < totalPartNum; i++) {
+                    if (doneSet.get(i)) {
+                        buf.append("Part:\t" + i + "\t# tuples:\t" + bufferManager.getDoneNumTuples(i)
+                                + "\tsizes(MB):\t"
+                                + decFormat.format(((double) bufferManager.getDonePhysicalSizes(i) / 1048576)) + "\n");
+                    }
+                }
+                buf.append("# total done partitions:\t" + donePartNum + "\t");
+                buf.append("# total done tuples:\t" + doneTupleNum + "\t");
+                buf.append("# total done sizes (MB):\t" + decFormat.format(((double) doneByteSize / 1048576)) + "\n");
+                buf.append("# total done partitions:\t" + donePartNum + "\t");
+                buf.append("# average done tuples:\t" + avgDoneTupleNum + "\t");
+                buf.append("# average done sizes (MB):\t" + decFormat.format((avgDoneByteSize / 1048576)) + "\n\n");
+
+                buf.append("Spilled partitions:" + "\n");
+                for (int i = 0; i < totalPartNum; i++) {
+                    if (spilledSet.get(i) && !doneSet.get(i)) {
+                        buf.append("Part:\t" + i + "\t# tuples:\t" + bufferManager.getSpilledNumTuples(i)
+                                + "\tsizes(MB):\t"
+                                + decFormat.format(((double) bufferManager.getPhysicalSize(i) / 1048576)) + "\n");
+                    }
+                }
+                buf.append("# total spilled partitions:\t" + spilledPartNum + "\t");
+                buf.append("# total spilled tuples:\t" + spilledTupleNum + "\t");
+                buf.append("# total spilled sizes (MB):\t" + decFormat.format(((double) spilledByteSize / 1048576))
+                        + "\n");
+                buf.append("# total spilled partitions:\t" + spilledPartNum + "\t");
+                buf.append("# average spilled tuples:\t" + avgSpilledTupleNum + "\t");
+                buf.append(
+                        "# average spilled sizes (MB):\t" + decFormat.format((avgSpilledByteSize / 1048576)) + "\n\n");
+
+                buf.append("In-memory resident partitions:\n");
+                for (int i = 0; i < totalPartNum; i++) {
+                    if (!spilledSet.get(i) && !doneSet.get(i)) {
+                        buf.append("Part:\t" + i + "\t# tuples:\t" + bufferManager.getNumTuples(i) + "\tsizes (MB):\t"
+                                + decFormat.format(((double) bufferManager.getPhysicalSize(i) / 1048576)) + "\n");
+                    }
+                }
+
+                buf.append("# total in-memory partitions:\t" + inMemoryPartNum + "\t");
+                buf.append("# total in-memory tuples:\t" + inMemoryTupleNum + "\t");
+                buf.append("# total in-memory sizes (MB):\t" + decFormat.format(((double) inMemoryByteSize / 1048576))
+                        + "\n");
+                buf.append("# total in-memory partitions:\t" + inMemoryPartNum + "\t");
+                buf.append("# average in-memory tuples:\t" + avgInMemoryTupleNum + "\t");
+                buf.append("# average in-memory sizes (MB):\t" + decFormat.format((avgInMemoryByteSize / 1048576)));
+
+                return buf.toString() + "\n\nHash table information:\n" + hashTableForTuplePointer.printInfo();
             }
         };
     }

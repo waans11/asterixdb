@@ -21,7 +21,6 @@ package org.apache.hyracks.dataflow.std.group;
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 
 public interface ISpillableTable {
 
@@ -70,4 +69,9 @@ public interface ISpillableTable {
      * @param tIndex
      */
     int findVictimPartition(IFrameTupleAccessor accessor, int tIndex) throws HyracksDataException;
+
+    /**
+     * Debug method: print the table information.
+     */
+    String printInfo();
 }

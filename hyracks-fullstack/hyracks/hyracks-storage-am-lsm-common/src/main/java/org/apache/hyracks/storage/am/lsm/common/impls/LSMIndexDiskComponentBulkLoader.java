@@ -31,15 +31,38 @@ public class LSMIndexDiskComponentBulkLoader implements IIndexBulkLoader {
     private final ILSMDiskComponentBulkLoader componentBulkLoader;
     private final ILSMIndexOperationContext opCtx;
 
+    // Temp :
+    private final boolean printIndexEntryDuringBulkLoad;
+    //
+
     public LSMIndexDiskComponentBulkLoader(AbstractLSMIndex lsmIndex, ILSMIndexOperationContext opCtx, float fillFactor,
             boolean verifyInput, long numElementsHint) throws HyracksDataException {
         this.lsmIndex = lsmIndex;
         this.opCtx = opCtx;
         opCtx.getIoOperation().setNewComponent(lsmIndex.createBulkLoadTarget());
+        // Temp :
+        this.printIndexEntryDuringBulkLoad = false;
         this.componentBulkLoader = opCtx.getIoOperation().getNewComponent().createBulkLoader(opCtx.getIoOperation(),
-                fillFactor, verifyInput, numElementsHint, false, true, true);
+                fillFactor, verifyInput, numElementsHint, false, true, true, false);
+        //
         lsmIndex.getIOOperationCallback().beforeOperation(opCtx.getIoOperation());
     }
+
+    // Temp :
+    public LSMIndexDiskComponentBulkLoader(AbstractLSMIndex lsmIndex, ILSMIndexOperationContext opCtx, float fillFactor,
+            boolean verifyInput, long numElementsHint, boolean printIndexEntryDuringBulkLoad)
+            throws HyracksDataException {
+        this.lsmIndex = lsmIndex;
+        this.opCtx = opCtx;
+        opCtx.getIoOperation().setNewComponent(lsmIndex.createBulkLoadTarget());
+        // Temp :
+        this.printIndexEntryDuringBulkLoad = printIndexEntryDuringBulkLoad;
+        this.componentBulkLoader = opCtx.getIoOperation().getNewComponent().createBulkLoader(opCtx.getIoOperation(),
+                fillFactor, verifyInput, numElementsHint, false, true, true, printIndexEntryDuringBulkLoad);
+        //
+        lsmIndex.getIOOperationCallback().beforeOperation(opCtx.getIoOperation());
+    }
+    //
 
     public ILSMDiskComponent getComponent() {
         return opCtx.getIoOperation().getNewComponent();

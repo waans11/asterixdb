@@ -32,6 +32,7 @@ import org.apache.asterix.lang.common.base.Statement;
 @FunctionalInterface
 public interface IStatementExecutorFactory {
 
+    // Temp :
     /**
      * create a statement executor
      *
@@ -46,5 +47,6 @@ public interface IStatementExecutorFactory {
      * @return an implementation of {@code IStatementExecutor} thaxt is used to execute the passed list of statements
      */
     IStatementExecutor create(ICcApplicationContext appCtx, List<Statement> statements, SessionOutput output,
-            ILangCompilationProvider compilationProvider, IStorageComponentProvider storageComponentProvider);
+            ILangCompilationProvider compilationProvider, IStorageComponentProvider storageComponentProvider,
+            String originalQuery);
 }

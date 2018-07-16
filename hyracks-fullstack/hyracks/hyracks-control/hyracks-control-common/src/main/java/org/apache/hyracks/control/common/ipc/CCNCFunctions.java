@@ -139,7 +139,7 @@ public class CCNCFunctions {
         }
 
         public SendApplicationMessageFunction(byte[] data, DeploymentId deploymentId, String nodeId) {
-            this.serializedMessage = data;
+            serializedMessage = data;
             this.deploymentId = deploymentId;
             this.nodeId = nodeId;
         }
@@ -772,11 +772,15 @@ public class CCNCFunctions {
         private final Map<byte[], byte[]> jobParameters;
         private final DeployedJobSpecId deployedJobSpecId;
         private final long jobStartTime;
+        // Temp :
+        private final String originalQuery;
+        //
 
         public StartTasksFunction(DeploymentId deploymentId, JobId jobId, byte[] planBytes,
                 List<TaskAttemptDescriptor> taskDescriptors,
                 Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies, Set<JobFlag> flags,
-                Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId, long jobStartTime) {
+                Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId, long jobStartTime,
+                String originalQuery) {
             this.deploymentId = deploymentId;
             this.jobId = jobId;
             this.planBytes = planBytes;
@@ -786,6 +790,11 @@ public class CCNCFunctions {
             this.jobParameters = jobParameters;
             this.deployedJobSpecId = deployedJobSpecId;
             this.jobStartTime = jobStartTime;
+            if (originalQuery == null) {
+                this.originalQuery = "";
+            } else {
+                this.originalQuery = originalQuery;
+            }
         }
 
         @Override
@@ -828,6 +837,12 @@ public class CCNCFunctions {
         public long getJobStartTime() {
             return jobStartTime;
         }
+
+        // Temp :
+        public String getOriginalQuery() {
+            return originalQuery;
+        }
+        //
 
         public static Object deserialize(ByteBuffer buffer, int length) throws Exception {
             ByteArrayInputStream bais = new ByteArrayInputStream(buffer.array(), buffer.position(), length);
@@ -900,8 +915,10 @@ public class CCNCFunctions {
 
             long jobStartTime = dis.readLong();
 
+            String originalQueryStr = dis.readUTF();
+
             return new StartTasksFunction(deploymentId, jobId, planBytes, taskDescriptors, connectorPolicies, flags,
-                    jobParameters, deployedJobSpecId, jobStartTime);
+                    jobParameters, deployedJobSpecId, jobStartTime, originalQueryStr);
         }
 
         public static void serialize(OutputStream out, Object object) throws Exception {
@@ -957,6 +974,10 @@ public class CCNCFunctions {
 
             //write job start time
             dos.writeLong(fn.jobStartTime);
+
+            //Temp : write originalQuery
+            dos.writeUTF(fn.originalQuery);
+            //
         }
     }
 

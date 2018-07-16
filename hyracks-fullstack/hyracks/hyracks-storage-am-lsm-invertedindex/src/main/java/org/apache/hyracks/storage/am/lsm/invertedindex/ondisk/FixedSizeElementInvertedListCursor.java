@@ -23,6 +23,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -40,12 +41,19 @@ import org.apache.hyracks.storage.common.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * A cursor class that traverse an inverted list that consists of fixed-size elements on disk
  *
  */
 public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
+    // Temp :
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final DecimalFormat DECFORMAT = new DecimalFormat("#.######");
+    //
 
     private final IBufferCache bufferCache;
     private final int fileId;
@@ -116,6 +124,9 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
      * stops allocating buffers.
      */
     private void allocateBuffers() throws HyracksDataException {
+        // Temp :
+        int count = 0;
+        //
         do {
             ByteBuffer tmpBuffer = bufferManagerForSearch.acquireFrame(bufferCache.getPageSize());
             if (tmpBuffer == null) {
@@ -124,18 +135,31 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
             }
             Arrays.fill(tmpBuffer.array(), (byte) 0);
             buffers.add(tmpBuffer);
+            count++;
         } while (buffers.size() < numPages);
         // At least there should be one frame to load a page from disk.
         if (buffers.isEmpty()) {
             throw HyracksDataException.create(ErrorCode.NOT_ENOUGH_BUDGET_FOR_TEXTSEARCH,
                     FixedSizeElementInvertedListCursor.class.getName());
         }
+        // Temp :
+        LOGGER.log(Level.INFO,
+                this.hashCode() + "\tallocateBuffers\t" + "#newly_allocated_buffers:\t" + count + "\tsize(MB)\t"
+                        + DECFORMAT.format((((double) bufferCache.getPageSize() * count) / 1048576)) + "\ttotal_count\t"
+                        + buffers.size() + "\tsize(MB)\t"
+                        + DECFORMAT.format((((double) bufferCache.getPageSize() * buffers.size()) / 1048576)));
+        //
     }
 
     /**
      * Deallocates all buffers. i.e. releases all buffers to the buffer manager.
      */
     private void deallocateBuffers() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO,
+                this.hashCode() + "\tdeallocateBuffers\t" + "current #buffers:\t" + buffers.size() + "\tsize(MB):\t"
+                        + DECFORMAT.format((((double) bufferCache.getPageSize() * buffers.size()) / 1048576)));
+        //
         for (int i = 0; i < buffers.size(); i++) {
             bufferManagerForSearch.releaseFrame(buffers.get(i));
             buffers.set(i, null);
@@ -192,6 +216,9 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
      */
     @Override
     public void prepareLoadPages() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tprepareLoadPages");
+        //
         // Resets the buffers if there is any.
         clearBuffers();
         if (numPages > buffers.size()) {
@@ -232,6 +259,10 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
 
             // Buffer full?
             if (currentBufferIdx >= buffers.size()) {
+                // Temp :
+                LOGGER.log(Level.INFO,
+                        this.hashCode() + "\tloadPages\t" + "buffer full - #read_pages:\t" + currentBufferIdx);
+                //
                 break;
             }
         }
@@ -261,6 +292,9 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
      */
     @Override
     public void unloadPages() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tunloadPages");
+        //
         // Deallocates the buffer pages
         deallocateBuffers();
     }
@@ -313,6 +347,9 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
     public boolean containsKey(ITupleReference searchTuple, MultiComparator invListCmp) throws HyracksDataException {
         // If the given element is greater than the last element in the current buffer, reads the next block.
         if (needToReadNextBlock(searchTuple, invListCmp)) {
+            // Temp :
+            LOGGER.log(Level.INFO, this.hashCode() + "\tcontainsKey\t" + "reading the next chunk");
+            //
             loadPages();
         }
         int mid = -1;
@@ -344,6 +381,12 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
     @Override
     protected void setInvListInfo(int startPageId, int endPageId, int startOff, int numElements)
             throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO,
+                this.hashCode() + "\t" + "setInvListInfo" + "\t" + "startPageId:\t" + startPageId + "\tendPageId:\t"
+                        + endPageId + "\tstartOff:\t" + startOff + "\t#elements:\t" + numElements + "\tsize(MB):\t"
+                        + DECFORMAT.format((((double) elementSize * numElements) / 1048576)));
+        //
         this.startPageId = startPageId;
         this.endPageId = endPageId;
         this.startOff = startOff;
@@ -503,6 +546,9 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
      */
     @Override
     public void doClose() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "doClose");
+        //
         if (!buffers.isEmpty()) {
             unloadPages();
         }
@@ -513,6 +559,9 @@ public class FixedSizeElementInvertedListCursor extends InvertedListCursor {
      */
     @Override
     public void doDestroy() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "doDestroy");
+        //
         if (!buffers.isEmpty()) {
             unloadPages();
         }

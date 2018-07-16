@@ -91,6 +91,9 @@ public abstract class AbstractTOccurrenceSearcher implements IInvertedIndexSearc
     protected int searchResultTupleIndex = 0;
     protected final IFrameTupleAccessor searchResultFta;
     protected FixedSizeTupleReference searchResultTuple;
+    // Limit text-search memory
+    protected Boolean limitTextSearchMemoryObject;
+    protected boolean limitTextSearchMemory;
 
     public AbstractTOccurrenceSearcher(IInPlaceInvertedIndex invIndex, IHyracksTaskContext ctx)
             throws HyracksDataException {
@@ -103,6 +106,10 @@ public abstract class AbstractTOccurrenceSearcher implements IInvertedIndexSearc
         if (bufferManager == null) {
             throw HyracksDataException.create(ErrorCode.CANNOT_CONTINUE_TEXT_SEARCH_BUFFER_MANAGER_IS_NULL);
         }
+        // Temp :
+        this.limitTextSearchMemoryObject = TaskUtil.get(HyracksConstants.LIMIT_TEXTSEARCHMEMORY, ctx);
+        limitTextSearchMemory = limitTextSearchMemoryObject == null ? true : limitTextSearchMemoryObject.booleanValue();
+        //
         this.finalSearchResult =
                 new InvertedIndexFinalSearchResult(invIndex.getInvListTypeTraits(), ctx, bufferManager);
         this.invListMerger = new InvertedListMerger(ctx, invIndex, bufferManager);

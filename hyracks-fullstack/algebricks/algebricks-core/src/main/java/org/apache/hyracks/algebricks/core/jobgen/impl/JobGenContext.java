@@ -70,6 +70,9 @@ public class JobGenContext {
     private AlgebricksAbsolutePartitionConstraint clusterLocations;
     private int varCounter;
     private final ITypingContext typingContext;
+    // if true, then limits the query execution - normal, false - executes it anyway.
+    private final boolean limitQueryExecution;
+    private final boolean printIndexEntryDuringBulkLoad;
 
     public JobGenContext(IOperatorSchema outerFlowSchema, IMetadataProvider<?, ?> metadataProvider, Object appContext,
             ISerializerDeserializerProvider serializerDeserializerProvider,
@@ -107,6 +110,49 @@ public class JobGenContext {
         this.predEvaluatorFactoryProvider = predEvaluatorFactoryProvider;
         this.frameSize = frameSize;
         this.varCounter = 0;
+        this.limitQueryExecution = true;
+        this.printIndexEntryDuringBulkLoad = false;
+    }
+
+    public JobGenContext(IOperatorSchema outerFlowSchema, IMetadataProvider<?, ?> metadataProvider, Object appContext,
+            ISerializerDeserializerProvider serializerDeserializerProvider,
+            IBinaryHashFunctionFactoryProvider hashFunctionFactoryProvider,
+            IBinaryHashFunctionFamilyProvider hashFunctionFamilyProvider,
+            IBinaryComparatorFactoryProvider comparatorFactoryProvider, ITypeTraitProvider typeTraitProvider,
+            IBinaryBooleanInspectorFactory booleanInspectorFactory,
+            IBinaryIntegerInspectorFactory integerInspectorFactory, IPrinterFactoryProvider printerFactoryProvider,
+            IMissingWriterFactory nullWriterFactory,
+            INormalizedKeyComputerFactoryProvider normalizedKeyComputerFactoryProvider,
+            IExpressionRuntimeProvider expressionRuntimeProvider, IExpressionTypeComputer expressionTypeComputer,
+            ITypingContext typingContext, IExpressionEvalSizeComputer expressionEvalSizeComputer,
+            IPartialAggregationTypeComputer partialAggregationTypeComputer,
+            IPredicateEvaluatorFactoryProvider predEvaluatorFactoryProvider, int frameSize,
+            AlgebricksAbsolutePartitionConstraint clusterLocations, boolean ignoreJobCapacityAndExecuteQuery,
+            boolean printIndexEntryDuringBulkLoad) {
+        this.outerFlowSchema = outerFlowSchema;
+        this.metadataProvider = metadataProvider;
+        this.appContext = appContext;
+        this.serializerDeserializerProvider = serializerDeserializerProvider;
+        this.hashFunctionFactoryProvider = hashFunctionFactoryProvider;
+        this.hashFunctionFamilyProvider = hashFunctionFamilyProvider;
+        this.comparatorFactoryProvider = comparatorFactoryProvider;
+        this.typeTraitProvider = typeTraitProvider;
+        this.booleanInspectorFactory = booleanInspectorFactory;
+        this.integerInspectorFactory = integerInspectorFactory;
+        this.printerFactoryProvider = printerFactoryProvider;
+        this.clusterLocations = clusterLocations;
+        this.normalizedKeyComputerFactoryProvider = normalizedKeyComputerFactoryProvider;
+        this.nonMatchWriterFactory = nullWriterFactory;
+        this.expressionRuntimeProvider = expressionRuntimeProvider;
+        this.expressionTypeComputer = expressionTypeComputer;
+        this.typingContext = typingContext;
+        this.expressionEvalSizeComputer = expressionEvalSizeComputer;
+        this.partialAggregationTypeComputer = partialAggregationTypeComputer;
+        this.predEvaluatorFactoryProvider = predEvaluatorFactoryProvider;
+        this.frameSize = frameSize;
+        this.varCounter = 0;
+        this.limitQueryExecution = ignoreJobCapacityAndExecuteQuery;
+        this.printIndexEntryDuringBulkLoad = printIndexEntryDuringBulkLoad;
     }
 
     public IOperatorSchema getOuterFlowSchema() {
@@ -205,6 +251,14 @@ public class JobGenContext {
 
     public IVariableTypeEnvironment getTypeEnvironment(ILogicalOperator op) {
         return typingContext.getOutputTypeEnvironment(op);
+    }
+
+    public boolean getLimitQueryExecution() {
+        return limitQueryExecution;
+    }
+
+    public boolean getPrintIndexEntryDuringBulkLoad() {
+        return printIndexEntryDuringBulkLoad;
     }
 
 }

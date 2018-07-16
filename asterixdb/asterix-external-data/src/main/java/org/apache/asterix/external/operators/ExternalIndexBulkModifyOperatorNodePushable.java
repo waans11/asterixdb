@@ -44,8 +44,10 @@ public class ExternalIndexBulkModifyOperatorNodePushable extends IndexBulkLoadOp
     public ExternalIndexBulkModifyOperatorNodePushable(IIndexDataflowHelperFactory indexHelperFactory,
             IHyracksTaskContext ctx, int partition, int[] fieldPermutation, float fillFactor, boolean verifyInput,
             long numElementsHint, RecordDescriptor inputRecDesc, int[] deletedFiles) throws HyracksDataException {
+        // Temp :
         super(indexHelperFactory, ctx, partition, fieldPermutation, fillFactor, verifyInput, numElementsHint, false,
-                inputRecDesc);
+                inputRecDesc, false);
+        //
         this.deletedFiles = deletedFiles;
     }
 

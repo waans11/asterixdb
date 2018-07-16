@@ -37,8 +37,8 @@ public class Task {
     public Task(TaskId taskId, ActivityPlan activityPlan) {
         this.taskId = taskId;
         this.activityPlan = activityPlan;
-        this.dependencies = new HashSet<TaskId>();
-        this.dependents = new HashSet<TaskId>();
+        dependencies = new HashSet<>();
+        dependents = new HashSet<>();
     }
 
     public TaskId getTaskId() {

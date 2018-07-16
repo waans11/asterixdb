@@ -159,10 +159,14 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                                                         expr.getFunctionIdentifier(), expr.getArguments());
                                         aggOp.getExpressions().get(i).setValue(serialAggExpr);
                                     }
+                                    // Temp :
                                     ExternalGroupByPOperator externalGby = new ExternalGroupByPOperator(
                                             gby.getGroupByList(), physicalOptimizationConfig.getMaxFramesForGroupBy(),
                                             (long) physicalOptimizationConfig.getMaxFramesForGroupBy()
-                                                    * physicalOptimizationConfig.getFrameSize());
+                                                    * physicalOptimizationConfig.getFrameSize(),
+                                            physicalOptimizationConfig.getLimitHashGroupMemory(),
+                                            physicalOptimizationConfig.getHashTableGarbageCollection());
+                                    //
                                     generateMergeAggregationExpressions(gby, context);
                                     op.setPhysicalOperator(externalGby);
                                     setToExternalGby = true;

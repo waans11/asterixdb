@@ -207,8 +207,10 @@ public abstract class RestApiServlet extends AbstractServlet {
             List<Statement> aqlStatements = parser.parse();
             validate(aqlStatements);
             MetadataManager.INSTANCE.init();
+            // Temp :
             IStatementExecutor translator = statementExecutorFactory.create(appCtx, aqlStatements, sessionOutput,
-                    compilationProvider, componentProvider);
+                    compilationProvider, componentProvider, query);
+            //
             final IRequestParameters requestParameters = new RequestParameters(hds,
                     new ResultProperties(resultDelivery), new IStatementExecutor.Stats(), null, null, null);
             translator.compileAndExecute(hcc, null, requestParameters);

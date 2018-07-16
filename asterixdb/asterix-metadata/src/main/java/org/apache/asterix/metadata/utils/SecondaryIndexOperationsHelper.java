@@ -348,9 +348,10 @@ public abstract class SecondaryIndexOperationsHelper {
         IndexDataflowHelperFactory primaryIndexDataflowHelperFactory = new IndexDataflowHelperFactory(
                 metadataProvider.getStorageComponentProvider().getStorageManager(), primaryFileSplitProvider);
 
-        LSMIndexBulkLoadOperatorDescriptor treeIndexBulkLoadOp = new LSMIndexBulkLoadOperatorDescriptor(spec,
-                secondaryRecDesc, fieldPermutation, fillFactor, false, numElementsHint, false, dataflowHelperFactory,
-                primaryIndexDataflowHelperFactory, BulkLoadUsage.CREATE_INDEX, dataset.getDatasetId());
+        LSMIndexBulkLoadOperatorDescriptor treeIndexBulkLoadOp =
+                new LSMIndexBulkLoadOperatorDescriptor(spec, secondaryRecDesc, fieldPermutation, fillFactor, false,
+                        numElementsHint, false, dataflowHelperFactory, primaryIndexDataflowHelperFactory,
+                        BulkLoadUsage.CREATE_INDEX, dataset.getDatasetId(), spec.getPrintIndexEntryDuringBulkLoad());
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, treeIndexBulkLoadOp,
                 secondaryPartitionConstraint);
         return treeIndexBulkLoadOp;

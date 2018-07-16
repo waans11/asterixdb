@@ -26,23 +26,43 @@ import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.io.GeneratedRunFileReader;
 import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public abstract class AbstractSortRunGenerator implements IRunGenerator {
     protected final List<GeneratedRunFileReader> generatedRunFileReaders;
 
+    // Temp :
+    static final Logger LOGGER = LogManager.getLogger();
+    protected final boolean limitMemory;
+    //
+
     public AbstractSortRunGenerator() {
         generatedRunFileReaders = new LinkedList<>();
+        this.limitMemory = true;
+    }
+
+    public AbstractSortRunGenerator(boolean limitMemory) {
+        generatedRunFileReaders = new LinkedList<>();
+        this.limitMemory = limitMemory;
     }
 
     abstract public ISorter getSorter() throws HyracksDataException;
 
     @Override
     public void open() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "open");
+        //
         generatedRunFileReaders.clear();
     }
 
     @Override
     public void close() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "close");
+        //
         if (getSorter().hasRemaining()) {
             if (generatedRunFileReaders.size() <= 0) {
                 getSorter().sort();
@@ -69,6 +89,13 @@ public abstract class AbstractSortRunGenerator implements IRunGenerator {
         } finally {
             flushWriter.close();
         }
+        // Temp :
+        LOGGER.log(Level.INFO,
+                this.hashCode() + "\t" + "flushFramesToRun" + "\twriter file:\t"
+                        + runWriter.getFileReference().getFile().getName() + "\tbyte size:\t" + runWriter.getFileSize()
+                        + "\tsize (MB):\t" + ((double) runWriter.getFileSize() / 1048576));
+        //
+
         generatedRunFileReaders.add(runWriter.createDeleteOnCloseReader());
         getSorter().reset();
     }

@@ -24,6 +24,7 @@ import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER_BYTE_
 import static org.apache.hyracks.control.common.config.OptionTypes.LONG_BYTE_UNIT;
 import static org.apache.hyracks.util.StorageUtil.StorageUnit.KILOBYTE;
 
+import java.text.DecimalFormat;
 import java.util.function.Function;
 
 import org.apache.asterix.common.metadata.MetadataIndexImmutableProperties;
@@ -33,6 +34,9 @@ import org.apache.hyracks.api.config.IOptionType;
 import org.apache.hyracks.api.config.Section;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.util.StorageUtil;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class StorageProperties extends AbstractProperties {
 
@@ -112,6 +116,10 @@ public class StorageProperties extends AbstractProperties {
     }
 
     private static final int SYSTEM_RESERVED_DATASETS = 0;
+    // Temp :
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final DecimalFormat decFormat = new DecimalFormat("#.######");
+    //
 
     public StorageProperties(PropertiesAccessor accessor) {
         super(accessor);
@@ -164,6 +172,14 @@ public class StorageProperties extends AbstractProperties {
     public long getJobExecutionMemoryBudget() {
         final long jobExecutionMemory =
                 Runtime.getRuntime().maxMemory() - getBufferCacheSize() - getMemoryComponentGlobalBudget();
+        // Temp :
+        LOGGER.log(Level.INFO,
+                this.hashCode() + "\t" + "getJobExecutionMemoryBudget\t" + "Runtime_maxMemory(MB):\t"
+                        + decFormat.format(Runtime.getRuntime().maxMemory() / 1048576) + "\tBuffer_cache_size(MB):\t"
+                        + decFormat.format(getBufferCacheSize() / 1048576) + "\tMemoryComponentGlobalBudget(MB):\t"
+                        + decFormat.format(getMemoryComponentGlobalBudget() / 1048576) + "\tjobExecutionMemory(MB):\t"
+                        + decFormat.format(jobExecutionMemory / 1048576));
+        //
         if (jobExecutionMemory <= 0) {
             final String msg = String.format(
                     "Invalid node memory configuration, more memory budgeted than available in JVM. Runtime max memory:"

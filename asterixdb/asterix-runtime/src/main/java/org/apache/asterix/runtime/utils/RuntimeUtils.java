@@ -27,13 +27,21 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.asterix.common.config.CompilerProperties;
+import org.apache.asterix.common.config.OptimizationConfUtil;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.cluster.INodeManager;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class RuntimeUtils {
+
+    // Temp :
+    private static final Logger LOGGER = LogManager.getLogger();
+    //
 
     private RuntimeUtils() {
     }
@@ -55,6 +63,7 @@ public class RuntimeUtils {
 
     public static Map<InetAddress, Set<String>> getNodeControllerMap(ICcApplicationContext appCtx)
             throws HyracksDataException {
+
         Map<InetAddress, Set<String>> map = new HashMap<>();
         appCtx.getServiceContext().getCCContext().getIPAddressNodeMap(map);
         return map;
@@ -69,6 +78,17 @@ public class RuntimeUtils {
     public static JobSpecification createJobSpecification(ICcApplicationContext appCtx) {
         CompilerProperties compilerProperties = appCtx.getCompilerProperties();
         int frameSize = compilerProperties.getFrameSize();
-        return new JobSpecification(frameSize);
+        // Temp :
+        JobSpecification jobSpec = new JobSpecification(frameSize);
+        jobSpec.setLimitQueryExecution(OptimizationConfUtil.getPhysicalOptimizationConfig().getLimitQueryExecution());
+        jobSpec.setPrintIndexEntryDuringBulkLoad(
+                OptimizationConfUtil.getPhysicalOptimizationConfig().getPrintIndexEntryDuringBulkLoad());
+        // Temp :
+        LOGGER.log(Level.INFO,
+                "\t" + "createJobSpecification" + "\tlimitQueryExecution:\t" + jobSpec.getLimitQueryExecution()
+                        + "\tprintIndexEntryDuringBulkLoad:\t" + jobSpec.getPrintIndexEntryDuringBulkLoad());
+        //
+
+        return jobSpec;
     }
 }

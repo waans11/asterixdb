@@ -19,6 +19,7 @@
 package org.apache.hyracks.dataflow.std.structures;
 
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -38,10 +39,22 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
     protected double garbageCollectionThreshold;
     protected int wastedIntSpaceCount = 0;
     protected ISimpleFrameBufferManager bufferManager;
+    // Temp :
+    protected boolean limitMemory;
+    protected boolean hashTableGarbageCollection;
+    protected static DecimalFormat decFormat = new DecimalFormat("#.######");
+    //
 
+    // Original const
     public SerializableHashTable(int tableSize, final IHyracksFrameMgrContext ctx,
             ISimpleFrameBufferManager bufferManager) throws HyracksDataException {
         this(tableSize, ctx, bufferManager, 0.1);
+    }
+
+    public SerializableHashTable(int tableSize, final IHyracksFrameMgrContext ctx,
+            ISimpleFrameBufferManager bufferManager, boolean limitMemory, boolean hashTableGarbageCollection)
+            throws HyracksDataException {
+        this(tableSize, ctx, bufferManager, 0.1, limitMemory, hashTableGarbageCollection);
     }
 
     public SerializableHashTable(int tableSize, final IHyracksFrameMgrContext ctx,
@@ -58,11 +71,35 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
         contents.add(frame);
         currentOffsetInEachFrameList.add(0);
         this.garbageCollectionThreshold = garbageCollectionThreshold;
+        // Temp :
+        limitMemory = true;
+        hashTableGarbageCollection = true;
+    }
+
+    public SerializableHashTable(int tableSize, final IHyracksFrameMgrContext ctx,
+            ISimpleFrameBufferManager bufferManager, double garbageCollectionThreshold, boolean limitMemory,
+            boolean hashTableGarbageCollection) throws HyracksDataException {
+        super(tableSize, ctx, false);
+        this.bufferManager = bufferManager;
+
+        ByteBuffer newFrame = getFrame(frameSize);
+        if (newFrame == null) {
+            throw new HyracksDataException("Can't allocate a frame for Hash Table. Please allocate more budget.");
+        }
+        IntSerDeBuffer frame = new IntSerDeBuffer(newFrame);
+        frameCapacity = frame.capacity();
+        contents.add(frame);
+        currentOffsetInEachFrameList.add(0);
+        this.garbageCollectionThreshold = garbageCollectionThreshold;
+        // Temp :
+        this.limitMemory = limitMemory;
+        this.hashTableGarbageCollection = hashTableGarbageCollection;
     }
 
     @Override
     ByteBuffer getFrame(int size) throws HyracksDataException {
-        ByteBuffer newFrame = bufferManager.acquireFrame(size);
+        // If limitMemory is false, there is no limit on the hash table size.
+        ByteBuffer newFrame = limitMemory ? bufferManager.acquireFrame(size) : ctx.allocateFrame(size);
         if (newFrame != null) {
             currentByteSize += size;
         }
@@ -84,12 +121,20 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
     public void close() {
         for (int i = 0; i < headers.length; i++) {
             if (headers[i] != null) {
-                bufferManager.releaseFrame(headers[i].getByteBuffer());
+                if (limitMemory) {
+                    bufferManager.releaseFrame(headers[i].getByteBuffer());
+                } else {
+                    ctx.deallocateFrames(headers[i].getByteBuffer().capacity());
+                }
                 headers[i] = null;
             }
         }
         for (int i = 0; i < contents.size(); i++) {
-            bufferManager.releaseFrame(contents.get(i).getByteBuffer());
+            if (limitMemory) {
+                bufferManager.releaseFrame(contents.get(i).getByteBuffer());
+            } else {
+                ctx.deallocateFrames(contents.get(i).getByteBuffer().capacity());
+            }
         }
         contents.clear();
         currentOffsetInEachFrameList.clear();
@@ -121,6 +166,11 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
     @Override
     public int collectGarbage(ITuplePointerAccessor bufferAccessor, ITuplePartitionComputer tpc)
             throws HyracksDataException {
+        // Temp : no garbage collection happens if this parameter is set to false.
+        if (!hashTableGarbageCollection) {
+            return -1;
+        }
+
         // Keeps the garbage collection related variable
         GarbageCollectionInfo gcInfo = new GarbageCollectionInfo();
 
@@ -211,7 +261,11 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
         if (numberOfFramesToBeDeallocated >= 1) {
             for (int i = 0; i < numberOfFramesToBeDeallocated; i++) {
                 currentByteSize -= contents.get(gcInfo.currentGCWritePageForGC + 1).getByteCapacity();
-                bufferManager.releaseFrame(contents.get(gcInfo.currentGCWritePageForGC + 1).getByteBuffer());
+                if (limitMemory) {
+                    bufferManager.releaseFrame(contents.get(gcInfo.currentGCWritePageForGC + 1).getByteBuffer());
+                } else {
+                    ctx.deallocateFrames(contents.get(gcInfo.currentGCWritePageForGC + 1).getByteBuffer().capacity());
+                }
                 contents.remove(gcInfo.currentGCWritePageForGC + 1);
                 currentOffsetInEachFrameList.remove(gcInfo.currentGCWritePageForGC + 1);
             }
@@ -492,7 +546,6 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
                         } else {
                             headerSlotCapaCountMap.put(capacity, 1);
                         }
-                        headerSlotUsedCount++;
                     }
                 }
                 hFrames++;
@@ -506,20 +559,23 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
         StringBuilder buf = new StringBuilder();
         buf.append("\n>>> " + this + " " + Thread.currentThread().getId() + "::printInfo()" + "\n");
         buf.append("(A) hash table cardinality (# of slot):\t" + tableSize + "\tExpected Table Size(MB):\t"
-                + ((double) getExpectedTableByteSize(tableSize, frameCapacity * 4) / 1048576) + "\twasted size(MB):\t"
-                + ((double) wastedIntSpaceCount * 4 / 1048576) + "\n");
+                + decFormat.format(((double) getExpectedTableByteSize(tableSize, frameCapacity * 4) / 1048576))
+                + "\tactual_size(MB):\t"
+                + decFormat.format(
+                        (double) hFrames * frameCapacity * 4 / 1048576 + (double) nFrames * frameCapacity * 4 / 1048576)
+                + "\twasted size(MB):\t" + decFormat.format(((double) wastedIntSpaceCount * 4 / 1048576)) + "\n");
         buf.append("(B) # of header frames:\t" + hFrames + "\tsize(MB)\t"
-                + ((double) hFrames * frameCapacity * 4 / 1048576) + "\tratio (B/D)\t" + ((double) hFrames / total)
-                + "\n");
+                + decFormat.format(((double) hFrames * frameCapacity * 4 / 1048576)) + "\tratio (B/D)\t"
+                + decFormat.format(((double) hFrames / total)) + "\n");
         buf.append("(C) # of content frames:\t" + nFrames + "\tsize(MB)\t"
-                + ((double) nFrames * frameCapacity * 4 / 1048576) + "\tratio (C/D)\t" + ((double) nFrames / total)
-                + "\n");
-        buf.append("(D) # of total frames:\t" + total + "\tsize(MB)\t" + ((double) total * frameCapacity * 4 / 1048576)
-                + "\n");
+                + decFormat.format(((double) nFrames * frameCapacity * 4 / 1048576)) + "\tratio (C/D)\t"
+                + decFormat.format(((double) nFrames / total)) + "\n");
+        buf.append("(D) # of total frames:\t" + total + "\tsize(MB)\t"
+                + decFormat.format(((double) total * frameCapacity * 4 / 1048576)) + "\n");
         buf.append("(E) # of used header entries:\t" + headerSlotUsedCount + "\n");
         buf.append("(F) # of all possible header entries:\t" + headerSlotTotalCount + "\n");
         buf.append("(G) header entries used ratio (E/F):\t" + headerSlotUsedRatio + "\n");
-        buf.append("(H) used count histogram (used count, its frequency):" + "\n");
+        buf.append("(H) content - used count histogram (used count, its frequency):" + "\n");
         int totalContentUsedCount = 0;
         for (Map.Entry<Integer, Integer> entry : headerSlotUsedCountMap.entrySet()) {
             buf.append(entry.getKey() + "\t" + entry.getValue() + "\n");
@@ -528,14 +584,15 @@ public class SerializableHashTable extends SimpleSerializableHashTable {
         buf.append("(H-1) total used count in content frames:\t" + totalContentUsedCount + "\n");
 
         int totalContentCapaCount = 0;
-        buf.append("(I) capacity count histogram (capacity, its frequency):" + "\n");
+        buf.append("(I) content - capacity count histogram (capacity, its frequency):" + "\n");
         for (Map.Entry<Integer, Integer> entry : headerSlotCapaCountMap.entrySet()) {
             buf.append(entry.getKey() + "\t" + entry.getValue() + "\n");
             totalContentCapaCount += (entry.getKey() * entry.getValue());
         }
         buf.append("(I-1) total capacity in content frames:\t" + totalContentCapaCount + "\n");
         buf.append("(J) ratio of used count in content frames (H-1 / I-1):\t"
-                + ((double) totalContentUsedCount / totalContentCapaCount) + "\n");
+                + decFormat.format(((double) totalContentUsedCount / totalContentCapaCount)) + "\n");
+
         return buf.toString();
     }
 

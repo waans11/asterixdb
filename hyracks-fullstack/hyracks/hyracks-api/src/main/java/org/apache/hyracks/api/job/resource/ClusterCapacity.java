@@ -19,6 +19,7 @@
 
 package org.apache.hyracks.api.job.resource;
 
+import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -32,6 +33,10 @@ public class ClusterCapacity implements IClusterCapacity {
     private int aggregatedCores = 0;
     private final Map<String, Long> nodeMemoryMap = new HashMap<>();
     private final Map<String, Integer> nodeCoreMap = new HashMap<>();
+
+    // Temp :
+    private static final DecimalFormat decFormat = new DecimalFormat("#.######");
+    //
 
     @Override
     public long getAggregatedMemoryByteSize() {
@@ -118,6 +123,7 @@ public class ClusterCapacity implements IClusterCapacity {
 
     @Override
     public String toString() {
-        return "(memory: " + aggregatedMemoryByteSize + " bytes, CPU cores: " + aggregatedCores + ")";
+        return "(memory(MB): " + decFormat.format((double) aggregatedMemoryByteSize / 1048576) + " , "
+                + aggregatedMemoryByteSize + " bytes, CPU cores: " + aggregatedCores + ")";
     }
 }

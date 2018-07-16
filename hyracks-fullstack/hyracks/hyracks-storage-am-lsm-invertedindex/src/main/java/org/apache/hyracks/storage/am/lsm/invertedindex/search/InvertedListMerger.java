@@ -85,9 +85,9 @@ public class InvertedListMerger {
 
     public InvertedListMerger(IHyracksTaskContext ctx, IInvertedIndex invIndex, ISimpleFrameBufferManager bufferManager)
             throws HyracksDataException {
-        this.invListCmp = MultiComparator.create(invIndex.getInvListCmpFactories());
-        this.prevSearchResult = new InvertedIndexSearchResult(invIndex.getInvListTypeTraits(), ctx, bufferManager);
-        this.newSearchResult = new InvertedIndexSearchResult(invIndex.getInvListTypeTraits(), ctx, bufferManager);
+        invListCmp = MultiComparator.create(invIndex.getInvListCmpFactories());
+        prevSearchResult = new InvertedIndexSearchResult(invIndex.getInvListTypeTraits(), ctx, bufferManager);
+        newSearchResult = new InvertedIndexSearchResult(invIndex.getInvListTypeTraits(), ctx, bufferManager);
     }
 
     /**
@@ -165,7 +165,7 @@ public class InvertedListMerger {
             // Needs to return the calculation result for the final list only.
             // Otherwise, the process needs to be continued until this method traverses the final inverted list
             // and either generates some output in the output buffer or finishes traversing it.
-            if (isFinalList && doneMerge) {
+            if (isFinalList) {
                 return doneMerge;
             }
         }

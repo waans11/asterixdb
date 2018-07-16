@@ -33,8 +33,10 @@ public class ExternalIndexBulkLoadOperatorNodePushable extends IndexBulkLoadOper
             IHyracksTaskContext ctx, int partition, int[] fieldPermutation, float fillFactor, boolean verifyInput,
             long numElementsHint, boolean checkIfEmptyIndex, RecordDescriptor recDesc, int version)
             throws HyracksDataException {
+        // Temp :
         super(indexDataflowHelperFactory, ctx, partition, fieldPermutation, fillFactor, verifyInput, numElementsHint,
-                checkIfEmptyIndex, recDesc);
+                checkIfEmptyIndex, recDesc, false);
+        //
         this.version = version;
     }
 

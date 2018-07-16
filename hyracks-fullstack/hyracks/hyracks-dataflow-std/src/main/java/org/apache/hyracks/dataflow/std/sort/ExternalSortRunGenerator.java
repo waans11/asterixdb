@@ -30,6 +30,7 @@ import org.apache.hyracks.dataflow.std.buffermanager.EnumFreeSlotPolicy;
 
 public class ExternalSortRunGenerator extends AbstractExternalSortRunGenerator {
 
+    // Temp : analysis - called from test only
     public ExternalSortRunGenerator(IHyracksTaskContext ctx, int[] sortFields,
             INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDesc, Algorithm alg, int framesLimit) throws HyracksDataException {
@@ -37,6 +38,15 @@ public class ExternalSortRunGenerator extends AbstractExternalSortRunGenerator {
                 framesLimit);
     }
 
+    //    public ExternalSortRunGenerator(IHyracksTaskContext ctx, int[] sortFields,
+    //            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+    //            RecordDescriptor recordDesc, Algorithm alg, int framesLimit, boolean limitMemory)
+    //            throws HyracksDataException {
+    //        this(ctx, sortFields, keyNormalizerFactories, comparatorFactories, recordDesc, alg, EnumFreeSlotPolicy.LAST_FIT,
+    //                framesLimit, limitMemory);
+    //    }
+
+    // Temp: analysis - called from another constructor - that constructor is called from test.
     public ExternalSortRunGenerator(IHyracksTaskContext ctx, int[] sortFields,
             INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDesc, Algorithm alg, EnumFreeSlotPolicy policy, int framesLimit)
@@ -45,6 +55,16 @@ public class ExternalSortRunGenerator extends AbstractExternalSortRunGenerator {
                 Integer.MAX_VALUE);
     }
 
+    // Temp : no call???
+    public ExternalSortRunGenerator(IHyracksTaskContext ctx, int[] sortFields,
+            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDesc, Algorithm alg, EnumFreeSlotPolicy policy, int framesLimit, boolean limitMemory)
+            throws HyracksDataException {
+        this(ctx, sortFields, keyNormalizerFactories, comparatorFactories, recordDesc, alg, policy, framesLimit,
+                Integer.MAX_VALUE, limitMemory);
+    }
+
+    // Temp : analysis - called from test and another constructor - that constructor is called from test
     public ExternalSortRunGenerator(IHyracksTaskContext ctx, int[] sortFields,
             INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
             RecordDescriptor recordDesc, Algorithm alg, EnumFreeSlotPolicy policy, int framesLimit, int outputLimit)
@@ -52,6 +72,16 @@ public class ExternalSortRunGenerator extends AbstractExternalSortRunGenerator {
         super(ctx, sortFields, keyNormalizerFactories, comparatorFactories, recordDesc, alg, policy, framesLimit,
                 outputLimit);
     }
+
+    // Temp : this is the one
+    public ExternalSortRunGenerator(IHyracksTaskContext ctx, int[] sortFields,
+            INormalizedKeyComputerFactory[] keyNormalizerFactories, IBinaryComparatorFactory[] comparatorFactories,
+            RecordDescriptor recordDesc, Algorithm alg, EnumFreeSlotPolicy policy, int framesLimit, int outputLimit,
+            boolean limitMemory) throws HyracksDataException {
+        super(ctx, sortFields, keyNormalizerFactories, comparatorFactories, recordDesc, alg, policy, framesLimit,
+                outputLimit, limitMemory);
+    }
+    //
 
     @Override
     protected RunFileWriter getRunFileWriter() throws HyracksDataException {

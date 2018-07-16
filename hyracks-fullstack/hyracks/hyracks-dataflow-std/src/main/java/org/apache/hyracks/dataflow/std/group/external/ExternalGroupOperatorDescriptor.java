@@ -59,6 +59,11 @@ public class ExternalGroupOperatorDescriptor extends AbstractOperatorDescriptor 
     private final int tableSize;
     private final long fileSize;
 
+    // Temp :
+    private final boolean limitMemory;
+    private final boolean hashTableGarbageCollection;
+
+    // Original constructor - confirmed: called from test cases, tpch, and examples
     public ExternalGroupOperatorDescriptor(IOperatorDescriptorRegistry spec, int inputSizeInTuple, long inputFileSize,
             int[] keyFields, int framesLimit, IBinaryComparatorFactory[] comparatorFactories,
             INormalizedKeyComputerFactory firstNormalizerFactory, IAggregatorDescriptorFactory partialAggregatorFactory,
@@ -91,6 +96,46 @@ public class ExternalGroupOperatorDescriptor extends AbstractOperatorDescriptor 
         outRecDescs[0] = outRecordDesc;
         this.tableSize = inputSizeInTuple;
         this.fileSize = inputFileSize;
+        this.limitMemory = true;
+        this.hashTableGarbageCollection = true;
+    }
+
+    // Temp :
+    public ExternalGroupOperatorDescriptor(IOperatorDescriptorRegistry spec, int inputSizeInTuple, long inputFileSize,
+            int[] keyFields, int framesLimit, IBinaryComparatorFactory[] comparatorFactories,
+            INormalizedKeyComputerFactory firstNormalizerFactory, IAggregatorDescriptorFactory partialAggregatorFactory,
+            IAggregatorDescriptorFactory intermediateAggregateFactory, RecordDescriptor partialAggRecordDesc,
+            RecordDescriptor outRecordDesc, ISpillableTableFactory spillableTableFactory, boolean limitMemory,
+            boolean hashTableGarbageCollection) {
+        super(spec, 1, 1);
+        this.framesLimit = framesLimit;
+        if (framesLimit <= 3) {
+            /**
+             * Minimum of 4 frames: 1 for input records, 1 for output, and 2 for hash table (1 header and 1 content)
+             * aggregation results.
+             */
+            throw new IllegalStateException(
+                    "Frame limit for the External Group Operator should at least be 4, but it is " + framesLimit + "!");
+        }
+        this.partialAggregatorFactory = partialAggregatorFactory;
+        this.intermediateAggregateFactory = intermediateAggregateFactory;
+        this.keyFields = keyFields;
+        this.comparatorFactories = comparatorFactories;
+        this.firstNormalizerFactory = firstNormalizerFactory;
+        this.spillableTableFactory = spillableTableFactory;
+
+        this.partialRecDesc = partialAggRecordDesc;
+        this.outRecDesc = outRecordDesc;
+
+        /**
+         * Set the record descriptor. Note that since this operator is a unary
+         * operator, only the first record descriptor is used here.
+         */
+        outRecDescs[0] = outRecordDesc;
+        this.tableSize = inputSizeInTuple;
+        this.fileSize = inputFileSize;
+        this.limitMemory = limitMemory;
+        this.hashTableGarbageCollection = hashTableGarbageCollection;
     }
 
     /*
@@ -128,7 +173,7 @@ public class ExternalGroupOperatorDescriptor extends AbstractOperatorDescriptor 
             return new ExternalGroupBuildOperatorNodePushable(ctx, new TaskId(getActivityId(), partition), tableSize,
                     fileSize, keyFields, framesLimit, comparatorFactories, firstNormalizerFactory,
                     partialAggregatorFactory, recordDescProvider.getInputRecordDescriptor(getActivityId(), 0),
-                    outRecDescs[0], spillableTableFactory);
+                    outRecDescs[0], spillableTableFactory, limitMemory, hashTableGarbageCollection);
         }
     }
 
@@ -146,7 +191,7 @@ public class ExternalGroupOperatorDescriptor extends AbstractOperatorDescriptor 
             return new ExternalGroupWriteOperatorNodePushable(ctx,
                     new TaskId(new ActivityId(getOperatorId(), AGGREGATE_ACTIVITY_ID), partition),
                     spillableTableFactory, partialRecDesc, outRecDesc, framesLimit, keyFields, firstNormalizerFactory,
-                    comparatorFactories, intermediateAggregateFactory);
+                    comparatorFactories, intermediateAggregateFactory, limitMemory, hashTableGarbageCollection);
 
         }
 

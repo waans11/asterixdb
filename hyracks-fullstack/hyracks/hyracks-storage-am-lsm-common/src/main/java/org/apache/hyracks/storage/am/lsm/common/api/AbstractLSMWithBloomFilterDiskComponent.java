@@ -94,4 +94,18 @@ public abstract class AbstractLSMWithBloomFilterDiskComponent extends AbstractLS
         }
         return chainedBulkLoader;
     }
+
+    // Temp :
+    @Override
+    public ChainedLSMDiskComponentBulkLoader createBulkLoader(ILSMIOOperation operation, float fillFactor,
+            boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter,
+            boolean cleanupEmptyComponent, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
+        ChainedLSMDiskComponentBulkLoader chainedBulkLoader = super.createBulkLoader(operation, fillFactor, verifyInput,
+                numElementsHint, checkIfEmptyIndex, withFilter, cleanupEmptyComponent, printIndexEntryDuringBulkLoad);
+        if (numElementsHint > 0) {
+            chainedBulkLoader.addBulkLoader(createBloomFilterBulkLoader(numElementsHint));
+        }
+        return chainedBulkLoader;
+    }
+    //
 }

@@ -111,7 +111,7 @@ public class InsertStatement implements IReturningStatement {
     }
 
     public void setReturnExpression(Expression expr) {
-        this.returnExpression = expr;
+        returnExpression = expr;
     }
 
     @Override
@@ -155,6 +155,17 @@ public class InsertStatement implements IReturningStatement {
             return Category.UPDATE;
         }
         return Category.QUERY;
+    }
+
+    // Temp :
+    @Override
+    public String getOriginalQuery() {
+        return query.getOriginalQuery();
+    }
+
+    @Override
+    public void setOriginalQuery(String value) {
+        query.setOriginalQuery(value);
     }
 
 }

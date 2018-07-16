@@ -24,6 +24,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.hyracks.api.dataflow.ActivityId;
+import org.apache.hyracks.api.dataflow.IActivity;
+import org.apache.hyracks.api.dataflow.TaskId;
 import org.apache.hyracks.api.job.ActivityCluster;
 import org.apache.hyracks.api.partitions.PartitionId;
 
@@ -48,11 +51,11 @@ public class TaskCluster {
         this.taskClusterId = taskClusterId;
         this.ac = ac;
         this.tasks = tasks;
-        producedPartitions = new HashSet<PartitionId>();
-        requiredPartitions = new HashSet<PartitionId>();
-        dependencyTaskClusters = new HashSet<TaskCluster>();
-        dependentTaskClusters = new HashSet<TaskCluster>();
-        taskClusterAttempts = new ArrayList<TaskClusterAttempt>();
+        producedPartitions = new HashSet<>();
+        requiredPartitions = new HashSet<>();
+        dependencyTaskClusters = new HashSet<>();
+        dependentTaskClusters = new HashSet<>();
+        taskClusterAttempts = new ArrayList<>();
     }
 
     public TaskClusterId getTaskClusterId() {
@@ -89,6 +92,18 @@ public class TaskCluster {
 
     @Override
     public String toString() {
-        return "TC:" + Arrays.toString(tasks);
+        // Temp :
+        StringBuilder acStr = new StringBuilder();
+        for (int i = 0; i < tasks.length; i++) {
+            TaskId tid = tasks[i].getTaskId();
+            ActivityId aid = tid.getActivityId();
+            IActivity han = ac.getActivityMap().get(aid);
+            acStr.append(han + "\n");
+        }
+        //
+
+        return "TC:" + Arrays.toString(tasks) + "\tActivitiesMap:\t" + ac.getActivityMap().toString()
+                + "\tdependencies:\t" + ac.getDependencies();
+        //
     }
 }

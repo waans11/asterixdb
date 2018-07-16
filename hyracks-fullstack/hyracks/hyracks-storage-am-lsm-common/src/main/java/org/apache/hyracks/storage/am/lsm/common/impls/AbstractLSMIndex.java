@@ -500,6 +500,17 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
         return createBulkLoader(fillLevel, verifyInput, numElementsHint);
     }
 
+    // Temp :
+    @Override
+    public final IIndexBulkLoader createBulkLoader(float fillLevel, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
+        if (checkIfEmptyIndex && !isEmptyIndex()) {
+            throw HyracksDataException.create(ErrorCode.LOAD_NON_EMPTY_INDEX);
+        }
+        return createBulkLoader(printIndexEntryDuringBulkLoad, fillLevel, verifyInput, numElementsHint);
+    }
+    //
+
     public IIndexBulkLoader createBulkLoader(float fillLevel, boolean verifyInput, long numElementsHint)
             throws HyracksDataException {
         AbstractLSMIndexOperationContext opCtx = createOpContext(NoOpIndexAccessParameters.INSTANCE);
@@ -508,6 +519,18 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
         opCtx.setIoOperation(loadOp);
         return new LSMIndexDiskComponentBulkLoader(this, opCtx, fillLevel, verifyInput, numElementsHint);
     }
+
+    // Temp :
+    public IIndexBulkLoader createBulkLoader(boolean printIndexEntryDuringBulkLoad, float fillLevel,
+            boolean verifyInput, long numElementsHint) throws HyracksDataException {
+        AbstractLSMIndexOperationContext opCtx = createOpContext(NoOpIndexAccessParameters.INSTANCE);
+        LoadOperation loadOp = new LoadOperation(ioOpCallback, getIndexIdentifier());
+        ioOpCallback.scheduled(loadOp);
+        opCtx.setIoOperation(loadOp);
+        return new LSMIndexDiskComponentBulkLoader(this, opCtx, fillLevel, verifyInput, numElementsHint,
+                printIndexEntryDuringBulkLoad);
+    }
+    //
 
     @Override
     public ILSMDiskComponent createBulkLoadTarget() throws HyracksDataException {

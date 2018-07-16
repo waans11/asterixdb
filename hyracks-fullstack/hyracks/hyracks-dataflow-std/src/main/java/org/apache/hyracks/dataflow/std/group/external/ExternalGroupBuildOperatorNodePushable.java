@@ -33,6 +33,7 @@ import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePu
 import org.apache.hyracks.dataflow.std.group.IAggregatorDescriptorFactory;
 import org.apache.hyracks.dataflow.std.group.ISpillableTable;
 import org.apache.hyracks.dataflow.std.group.ISpillableTableFactory;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -57,6 +58,11 @@ public class ExternalGroupBuildOperatorNodePushable extends AbstractUnaryInputSi
     private ExternalGroupState state;
     private boolean isFailed = false;
 
+    // Temp :
+    private final boolean limitMemory;
+    private final boolean hashTableGarbageCollection;
+
+    // Original const - confirmed that it is only called from tests
     public ExternalGroupBuildOperatorNodePushable(IHyracksTaskContext ctx, Object stateId, int tableSize, long fileSize,
             int[] keyFields, int framesLimit, IBinaryComparatorFactory[] comparatorFactories,
             INormalizedKeyComputerFactory firstNormalizerFactory, IAggregatorDescriptorFactory aggregatorFactory,
@@ -78,6 +84,35 @@ public class ExternalGroupBuildOperatorNodePushable extends AbstractUnaryInputSi
         this.outRecordDescriptor = outRecordDescriptor;
         this.tableSize = tableSize;
         this.fileSize = fileSize;
+        this.limitMemory = true;
+        this.hashTableGarbageCollection = true;
+    }
+
+    // Temp :
+    public ExternalGroupBuildOperatorNodePushable(IHyracksTaskContext ctx, Object stateId, int tableSize, long fileSize,
+            int[] keyFields, int framesLimit, IBinaryComparatorFactory[] comparatorFactories,
+            INormalizedKeyComputerFactory firstNormalizerFactory, IAggregatorDescriptorFactory aggregatorFactory,
+            RecordDescriptor inRecordDescriptor, RecordDescriptor outRecordDescriptor,
+            ISpillableTableFactory spillableTableFactory, boolean limitMemory, boolean hashTableGarbageCollection) {
+        this.ctx = ctx;
+        this.stateId = stateId;
+        this.framesLimit = framesLimit;
+        this.aggregatorFactory = aggregatorFactory;
+        this.keyFields = keyFields;
+        this.comparators = new IBinaryComparator[comparatorFactories.length];
+        for (int i = 0; i < comparatorFactories.length; ++i) {
+            comparators[i] = comparatorFactories[i].createBinaryComparator();
+        }
+        this.firstNormalizerComputer =
+                firstNormalizerFactory == null ? null : firstNormalizerFactory.createNormalizedKeyComputer();
+        this.spillableTableFactory = spillableTableFactory;
+        this.inRecordDescriptor = inRecordDescriptor;
+        this.outRecordDescriptor = outRecordDescriptor;
+        this.tableSize = tableSize;
+        this.fileSize = fileSize;
+        // Temp :
+        this.limitMemory = limitMemory;
+        this.hashTableGarbageCollection = hashTableGarbageCollection;
     }
 
     @Override
@@ -85,13 +120,18 @@ public class ExternalGroupBuildOperatorNodePushable extends AbstractUnaryInputSi
         state = new ExternalGroupState(ctx.getJobletContext().getJobId(), stateId);
         ISpillableTable table = spillableTableFactory.buildSpillableTable(ctx, tableSize, fileSize, keyFields,
                 comparators, firstNormalizerComputer, aggregatorFactory, inRecordDescriptor, outRecordDescriptor,
-                framesLimit, 0);
+                framesLimit, 0, limitMemory, hashTableGarbageCollection);
         RunFileWriter[] runFileWriters = new RunFileWriter[table.getNumPartitions()];
         this.externalGroupBy = new ExternalHashGroupBy(this, table, runFileWriters, inRecordDescriptor);
 
         state.setSpillableTable(table);
         state.setRuns(runFileWriters);
         state.setSpilledNumTuples(externalGroupBy.getSpilledNumTuples());
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "open" + "\thash table cardinality:\t" + tableSize
+                + "\tfileSize:\t" + fileSize);
+        //
+
     }
 
     @Override
@@ -123,6 +163,13 @@ public class ExternalGroupBuildOperatorNodePushable extends AbstractUnaryInputSi
                         numOfSpilledPart++;
                     }
                 }
+                // Temp :
+                String result = state.getSpillableTable().printInfo();
+                LOGGER.log(Level.INFO,
+                        this.hashCode() + "\t" + "close" + "\thash table cardinality:\t" + tableSize + "\tfileSize:\t"
+                                + fileSize + "\tnumOfPartition:\t" + numOfPartition + "\t#spilled:\t" + numOfSpilledPart
+                                + "\n" + result);
+                //                
                 LOGGER.debug("level 0:" + "build with " + numOfPartition + " partitions" + ", spilled "
                         + numOfSpilledPart + " partitions");
             }

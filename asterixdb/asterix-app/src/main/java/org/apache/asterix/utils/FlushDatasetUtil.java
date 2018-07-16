@@ -20,6 +20,7 @@
 package org.apache.asterix.utils;
 
 import org.apache.asterix.common.config.CompilerProperties;
+import org.apache.asterix.common.config.OptimizationConfUtil;
 import org.apache.asterix.common.transactions.TxnId;
 import org.apache.asterix.common.utils.JobUtils;
 import org.apache.asterix.metadata.declared.MetadataProvider;
@@ -54,6 +55,11 @@ public class FlushDatasetUtil {
         CompilerProperties compilerProperties = metadataProvider.getApplicationContext().getCompilerProperties();
         int frameSize = compilerProperties.getFrameSize();
         JobSpecification spec = new JobSpecification(frameSize);
+        // Temp :
+        spec.setLimitQueryExecution(OptimizationConfUtil.getPhysicalOptimizationConfig().getLimitQueryExecution());
+        spec.setPrintIndexEntryDuringBulkLoad(
+                OptimizationConfUtil.getPhysicalOptimizationConfig().getPrintIndexEntryDuringBulkLoad());
+        //
 
         RecordDescriptor[] rDescs = new RecordDescriptor[] { new RecordDescriptor(new ISerializerDeserializer[] {}) };
         AlgebricksMetaOperatorDescriptor emptySource = new AlgebricksMetaOperatorDescriptor(spec, 0, 1,

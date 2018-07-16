@@ -29,9 +29,16 @@ public class PhysicalOptimizationConfig {
     private static final String MAX_FRAMES_FOR_JOIN_LEFT_INPUT = "MAX_FRAMES_FOR_JOIN_LEFT_INPUT";
     private static final String MAX_FRAMES_FOR_JOIN = "MAX_FRAMES_FOR_JOIN";
     private static final String MAX_FRAMES_FOR_TEXTSEARCH = "MAX_FRAMES_FOR_TEXTSEARCH";
+    private static final String LIMIT_SORTMEMORY = "LIMIT_SORTMEMORY";
+    private static final String LIMIT_HASHJOINMEMORY = "LIMIT_HASHJOINMEMORY";
+    private static final String LIMIT_HASHGROUPMEMORY = "LIMIT_HASHGROUPMEMORY";
+    private static final String HASHTABLE_GARBAGECOLLECTION = "HASHTABLE_GARBAGECOLLECTION";
+    private static final String LIMIT_TEXTSEARCHMEMORY = "LIMIT_TEXTSEARCHMEMORY";
+    private static final String LIMIT_QUERYEXECUTION = "LIMIT_QUERYEXECUTION";
+    private static final String CONSERVATIVE_LIMIT_QUERYEXECUTION = "CONSERVATIVE_LIMIT_QUERYEXECUTION";
     private static final String FUDGE_FACTOR = "FUDGE_FACTOR";
     private static final String MAX_RECORDS_PER_FRAME = "MAX_RECORDS_PER_FRAME";
-
+    private static final String PRINT_INDEXENTRYDURINGBULKLOAD = "PRINT_INDEXENTRYDURINGBULKLOAD";
     private static final String DEFAULT_HASH_GROUP_TABLE_SIZE = "DEFAULT_HASH_GROUP_TABLE_SIZE";
     private static final String DEFAULT_EXTERNAL_GROUP_TABLE_SIZE = "DEFAULT_EXTERNAL_GROUP_TABLE_SIZE";
     private static final String DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE = "DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE";
@@ -48,6 +55,14 @@ public class PhysicalOptimizationConfig {
         setInt(DEFAULT_HASH_GROUP_TABLE_SIZE, 10485767);
         setInt(DEFAULT_EXTERNAL_GROUP_TABLE_SIZE, 10485767);
         setInt(DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE, 10485767);
+        setBoolean(LIMIT_SORTMEMORY, true);
+        setBoolean(LIMIT_HASHJOINMEMORY, true);
+        setBoolean(LIMIT_HASHGROUPMEMORY, true);
+        setBoolean(HASHTABLE_GARBAGECOLLECTION, true);
+        setBoolean(LIMIT_TEXTSEARCHMEMORY, true);
+        setBoolean(LIMIT_QUERYEXECUTION, true);
+        setBoolean(CONSERVATIVE_LIMIT_QUERYEXECUTION, false);
+        setBoolean(PRINT_INDEXENTRYDURINGBULKLOAD, false);
     }
 
     public int getFrameSize() {
@@ -143,6 +158,71 @@ public class PhysicalOptimizationConfig {
         setInt(DEFAULT_IN_MEM_HASH_JOIN_TABLE_SIZE, tableSize);
     }
 
+    // Temp :
+    public boolean getLimitSortMemory() {
+        return getBoolean(LIMIT_SORTMEMORY, true);
+    }
+
+    public void setLimitSortMemory(boolean value) {
+        setBoolean(LIMIT_SORTMEMORY, value);
+    }
+
+    public boolean getLimitHashJoinMemory() {
+        return getBoolean(LIMIT_HASHJOINMEMORY, true);
+    }
+
+    public void setLimitHashJoinMemory(boolean value) {
+        setBoolean(LIMIT_HASHJOINMEMORY, value);
+    }
+
+    public boolean getLimitHashGroupMemory() {
+        return getBoolean(LIMIT_HASHGROUPMEMORY, true);
+    }
+
+    public void setLimitHashGroupMemory(boolean value) {
+        setBoolean(LIMIT_HASHGROUPMEMORY, value);
+    }
+
+    public boolean getLimitTextSearchMemory() {
+        return getBoolean(LIMIT_TEXTSEARCHMEMORY, true);
+    }
+
+    public void setLimitTextSearchMemory(boolean value) {
+        setBoolean(LIMIT_TEXTSEARCHMEMORY, value);
+    }
+
+    public boolean getLimitQueryExecution() {
+        return getBoolean(LIMIT_QUERYEXECUTION, true);
+    }
+
+    public void setLimitQueryExecution(boolean value) {
+        setBoolean(LIMIT_QUERYEXECUTION, value);
+    }
+
+    public boolean getConservativeLimitQueryExecution() {
+        return getBoolean(CONSERVATIVE_LIMIT_QUERYEXECUTION, false);
+    }
+
+    public void setConservativeLimitQueryExecution(boolean value) {
+        setBoolean(CONSERVATIVE_LIMIT_QUERYEXECUTION, value);
+    }
+
+    public boolean getHashTableGarbageCollection() {
+        return getBoolean(HASHTABLE_GARBAGECOLLECTION, true);
+    }
+
+    public void setHashTableGarbageCollection(boolean value) {
+        setBoolean(HASHTABLE_GARBAGECOLLECTION, value);
+    }
+
+    public boolean getPrintIndexEntryDuringBulkLoad() {
+        return getBoolean(PRINT_INDEXENTRYDURINGBULKLOAD, false);
+    }
+
+    public void setPrintIndexEntryDuringBulkLoad(boolean value) {
+        setBoolean(PRINT_INDEXENTRYDURINGBULKLOAD, value);
+    }
+
     private void setInt(String property, int value) {
         properties.setProperty(property, Integer.toString(value));
     }
@@ -165,6 +245,18 @@ public class PhysicalOptimizationConfig {
             return defaultValue;
         else
             return Double.parseDouble(value);
+    }
+
+    private void setBoolean(String property, boolean value) {
+        properties.setProperty(property, Boolean.toString(value));
+    }
+
+    private boolean getBoolean(String property, boolean defaultValue) {
+        String value = properties.getProperty(property);
+        if (value == null)
+            return defaultValue;
+        else
+            return Boolean.parseBoolean(value);
     }
 
 }

@@ -145,6 +145,15 @@ public class EmptyComponent implements ILSMDiskComponent {
         return null;
     }
 
+    // Temp :
+    @Override
+    public IChainedComponentBulkLoader createIndexBulkLoader(float fillFactor, boolean verifyInput,
+            long numElementsHint, boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad)
+            throws HyracksDataException {
+        return null;
+    }
+    //
+
     @Override
     public ChainedLSMDiskComponentBulkLoader createBulkLoader(ILSMIOOperation operation, float fillFactor,
             boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter,
@@ -152,8 +161,18 @@ public class EmptyComponent implements ILSMDiskComponent {
         return null;
     }
 
+    // Temp :
+    @Override
+    public ChainedLSMDiskComponentBulkLoader createBulkLoader(ILSMIOOperation operation, float fillFactor,
+            boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter,
+            boolean cleanupEmptyComponent, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException {
+        return null;
+    }
+    //
+
     @Override
     public void schedule(LSMIOOperationType ioOperationType) throws HyracksDataException {
         // Do nothing
     }
+
 }

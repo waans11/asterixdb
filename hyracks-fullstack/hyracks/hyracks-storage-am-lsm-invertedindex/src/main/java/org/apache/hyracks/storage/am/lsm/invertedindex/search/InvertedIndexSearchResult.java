@@ -20,6 +20,7 @@
 package org.apache.hyracks.storage.am.lsm.invertedindex.search;
 
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.ListIterator;
@@ -39,12 +40,20 @@ import org.apache.hyracks.dataflow.std.buffermanager.ISimpleFrameBufferManager;
 import org.apache.hyracks.storage.am.lsm.invertedindex.ondisk.FixedSizeFrameTupleAccessor;
 import org.apache.hyracks.storage.am.lsm.invertedindex.ondisk.FixedSizeFrameTupleAppender;
 import org.apache.hyracks.storage.am.lsm.invertedindex.ondisk.FixedSizeTupleReference;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Disk-based or in-memory based storage for intermediate and final results of inverted-index
  * searches. One frame is dedicated to I/O operation for disk operation mode.
  */
 public class InvertedIndexSearchResult {
+    // Temp :
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final DecimalFormat DECFORMAT = new DecimalFormat("#.######");
+    //
+
     // The size of count field for each element. Currently, we use an integer value.
     protected static final int ELEMENT_COUNT_SIZE = 4;
     // I/O buffer's index in the buffers
@@ -84,16 +93,16 @@ public class InvertedIndexSearchResult {
         accessor = new FixedSizeFrameTupleAccessor(ctx.getInitialFrameSize(), typeTraits);
         tuple = new FixedSizeTupleReference(typeTraits);
         this.bufferManager = bufferManager;
-        this.isInReadMode = false;
-        this.isWriteFinished = false;
-        this.isInMemoryOpMode = false;
-        this.isFileOpened = false;
-        this.ioBufferFrame = null;
-        this.ioBuffer = null;
-        this.buffers = null;
-        this.currentWriterBufIdx = 0;
-        this.currentReaderBufIdx = 0;
-        this.numResults = 0;
+        isInReadMode = false;
+        isWriteFinished = false;
+        isInMemoryOpMode = false;
+        isFileOpened = false;
+        ioBufferFrame = null;
+        ioBuffer = null;
+        buffers = null;
+        currentWriterBufIdx = 0;
+        currentReaderBufIdx = 0;
+        numResults = 0;
         calculateNumElementPerPage();
         // Allocates one frame for read/write operation.
         prepareIOBuffer();
@@ -131,6 +140,15 @@ public class InvertedIndexSearchResult {
         if (!isInMemoryOpMode) {
             // Not enough number of buffers. Switch to the file I/O mode.
             createAndOpenFile();
+            // Temp :
+            LOGGER.log(Level.INFO, this.hashCode() + "\tprepareWrite\t" + "Disk I/O mode is initiated."
+                    + "\tnumExpectedPages:\t" + numExpectedPages);
+            //
+        } else {
+            // Temp :
+            LOGGER.log(Level.INFO, this.hashCode() + "\tprepareWrite\t" + "In-memory I/O mode is initiated."
+                    + "\tnumExpectedPages:\t" + numExpectedPages);
+            //
         }
         appender.reset(ioBuffer);
         isWriteFinished = false;
@@ -180,6 +198,22 @@ public class InvertedIndexSearchResult {
         if (!isInMemoryOpMode && searchResultWriter != null) {
             searchResultWriter.nextFrame(ioBuffer);
             searchResultWriter.close();
+            // Temp :
+            LOGGER.log(Level.INFO,
+                    this.hashCode() + "\tfinalizeWrite\t" + "Disk I/O mode - file write is finished.\t" + "file:\t"
+                            + searchResultWriter.getFileReference().getFile().getName() + "\tsize(MB):\t"
+                            + DECFORMAT.format(((double) searchResultWriter.getFileSize()) / 1048576)
+                            + "\tnumResults:\t" + numResults);
+            //
+        } else {
+            // Temp :
+            LOGGER.log(Level.INFO,
+                    this.hashCode() + "\tfinalizeWrite\t" + "In-memory I/O mode - write is finished.\t#buffers:\t"
+                            + (currentWriterBufIdx + 1) + "\tsize(MB):\t"
+                            + DECFORMAT
+                                    .format((double) ((currentWriterBufIdx + 1) * ctx.getInitialFrameSize()) / 1048576)
+                            + "\tnumResults:\t" + numResults);
+            //
         }
         isWriteFinished = true;
     }
@@ -199,6 +233,18 @@ public class InvertedIndexSearchResult {
             searchResultReader = searchResultWriter.createDeleteOnCloseReader();
             searchResultReader.open();
             searchResultReader.setDeleteAfterClose(true);
+            // Temp :
+            LOGGER.log(Level.INFO,
+                    this.hashCode() + "\tprepareResultRead\t" + "DISK I/O mode - file read initiated.\t" + "file:\t"
+                            + searchResultWriter.getFileReference().getFile().getName() + "\tsize(MB):\t"
+                            + DECFORMAT.format(((double) searchResultReader.getFileSize()) / 1048576));
+            //
+        } else {
+            LOGGER.log(Level.INFO,
+                    this.hashCode() + "\tprepareResultRead\t" + "In-memory I/O mode - read initiated.\t#buffers:\t"
+                            + (currentWriterBufIdx + 1) + "\tsize(MB):\t"
+                            + DECFORMAT.format(((double) (currentWriterBufIdx + 1)) * ctx.getInitialFrameSize()));
+
         }
         currentReaderBufIdx = 0;
         isInReadMode = true;
@@ -225,9 +271,17 @@ public class InvertedIndexSearchResult {
      */
     public void closeResultRead(boolean deallocateIOBufferNeeded) throws HyracksDataException {
         if (isInMemoryOpMode) {
+            LOGGER.log(Level.INFO,
+                    this.hashCode() + "\tcloseResultRead\t" + "In-memory I/O mode - read finished.\t#buffers:\t"
+                            + (currentReaderBufIdx) + "\tsize(MB):\t"
+                            + DECFORMAT.format(((double) (currentReaderBufIdx)) * ctx.getInitialFrameSize()));
             // In-memory mode? Releases all buffers for an intermediate search result.
             deallocateBuffers();
         } else if (searchResultReader != null) {
+            LOGGER.log(Level.INFO,
+                    this.hashCode() + "\tcloseResultRead\t" + "DISK I/O mode - file read finished.\t" + "file:\t"
+                            + searchResultWriter.getFileReference().getFile().getName() + "\tsize(MB):\t"
+                            + DECFORMAT.format(((double) searchResultReader.getFileSize()) / 1048576));
             // Disk mode? Closes the file handle (this should delete the file also.)
             searchResultReader.close();
         }
@@ -267,6 +321,9 @@ public class InvertedIndexSearchResult {
     }
 
     public void reset() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\treset" + "\tnumResults:\t" + numResults);
+        //
         // Removes the file if it was in the disk op mode.
         if (searchResultReader != null) {
             searchResultReader.close();
@@ -306,12 +363,20 @@ public class InvertedIndexSearchResult {
         frameSize = frameSize - FixedSizeFrameTupleAppender.MINFRAME_COUNT_SIZE
                 - FixedSizeFrameTupleAppender.TUPLE_COUNT_SIZE;
         numPossibleElementPerPage = (int) Math.floor((double) frameSize / (invListElementSize + ELEMENT_COUNT_SIZE));
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tcalculateNumElementPerPage\t" + "numPossibleElementPerPage:\t"
+                + numPossibleElementPerPage);
+        //
     }
 
     /**
-     * Allocates the buffer for read/write operation and initializes the buffers array that will be used keep a result.
+     * Allocates the buffer for read/write operation and initializes the buffers array that will be used to keep a result.
      */
     protected void prepareIOBuffer() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tprepareIOBuffer\t" + "allocate or clear I/O buffer");
+        //
+
         if (ioBufferFrame != null) {
             clearBuffer(ioBuffer);
         } else {
@@ -325,7 +390,7 @@ public class InvertedIndexSearchResult {
             }
             clearBuffer(ioBuffer);
             // For keeping the results in memory if possible.
-            buffers = new ArrayList<ByteBuffer>();
+            buffers = new ArrayList<>();
             buffers.add(ioBuffer);
         }
     }
@@ -334,6 +399,10 @@ public class InvertedIndexSearchResult {
      * Tries to allocate buffers to accommodate the results in memory.
      */
     protected boolean tryAllocateBuffers(int numExpectedPages) throws HyracksDataException {
+        // Temp :
+        int count = 0;
+        int bytes = 0;
+        //
         boolean allBufferAllocated = true;
         while (buffers.size() < numExpectedPages) {
             ByteBuffer tmpBuffer = bufferManager.acquireFrame(ctx.getInitialFrameSize());
@@ -345,7 +414,18 @@ public class InvertedIndexSearchResult {
                 clearBuffer(tmpBuffer);
             }
             buffers.add(tmpBuffer);
+            // Temp :
+            count++;
+            bytes += tmpBuffer.capacity();
+            //
         }
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tryAllocateBuffers\t" + "\tresult:\t" + allBufferAllocated
+                + "\tnumExpectedPages:\t" + numExpectedPages + "#newly_allocated_buffers:\t" + count + "\tsize(MB)\t"
+                + DECFORMAT.format((((double) bytes) / 1048576)) + "\ttotal_count\t" + buffers.size() + "\tsize(MB)\t"
+                + DECFORMAT.format((((double) ctx.getInitialFrameSize() * buffers.size()) / 1048576)));
+        //
+
         return allBufferAllocated;
     }
 
@@ -365,6 +445,9 @@ public class InvertedIndexSearchResult {
 
     // Deallocates the I/O buffer (one frame). This should be the last oepration.
     protected void deallocateIOBuffer() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tdeallocateIOBuffer\t" + "Deallocate I/O buffer");
+        //
         if (ioBufferFrame != null) {
             bufferManager.releaseFrame(ioBuffer);
             buffers.clear();
@@ -377,6 +460,11 @@ public class InvertedIndexSearchResult {
      * Deallocates the buffers. We do not remove the first buffer since it can be used as an I/O buffer.
      */
     protected void deallocateBuffers() throws HyracksDataException {
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\tdeallocateBuffers\t" + "# buffers:\t" + buffers.size() + "\tsize:\t"
+                + DECFORMAT.format((((double) ctx.getInitialFrameSize()) * buffers.size() / 1048576)));
+        //
+
         int toDeleteCount = buffers.size() - 1;
         int deletedCount = 0;
         for (ListIterator<ByteBuffer> iter = buffers.listIterator(buffers.size()); iter.hasPrevious();) {

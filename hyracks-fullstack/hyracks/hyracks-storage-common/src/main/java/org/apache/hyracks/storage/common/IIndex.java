@@ -139,6 +139,10 @@ public interface IIndex {
     public IIndexBulkLoader createBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
             boolean checkIfEmptyIndex) throws HyracksDataException;
 
+    // Temp :
+    public IIndexBulkLoader createBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, boolean printIndexEntryDuringBulkLoad) throws HyracksDataException;
+
     /**
      * TODO: This should be moved to ILSMIndex since filters don't make sense in non LSM context
      *

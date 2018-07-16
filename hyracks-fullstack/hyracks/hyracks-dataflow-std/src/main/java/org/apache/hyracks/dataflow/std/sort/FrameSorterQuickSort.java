@@ -43,6 +43,16 @@ public class FrameSorterQuickSort extends AbstractFrameSorter {
                 recordDescriptor, outputLimit);
     }
 
+    // Temp :
+    public FrameSorterQuickSort(IHyracksTaskContext ctx, IFrameBufferManager bufferManager, int maxSortFrames,
+            int[] sortFields, INormalizedKeyComputerFactory[] keyNormalizerFactories,
+            IBinaryComparatorFactory[] comparatorFactories, RecordDescriptor recordDescriptor, int outputLimit,
+            boolean limitMemory) throws HyracksDataException {
+        super(ctx, bufferManager, maxSortFrames, sortFields, keyNormalizerFactories, comparatorFactories,
+                recordDescriptor, outputLimit, limitMemory);
+    }
+    //
+
     @Override
     void sortTupleReferences() throws HyracksDataException {
         sort(0, tupleCount);

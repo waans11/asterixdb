@@ -156,8 +156,8 @@ public class RequiredCapacityVisitorTest {
 
     private RequiredCapacityVisitor makeComputationCapacityVisitor(int numComputationPartitions,
             IClusterCapacity clusterCapacity) {
-        return new RequiredCapacityVisitor(numComputationPartitions, FRAME_LIMIT, FRAME_LIMIT, FRAME_LIMIT, FRAME_SIZE,
-                clusterCapacity);
+        return new RequiredCapacityVisitor(numComputationPartitions, FRAME_LIMIT, FRAME_LIMIT, FRAME_LIMIT, FRAME_LIMIT,
+                FRAME_SIZE, clusterCapacity);
     }
 
     private GroupByOperator makeGroupByOperator(AbstractLogicalOperator.ExecutionMode exeMode) {

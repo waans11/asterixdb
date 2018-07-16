@@ -54,11 +54,13 @@ import org.apache.asterix.app.result.ResultHandle;
 import org.apache.asterix.app.result.ResultReader;
 import org.apache.asterix.common.api.IMetadataLockManager;
 import org.apache.asterix.common.cluster.IClusterStateManager;
+import org.apache.asterix.common.config.CompilerProperties;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.ExternalFilePendingOp;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.config.DatasetConfig.TransactionState;
 import org.apache.asterix.common.config.GlobalConfig;
+import org.apache.asterix.common.config.OptimizationConfUtil;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.exceptions.AsterixException;
@@ -177,6 +179,7 @@ import org.apache.commons.lang3.tuple.Triple;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
+import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import org.apache.hyracks.algebricks.data.IAWriterFactory;
 import org.apache.hyracks.algebricks.data.IResultSerializerFactoryProvider;
 import org.apache.hyracks.algebricks.runtime.serializer.ResultSerializerFactoryProvider;
@@ -226,22 +229,29 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
     protected final EnumSet<JobFlag> jobFlags = EnumSet.noneOf(JobFlag.class);
     protected final IMetadataLockManager lockManager;
 
+    // Temp :
+    protected final String originalQuery;
+    //
+
+    // Temp :
     public QueryTranslator(ICcApplicationContext appCtx, List<Statement> statements, SessionOutput output,
-            ILangCompilationProvider compliationProvider, ExecutorService executorService) {
+            ILangCompilationProvider compliationProvider, ExecutorService executorService, String originalQuery) {
         this.appCtx = appCtx;
-        this.lockManager = appCtx.getMetadataLockManager();
+        lockManager = appCtx.getMetadataLockManager();
         this.statements = statements;
-        this.sessionOutput = output;
-        this.sessionConfig = output.config();
+        sessionOutput = output;
+        sessionConfig = output.config();
         declaredFunctions = getDeclaredFunctions(statements);
         apiFramework = new APIFramework(compliationProvider);
         rewriterFactory = compliationProvider.getRewriterFactory();
         activeDataverse = MetadataBuiltinEntities.DEFAULT_DATAVERSE;
         this.executorService = executorService;
         if (appCtx.getServiceContext().getAppConfig().getBoolean(CCConfig.Option.ENFORCE_FRAME_WRITER_PROTOCOL)) {
-            this.jobFlags.add(JobFlag.ENFORCE_CONTRACT);
+            jobFlags.add(JobFlag.ENFORCE_CONTRACT);
         }
+        this.originalQuery = originalQuery;
     }
+    //
 
     public SessionOutput getSessionOutput() {
         return sessionOutput;
@@ -1014,6 +1024,17 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             bActiveTxn = true;
             metadataProvider.setMetadataTxnContext(mdTxnCtx);
 
+            // Temp : sets the parameter - whether to print the entry during the index bulkload or not.
+            Map<String, String> querySpecificConfig = APIFramework.validateConfig(metadataProvider.getConfig());
+            CompilerProperties compilerProperties = metadataProvider.getApplicationContext().getCompilerProperties();
+            boolean printIndexEntryDuringBulkLoad =
+                    APIFramework.getBooleanOption(CompilerProperties.COMPILER_PRINTINDEXENTRYDURINGBULKLOAD_KEY,
+                            querySpecificConfig.get(CompilerProperties.COMPILER_PRINTINDEXENTRYDURINGBULKLOAD_KEY),
+                            compilerProperties.getPrintIndexEntryDuringBulkLoad());
+            final PhysicalOptimizationConfig physOptConf = OptimizationConfUtil.getPhysicalOptimizationConfig();
+            physOptConf.setPrintIndexEntryDuringBulkLoad(printIndexEntryDuringBulkLoad);
+            //
+
             // #. load data into the index in NC.
             spec = IndexUtil.buildSecondaryIndexLoadingJobSpec(ds, index, metadataProvider);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -1684,7 +1705,9 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
             //Check whether the function is use-able
             metadataProvider.setDefaultDataverse(dv);
-            Query wrappedQuery = new Query(false);
+            // Temp :
+            Query wrappedQuery = new Query(false, originalQuery);
+            //
             wrappedQuery.setBody(cfs.getFunctionBodyExpression());
             wrappedQuery.setTopLevel(false);
             List<VarIdentifier> varIds = new ArrayList<>();
@@ -2373,7 +2396,13 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             boolean bActiveTxn = true;
             metadataProvider.setMetadataTxnContext(mdTxnCtx);
             try {
+                // Temp :
+                query.setOriginalQuery(originalQuery);
+                //
                 final JobSpecification jobSpec = rewriteCompileQuery(hcc, metadataProvider, query, null);
+                // Temp :
+                jobSpec.setOriginalQuery(originalQuery);
+                //
                 afterCompile();
                 MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                 bActiveTxn = false;

@@ -19,9 +19,9 @@
 
 package org.apache.asterix.lang.common.base;
 
-import org.apache.asterix.lang.common.struct.VarIdentifier;
-
 import java.util.List;
+
+import org.apache.asterix.lang.common.struct.VarIdentifier;
 
 /**
  * Interface for statements that can return tuples to users,
@@ -78,4 +78,9 @@ public interface IReturningStatement extends Statement {
      * @param externalVars external variables
      */
     void setExternalVars(List<VarIdentifier> externalVars);
+
+    // Temp : returns the original query string
+    String getOriginalQuery();
+
+    void setOriginalQuery(String value);
 }

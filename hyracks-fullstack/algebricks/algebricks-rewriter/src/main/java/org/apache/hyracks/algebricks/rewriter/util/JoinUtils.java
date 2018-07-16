@@ -98,7 +98,9 @@ public class JoinUtils {
                 context.getPhysicalOptimizationConfig().getMaxFramesForJoin(),
                 context.getPhysicalOptimizationConfig().getMaxFramesForJoinLeftInput(),
                 context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(),
-                context.getPhysicalOptimizationConfig().getFudgeFactor()));
+                context.getPhysicalOptimizationConfig().getFudgeFactor(),
+                context.getPhysicalOptimizationConfig().getLimitHashJoinMemory(),
+                context.getPhysicalOptimizationConfig().getHashTableGarbageCollection()));
         if (partitioningType == JoinPartitioningType.BROADCAST) {
             hybridToInMemHashJoin(op, context);
         }

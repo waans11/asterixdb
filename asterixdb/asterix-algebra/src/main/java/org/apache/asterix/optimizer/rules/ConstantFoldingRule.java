@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.common.config.GlobalConfig;
+import org.apache.asterix.common.config.OptimizationConfUtil;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.dataflow.data.common.ExpressionTypeComputer;
 import org.apache.asterix.dataflow.data.nontagged.MissingWriterFactory;
@@ -142,7 +143,9 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
                 BinaryComparatorFactoryProvider.INSTANCE, TypeTraitProvider.INSTANCE, BinaryBooleanInspector.FACTORY,
                 BinaryIntegerInspector.FACTORY, ADMPrinterFactoryProvider.INSTANCE, MissingWriterFactory.INSTANCE, null,
                 new ExpressionRuntimeProvider(new QueryLogicalExpressionJobGen(metadataProvider.getFunctionManager())),
-                ExpressionTypeComputer.INSTANCE, null, null, null, null, GlobalConfig.DEFAULT_FRAME_SIZE, null);
+                ExpressionTypeComputer.INSTANCE, null, null, null, null, GlobalConfig.DEFAULT_FRAME_SIZE, null,
+                OptimizationConfUtil.getPhysicalOptimizationConfig().getLimitQueryExecution(),
+                OptimizationConfUtil.getPhysicalOptimizationConfig().getPrintIndexEntryDuringBulkLoad());
     }
 
     @Override

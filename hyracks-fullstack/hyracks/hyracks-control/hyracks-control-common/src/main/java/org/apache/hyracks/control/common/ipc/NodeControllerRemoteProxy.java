@@ -62,15 +62,26 @@ public class NodeControllerRemoteProxy implements INodeController {
         this.ipcHandle = ipcHandle;
     }
 
+    //    private static final Logger LOGGER = LogManager.getLogger();
+
+    // Temp :
     @Override
     public void startTasks(DeploymentId deploymentId, JobId jobId, byte[] planBytes,
             List<TaskAttemptDescriptor> taskDescriptors, Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies,
             Set<JobFlag> flags, Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId,
-            long jobStartTime) throws Exception {
+            long jobStartTime, String originalQuery) throws Exception {
         StartTasksFunction stf = new StartTasksFunction(deploymentId, jobId, planBytes, taskDescriptors,
-                connectorPolicies, flags, jobParameters, deployedJobSpecId, jobStartTime);
+                connectorPolicies, flags, jobParameters, deployedJobSpecId, jobStartTime, originalQuery);
+
+        //        if (originalQuery.length() > 0) {
+        //            System.out.println("NodeControllerRemoteProxy::startTasks - originalQuery:\n" + originalQuery);
+        //        }
+        //        // Temp :
+        //        LOGGER.info(originalQuery);
+        //        //
         ipcHandle.send(-1, stf, null);
     }
+    //
 
     @Override
     public void abortTasks(JobId jobId, List<TaskAttemptId> tasks) throws Exception {

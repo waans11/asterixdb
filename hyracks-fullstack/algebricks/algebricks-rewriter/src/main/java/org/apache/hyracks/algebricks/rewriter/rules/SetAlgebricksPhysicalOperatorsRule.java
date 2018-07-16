@@ -175,7 +175,9 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                                     ExternalGroupByPOperator externalGby = new ExternalGroupByPOperator(
                                             gby.getGroupByList(), physicalOptimizationConfig.getMaxFramesForGroupBy(),
                                             (long) physicalOptimizationConfig.getMaxFramesForGroupBy()
-                                                    * physicalOptimizationConfig.getFrameSize());
+                                                    * physicalOptimizationConfig.getFrameSize(),
+                                            physicalOptimizationConfig.getLimitHashGroupMemory(),
+                                            physicalOptimizationConfig.getHashTableGarbageCollection());
                                     op.setPhysicalOperator(externalGby);
                                     break;
                                 }
@@ -225,8 +227,9 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                         }
                     }
                     if (topLevelOp) {
-                        op.setPhysicalOperator(new StableSortPOperator(
-                                physicalOptimizationConfig.getMaxFramesExternalSort(), oo.getTopK()));
+                        op.setPhysicalOperator(
+                                new StableSortPOperator(physicalOptimizationConfig.getMaxFramesExternalSort(),
+                                        oo.getTopK(), physicalOptimizationConfig.getLimitSortMemory()));
                     } else {
                         op.setPhysicalOperator(new InMemoryStableSortPOperator());
                     }

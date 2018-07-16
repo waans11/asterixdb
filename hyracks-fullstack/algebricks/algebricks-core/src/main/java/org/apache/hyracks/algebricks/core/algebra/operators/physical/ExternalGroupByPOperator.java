@@ -71,12 +71,30 @@ public class ExternalGroupByPOperator extends AbstractPhysicalOperator {
     private final long inputSize;
     private final int frameLimit;
     private List<LogicalVariable> columnSet = new ArrayList<LogicalVariable>();
+    // Temp :
+    // Used for the experiment - limit memory: if set to false, the hash table size is not accounted for.
+    private final boolean limitMemory;
+    private final boolean hashTableGarbageCollection;
+    //
 
+    // Temp : analysis - called by a test only
     public ExternalGroupByPOperator(List<Pair<LogicalVariable, Mutable<ILogicalExpression>>> gbyList, int frameLimit,
             long fileSize) {
         this.frameLimit = frameLimit;
         this.inputSize = fileSize;
+        this.limitMemory = true;
+        this.hashTableGarbageCollection = true;
         computeColumnSet(gbyList);
+    }
+
+    public ExternalGroupByPOperator(List<Pair<LogicalVariable, Mutable<ILogicalExpression>>> gbyList, int frameLimit,
+            long fileSize, boolean limitMemory, boolean hashTableGarbageCollection) {
+        this.frameLimit = frameLimit;
+        this.inputSize = fileSize;
+        computeColumnSet(gbyList);
+        // Temp :
+        this.limitMemory = limitMemory;
+        this.hashTableGarbageCollection = hashTableGarbageCollection;
     }
 
     public void computeColumnSet(List<Pair<LogicalVariable, Mutable<ILogicalExpression>>> gbyList) {
@@ -267,7 +285,8 @@ public class ExternalGroupByPOperator extends AbstractPhysicalOperator {
 
         ExternalGroupOperatorDescriptor gbyOpDesc = new ExternalGroupOperatorDescriptor(spec, hashTableSize, inputSize,
                 keyAndDecFields, frameLimit, comparatorFactories, normalizedKeyFactory, aggregatorFactory, mergeFactory,
-                recordDescriptor, recordDescriptor, new HashSpillableTableFactory(hashFunctionFactories));
+                recordDescriptor, recordDescriptor, new HashSpillableTableFactory(hashFunctionFactories), limitMemory,
+                hashTableGarbageCollection);
         contributeOpDesc(builder, gby, gbyOpDesc);
         ILogicalOperator src = op.getInputs().get(0).getValue();
         builder.contributeGraphEdge(src, 0, op, 0);

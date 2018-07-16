@@ -24,6 +24,9 @@ import org.apache.hyracks.api.job.resource.ClusterCapacity;
 import org.apache.hyracks.api.job.resource.IClusterCapacity;
 import org.apache.hyracks.api.job.resource.IReadOnlyClusterCapacity;
 import org.apache.hyracks.api.job.resource.NodeCapacity;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ResourceManager implements IResourceManager {
 
@@ -33,6 +36,10 @@ public class ResourceManager implements IResourceManager {
 
     // The current capacity, which is dynamically changing.
     private IClusterCapacity currentCapacity = new ClusterCapacity();
+
+    // Temp :
+    private static final Logger LOGGER = LogManager.getLogger();
+    //
 
     @Override
     public IReadOnlyClusterCapacity getMaximumCapacity() {
@@ -48,5 +55,9 @@ public class ResourceManager implements IResourceManager {
     public void update(String nodeId, NodeCapacity capacity) throws HyracksException {
         maxCapacity.update(nodeId, capacity);
         currentCapacity.update(nodeId, capacity);
+        // Temp :
+        LOGGER.log(Level.INFO, this.hashCode() + "\t" + "update\t" + "maxCapacity:memory_size(MB)\t"
+                + maxCapacity.getAggregatedMemoryByteSize() + "\t#CPU_cores:\t" + maxCapacity.getAggregatedCores());
+        //
     }
 }

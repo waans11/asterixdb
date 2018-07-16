@@ -19,5 +19,23 @@
  !-->
 <test-suite xmlns="urn:xml.testframework.asterix.apache.org" ResultOffsetPath="results" QueryOffsetPath="queries_sqlpp" QueryFileExtension=".sqlpp">
   <test-group name="failed">
+<!--     <test-case FilePath="index-selection">
+      <compilation-unit name="btree-sec-primary-index">
+        <output-dir compare="Text">btree-sec-primary-index</output-dir>
+      </compilation-unit>
+    </test-case>
+ -->
+<!--      <test-case FilePath="fulltext">
+      <compilation-unit name="fulltext-index-09">
+        <output-dir compare="Text">fulltext-index-09</output-dir>
+      </compilation-unit>
+    </test-case>
+ -->
+    <test-case FilePath="fulltext">
+      <compilation-unit name="fulltext-index-01">
+        <output-dir compare="Text">fulltext-index-01</output-dir>
+      </compilation-unit>
+    </test-case>
+  
   </test-group>
 </test-suite>
